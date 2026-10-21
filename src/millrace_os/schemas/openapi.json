@@ -1,0 +1,2865 @@
+{
+  "components": {
+    "schemas": {
+      "ActionInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "action_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Action Id",
+            "type": "string"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action_id",
+          "available"
+        ],
+        "title": "ActionInfo",
+        "type": "object"
+      },
+      "ActionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "target_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Target Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id"
+        ],
+        "title": "ActionInput",
+        "type": "object"
+      },
+      "BootstrapInput": {
+        "additionalProperties": false,
+        "properties": {
+          "recovery": {
+            "default": false,
+            "title": "Recovery",
+            "type": "boolean"
+          }
+        },
+        "title": "BootstrapInput",
+        "type": "object"
+      },
+      "BootstrapNonce": {
+        "additionalProperties": false,
+        "properties": {
+          "expires_in": {
+            "const": 60,
+            "default": 60,
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "nonce": {
+            "maxLength": 64,
+            "minLength": 43,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Nonce",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nonce"
+        ],
+        "title": "BootstrapNonce",
+        "type": "object"
+      },
+      "Diagnostics": {
+        "additionalProperties": false,
+        "properties": {
+          "actions_available": {
+            "const": false,
+            "default": false,
+            "title": "Actions Available",
+            "type": "boolean"
+          },
+          "providers_available": {
+            "const": false,
+            "default": false,
+            "title": "Providers Available",
+            "type": "boolean"
+          },
+          "recovery_operations": {
+            "const": "diagnostics-only",
+            "default": "diagnostics-only",
+            "title": "Recovery Operations",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "recovery"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "storage_error": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Error"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "Diagnostics",
+        "type": "object"
+      },
+      "Error": {
+        "additionalProperties": false,
+        "properties": {
+          "actionable": {
+            "default": false,
+            "title": "Actionable",
+            "type": "boolean"
+          },
+          "category": {
+            "enum": [
+              "trust",
+              "validation",
+              "availability",
+              "request"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "causation": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Causation"
+          },
+          "code": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Code",
+            "type": "string"
+          },
+          "contract": {
+            "const": "os.error.v1",
+            "default": "os.error.v1",
+            "title": "Contract",
+            "type": "string"
+          },
+          "correlation": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation"
+          },
+          "detail": {
+            "default": "",
+            "maxLength": 256,
+            "title": "Detail",
+            "type": "string"
+          },
+          "diagnostic_reference": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Diagnostic Reference"
+          },
+          "partial_result": {
+            "default": false,
+            "title": "Partial Result",
+            "type": "boolean"
+          },
+          "provider": {
+            "const": "os",
+            "default": "os",
+            "title": "Provider",
+            "type": "string"
+          },
+          "retryable": {
+            "default": false,
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "suggested_actions": {
+            "default": [],
+            "items": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Suggested Actions",
+            "type": "array"
+          },
+          "summary": {
+            "maxLength": 256,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "category",
+          "summary"
+        ],
+        "title": "Error",
+        "type": "object"
+      },
+      "ExchangeInput": {
+        "additionalProperties": false,
+        "properties": {
+          "nonce": {
+            "maxLength": 64,
+            "minLength": 43,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Nonce",
+            "type": "string"
+          },
+          "recovery": {
+            "default": false,
+            "title": "Recovery",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "nonce"
+        ],
+        "title": "ExchangeInput",
+        "type": "object"
+      },
+      "Health": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "Health",
+        "type": "object"
+      },
+      "Identity": {
+        "additionalProperties": false,
+        "properties": {
+          "authentication": {
+            "enum": [
+              "bearer",
+              "session"
+            ],
+            "title": "Authentication",
+            "type": "string"
+          },
+          "identity": {
+            "const": "local-operator",
+            "default": "local-operator",
+            "title": "Identity",
+            "type": "string"
+          },
+          "recovery_only": {
+            "title": "Recovery Only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "authentication",
+          "recovery_only"
+        ],
+        "title": "Identity",
+        "type": "object"
+      },
+      "Page_ActionInfo_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ActionInfo"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "title": "Next Cursor",
+            "type": "null"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[ActionInfo]",
+        "type": "object"
+      },
+      "Page_ProviderInfo_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderInfo"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "title": "Next Cursor",
+            "type": "null"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[ProviderInfo]",
+        "type": "object"
+      },
+      "ProviderInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "enum": [
+              "workflow",
+              "terminal"
+            ],
+            "title": "Authority",
+            "type": "string"
+          },
+          "available": {
+            "const": false,
+            "default": false,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "provider_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "reason": {
+            "const": "not_implemented",
+            "default": "not_implemented",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "authority"
+        ],
+        "title": "ProviderInfo",
+        "type": "object"
+      },
+      "Read_Diagnostics_": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "const": "os-local",
+            "default": "os-local",
+            "title": "Authority",
+            "type": "string"
+          },
+          "compatibility": {
+            "const": "foundation-only",
+            "default": "foundation-only",
+            "title": "Compatibility",
+            "type": "string"
+          },
+          "contract": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Contract",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Diagnostics"
+          },
+          "freshness": {
+            "const": "current",
+            "default": "current",
+            "title": "Freshness",
+            "type": "string"
+          },
+          "observed_at": {
+            "maxLength": 40,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "partial_reasons": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Partial Reasons",
+            "type": "array"
+          },
+          "redacted": {
+            "const": true,
+            "default": true,
+            "title": "Redacted",
+            "type": "boolean"
+          },
+          "source_cursor": {
+            "title": "Source Cursor",
+            "type": "null"
+          },
+          "source_provider": {
+            "const": "os",
+            "default": "os",
+            "title": "Source Provider",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract",
+          "data",
+          "observed_at"
+        ],
+        "title": "Read[Diagnostics]",
+        "type": "object"
+      },
+      "Read_Identity_": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "const": "os-local",
+            "default": "os-local",
+            "title": "Authority",
+            "type": "string"
+          },
+          "compatibility": {
+            "const": "foundation-only",
+            "default": "foundation-only",
+            "title": "Compatibility",
+            "type": "string"
+          },
+          "contract": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Contract",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Identity"
+          },
+          "freshness": {
+            "const": "current",
+            "default": "current",
+            "title": "Freshness",
+            "type": "string"
+          },
+          "observed_at": {
+            "maxLength": 40,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "partial_reasons": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Partial Reasons",
+            "type": "array"
+          },
+          "redacted": {
+            "const": true,
+            "default": true,
+            "title": "Redacted",
+            "type": "boolean"
+          },
+          "source_cursor": {
+            "title": "Source Cursor",
+            "type": "null"
+          },
+          "source_provider": {
+            "const": "os",
+            "default": "os",
+            "title": "Source Provider",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract",
+          "data",
+          "observed_at"
+        ],
+        "title": "Read[Identity]",
+        "type": "object"
+      },
+      "Read_Page_ActionInfo__": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "const": "os-local",
+            "default": "os-local",
+            "title": "Authority",
+            "type": "string"
+          },
+          "compatibility": {
+            "const": "foundation-only",
+            "default": "foundation-only",
+            "title": "Compatibility",
+            "type": "string"
+          },
+          "contract": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Contract",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Page_ActionInfo_"
+          },
+          "freshness": {
+            "const": "current",
+            "default": "current",
+            "title": "Freshness",
+            "type": "string"
+          },
+          "observed_at": {
+            "maxLength": 40,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "partial_reasons": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Partial Reasons",
+            "type": "array"
+          },
+          "redacted": {
+            "const": true,
+            "default": true,
+            "title": "Redacted",
+            "type": "boolean"
+          },
+          "source_cursor": {
+            "title": "Source Cursor",
+            "type": "null"
+          },
+          "source_provider": {
+            "const": "os",
+            "default": "os",
+            "title": "Source Provider",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract",
+          "data",
+          "observed_at"
+        ],
+        "title": "Read[Page[ActionInfo]]",
+        "type": "object"
+      },
+      "Read_Page_ProviderInfo__": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "const": "os-local",
+            "default": "os-local",
+            "title": "Authority",
+            "type": "string"
+          },
+          "compatibility": {
+            "const": "foundation-only",
+            "default": "foundation-only",
+            "title": "Compatibility",
+            "type": "string"
+          },
+          "contract": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Contract",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Page_ProviderInfo_"
+          },
+          "freshness": {
+            "const": "current",
+            "default": "current",
+            "title": "Freshness",
+            "type": "string"
+          },
+          "observed_at": {
+            "maxLength": 40,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "partial_reasons": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Partial Reasons",
+            "type": "array"
+          },
+          "redacted": {
+            "const": true,
+            "default": true,
+            "title": "Redacted",
+            "type": "boolean"
+          },
+          "source_cursor": {
+            "title": "Source Cursor",
+            "type": "null"
+          },
+          "source_provider": {
+            "const": "os",
+            "default": "os",
+            "title": "Source Provider",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract",
+          "data",
+          "observed_at"
+        ],
+        "title": "Read[Page[ProviderInfo]]",
+        "type": "object"
+      },
+      "Read_Registry_": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "const": "os-local",
+            "default": "os-local",
+            "title": "Authority",
+            "type": "string"
+          },
+          "compatibility": {
+            "const": "foundation-only",
+            "default": "foundation-only",
+            "title": "Compatibility",
+            "type": "string"
+          },
+          "contract": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Contract",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Registry"
+          },
+          "freshness": {
+            "const": "current",
+            "default": "current",
+            "title": "Freshness",
+            "type": "string"
+          },
+          "observed_at": {
+            "maxLength": 40,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "partial_reasons": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Partial Reasons",
+            "type": "array"
+          },
+          "redacted": {
+            "const": true,
+            "default": true,
+            "title": "Redacted",
+            "type": "boolean"
+          },
+          "source_cursor": {
+            "title": "Source Cursor",
+            "type": "null"
+          },
+          "source_provider": {
+            "const": "os",
+            "default": "os",
+            "title": "Source Provider",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract",
+          "data",
+          "observed_at"
+        ],
+        "title": "Read[Registry]",
+        "type": "object"
+      },
+      "Read_Version_": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "const": "os-local",
+            "default": "os-local",
+            "title": "Authority",
+            "type": "string"
+          },
+          "compatibility": {
+            "const": "foundation-only",
+            "default": "foundation-only",
+            "title": "Compatibility",
+            "type": "string"
+          },
+          "contract": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Contract",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Version"
+          },
+          "freshness": {
+            "const": "current",
+            "default": "current",
+            "title": "Freshness",
+            "type": "string"
+          },
+          "observed_at": {
+            "maxLength": 40,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "partial_reasons": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Partial Reasons",
+            "type": "array"
+          },
+          "redacted": {
+            "const": true,
+            "default": true,
+            "title": "Redacted",
+            "type": "boolean"
+          },
+          "source_cursor": {
+            "title": "Source Cursor",
+            "type": "null"
+          },
+          "source_provider": {
+            "const": "os",
+            "default": "os",
+            "title": "Source Provider",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract",
+          "data",
+          "observed_at"
+        ],
+        "title": "Read[Version]",
+        "type": "object"
+      },
+      "Registry": {
+        "additionalProperties": false,
+        "properties": {
+          "registry": {
+            "const": "os.registry.v1",
+            "default": "os.registry.v1",
+            "title": "Registry",
+            "type": "string"
+          },
+          "schemas": {
+            "items": {
+              "$ref": "#/components/schemas/SchemaEntry"
+            },
+            "maxItems": 64,
+            "title": "Schemas",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schemas"
+        ],
+        "title": "Registry",
+        "type": "object"
+      },
+      "Rotation": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "const": "rotated",
+            "default": "rotated",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "Rotation",
+        "type": "object"
+      },
+      "SchemaEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "contract_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "version": {
+            "const": 1,
+            "default": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "contract_id",
+          "sha256"
+        ],
+        "title": "SchemaEntry",
+        "type": "object"
+      },
+      "SessionOutput": {
+        "additionalProperties": false,
+        "properties": {
+          "csrf": {
+            "maxLength": 64,
+            "minLength": 43,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Csrf",
+            "type": "string"
+          },
+          "expires_in": {
+            "const": 900,
+            "default": 900,
+            "title": "Expires In",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "csrf"
+        ],
+        "title": "SessionOutput",
+        "type": "object"
+      },
+      "Version": {
+        "additionalProperties": false,
+        "properties": {
+          "api": {
+            "const": "v1",
+            "default": "v1",
+            "title": "Api",
+            "type": "string"
+          },
+          "package": {
+            "const": "millrace-os",
+            "default": "millrace-os",
+            "title": "Package",
+            "type": "string"
+          },
+          "version": {
+            "const": "1.0.0",
+            "default": "1.0.0",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "title": "Version",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "Session": {
+        "in": "cookie",
+        "name": "millrace_os_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "title": "Millrace OS",
+    "version": "1.0.0"
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/actions": {
+      "get": {
+        "operationId": "actions_api_v1_actions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Read_Page_ActionInfo__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Actions"
+      }
+    },
+    "/api/v1/actions/{action_id}:invoke": {
+      "post": {
+        "operationId": "invoke_api_v1_actions__action_id__invoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "title": "Action Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true,
+            "schema": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": true,
+            "schema": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "title": "X-Correlation-Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exact configured origin; required for browser mutations.",
+            "in": "header",
+            "name": "Origin",
+            "required": false,
+            "schema": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required with session authentication.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 43,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Invoke"
+      }
+    },
+    "/api/v1/auth/bootstrap": {
+      "post": {
+        "operationId": "mint_api_v1_auth_bootstrap_post",
+        "parameters": [
+          {
+            "description": "Exact configured origin; required for browser mutations.",
+            "in": "header",
+            "name": "Origin",
+            "required": false,
+            "schema": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapNonce"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Mint"
+      }
+    },
+    "/api/v1/auth/exchange": {
+      "post": {
+        "operationId": "exchange_api_v1_auth_exchange_post",
+        "parameters": [
+          {
+            "description": "Exact configured origin; required for browser mutations.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExchangeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOutput"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "summary": "Exchange"
+      }
+    },
+    "/api/v1/auth/rotate": {
+      "post": {
+        "operationId": "rotate_api_v1_auth_rotate_post",
+        "parameters": [
+          {
+            "description": "Exact configured origin; required for browser mutations.",
+            "in": "header",
+            "name": "Origin",
+            "required": false,
+            "schema": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rotation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Rotate"
+      }
+    },
+    "/api/v1/contracts": {
+      "get": {
+        "operationId": "contracts_api_v1_contracts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Read_Registry_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Contracts"
+      }
+    },
+    "/api/v1/contracts/{contract_id}/{version}/{digest}": {
+      "get": {
+        "operationId": "schema_api_v1_contracts__contract_id___version___digest__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "const": "1",
+              "title": "Version",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "digest",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Digest",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Schema"
+      }
+    },
+    "/api/v1/diagnostics": {
+      "get": {
+        "operationId": "diagnostic_api_v1_diagnostics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Read_Diagnostics_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Diagnostic"
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "operationId": "events_api_v1_events_get",
+        "parameters": [
+          {
+            "description": "Valid cursors refuse 409: replay is not implemented.",
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Events"
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Not ready"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/api/v1/identity": {
+      "get": {
+        "operationId": "identity_api_v1_identity_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Read_Identity_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Identity"
+      }
+    },
+    "/api/v1/providers": {
+      "get": {
+        "operationId": "providers_api_v1_providers_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Read_Page_ProviderInfo__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Providers"
+      }
+    },
+    "/api/v1/recovery/diagnostics": {
+      "get": {
+        "operationId": "diagnostic_api_v1_recovery_diagnostics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Read_Diagnostics_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Diagnostic"
+      }
+    },
+    "/api/v1/version": {
+      "get": {
+        "operationId": "version_api_v1_version_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Read_Version_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Version"
+      }
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "registry": "os.registry.v1",
+  "schemas": [
+    {
+      "contract_id": "ActionInfo",
+      "sha256": "a7a49afddaffff6e0762681f4d70861eee22ac13aa3eef03667006de363cd5cd",
+      "version": 1
+    },
+    {
+      "contract_id": "ActionInput",
+      "sha256": "f0168607207e9d207707ad457164f8939eecbbf1e8b2a276e01bda86c6a8a47d",
+      "version": 1
+    },
+    {
+      "contract_id": "ActionOutput",
+      "sha256": "9a957c866838731cd450320c3c2771211a34ae09142a6575ac4b06e9f7f260b1",
+      "version": 1
+    },
+    {
+      "contract_id": "BootstrapInput",
+      "sha256": "57b3ed26cd036fe23c31cc93f238e43740e25e328c4b0e13db0ae1f706955498",
+      "version": 1
+    },
+    {
+      "contract_id": "BootstrapNonce",
+      "sha256": "41bb180326bd0fb13a2123a9f5a82304163b3d1f8b66795d3a966ce4ac2bb72f",
+      "version": 1
+    },
+    {
+      "contract_id": "Diagnostics",
+      "sha256": "b61d56d2ddc0f1701b5f3ba4f55e706a9498a6e3ef60551765a1c45d6d86dcf8",
+      "version": 1
+    },
+    {
+      "contract_id": "Error",
+      "sha256": "98d07364229a385d557f26bc43d769fead05c0701a7c70d29edada0d90c3539f",
+      "version": 1
+    },
+    {
+      "contract_id": "Event",
+      "sha256": "8df1f01cc5ffda8f0113869d8c9cd27e7435ee1517fa75fcea23fcf413f503d9",
+      "version": 1
+    },
+    {
+      "contract_id": "ExchangeInput",
+      "sha256": "5aae776f5722c80995746ad34eb9400f85338e2e07f1d1a99d7dd53b84efbf3c",
+      "version": 1
+    },
+    {
+      "contract_id": "Health",
+      "sha256": "38d5ec0cdccc8c5eab35562b3e9b6e75ef14b3ce9bfd71149dbb422f88b46c02",
+      "version": 1
+    },
+    {
+      "contract_id": "Identity",
+      "sha256": "87a406d46d3289910dcf9187be9efc0cfa757d0916c8be2b43a50e2ee86a6529",
+      "version": 1
+    },
+    {
+      "contract_id": "ProviderInfo",
+      "sha256": "68d38b3a1e596951295e7445590d17725da03561bfb8954e67402b929cd4e6c6",
+      "version": 1
+    },
+    {
+      "contract_id": "Read-Diagnostics",
+      "sha256": "2c37ae517b532b87476f5b9d895407a91d1c006e7fb4a59b542de0ebf818e958",
+      "version": 1
+    },
+    {
+      "contract_id": "Read-Identity",
+      "sha256": "0cc27e23c953fb763d446464937887a7ee10767a8b16da737a67d97beff17ace",
+      "version": 1
+    },
+    {
+      "contract_id": "Read-Page-ActionInfo",
+      "sha256": "109037146125f1643d5033e7d3c39f0fe50361b9278be2dcd1eae9d05b710575",
+      "version": 1
+    },
+    {
+      "contract_id": "Read-Page-ProviderInfo",
+      "sha256": "19e012201d05d868e74b39cbbe6f5842fd4139f93a2a0b882610008f791f539e",
+      "version": 1
+    },
+    {
+      "contract_id": "Read-Registry",
+      "sha256": "e50b53d4f6029687eba7831be3f724f911819e967fa6fbbd9cd203cbcef242dc",
+      "version": 1
+    },
+    {
+      "contract_id": "Read-Version",
+      "sha256": "0d8d98e8f66eaed8de3512e8bc2b07ee1760e732139aaac093ccc1e68d37106e",
+      "version": 1
+    },
+    {
+      "contract_id": "Receipt",
+      "sha256": "59fe25f49e367d5928a4a097549b2d1ea94baab25cd8e1751a1b8e371691ecb6",
+      "version": 1
+    },
+    {
+      "contract_id": "Registry",
+      "sha256": "10b256450d27ae55145d2328d9d97d059a18b60d90b304a3f01db20986f4c42e",
+      "version": 1
+    },
+    {
+      "contract_id": "Rotation",
+      "sha256": "592a91ab20e061ab829c1a0c9d562e5a8f8e8fc1c33c3db8c7b77e6aed12608b",
+      "version": 1
+    },
+    {
+      "contract_id": "SessionOutput",
+      "sha256": "aeb2b843cd3ca8b2f681a2ec8f3220406a4a32e2fa511417c892d29c8a212871",
+      "version": 1
+    },
+    {
+      "contract_id": "StorageRecord",
+      "sha256": "b32ff1100b47fd99f9cbd07356f5ddb71efd9c818f0ccc71381cc911a8f04412",
+      "version": 1
+    },
+    {
+      "contract_id": "Version",
+      "sha256": "3d052c4b4026568a043058202f5a3bd2f657e7c2f75f607238a6eea6fb171b3d",
+      "version": 1
+    }
+  ]
+}

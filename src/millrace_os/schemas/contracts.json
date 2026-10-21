@@ -1,0 +1,1425 @@
+{
+  "ActionInfo": {
+    "$id": "urn:millrace-os:ActionInfo:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "action_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Action Id",
+        "type": "string"
+      },
+      "available": {
+        "title": "Available",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "action_id",
+      "available"
+    ],
+    "title": "ActionInfo",
+    "type": "object"
+  },
+  "ActionInput": {
+    "$id": "urn:millrace-os:ActionInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "target_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Target Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "target_id"
+    ],
+    "title": "ActionInput",
+    "type": "object"
+  },
+  "ActionOutput": {
+    "$id": "urn:millrace-os:ActionOutput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "operation_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Operation Id"
+      },
+      "outcome": {
+        "enum": [
+          "refused",
+          "pending",
+          "unknown"
+        ],
+        "title": "Outcome",
+        "type": "string"
+      },
+      "provider_executed": {
+        "const": false,
+        "default": false,
+        "title": "Provider Executed",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "outcome"
+    ],
+    "title": "ActionOutput",
+    "type": "object"
+  },
+  "BootstrapInput": {
+    "$id": "urn:millrace-os:BootstrapInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "recovery": {
+        "default": false,
+        "title": "Recovery",
+        "type": "boolean"
+      }
+    },
+    "title": "BootstrapInput",
+    "type": "object"
+  },
+  "BootstrapNonce": {
+    "$id": "urn:millrace-os:BootstrapNonce:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "expires_in": {
+        "const": 60,
+        "default": 60,
+        "title": "Expires In",
+        "type": "integer"
+      },
+      "nonce": {
+        "maxLength": 64,
+        "minLength": 43,
+        "pattern": "^[A-Za-z0-9_-]+$",
+        "title": "Nonce",
+        "type": "string"
+      }
+    },
+    "required": [
+      "nonce"
+    ],
+    "title": "BootstrapNonce",
+    "type": "object"
+  },
+  "Diagnostics": {
+    "$id": "urn:millrace-os:Diagnostics:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "actions_available": {
+        "const": false,
+        "default": false,
+        "title": "Actions Available",
+        "type": "boolean"
+      },
+      "providers_available": {
+        "const": false,
+        "default": false,
+        "title": "Providers Available",
+        "type": "boolean"
+      },
+      "recovery_operations": {
+        "const": "diagnostics-only",
+        "default": "diagnostics-only",
+        "title": "Recovery Operations",
+        "type": "string"
+      },
+      "status": {
+        "enum": [
+          "ready",
+          "recovery"
+        ],
+        "title": "Status",
+        "type": "string"
+      },
+      "storage_error": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Storage Error"
+      }
+    },
+    "required": [
+      "status"
+    ],
+    "title": "Diagnostics",
+    "type": "object"
+  },
+  "Error": {
+    "$id": "urn:millrace-os:Error:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "actionable": {
+        "default": false,
+        "title": "Actionable",
+        "type": "boolean"
+      },
+      "category": {
+        "enum": [
+          "trust",
+          "validation",
+          "availability",
+          "request"
+        ],
+        "title": "Category",
+        "type": "string"
+      },
+      "causation": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Causation"
+      },
+      "code": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Code",
+        "type": "string"
+      },
+      "contract": {
+        "const": "os.error.v1",
+        "default": "os.error.v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "correlation": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Correlation"
+      },
+      "detail": {
+        "default": "",
+        "maxLength": 256,
+        "title": "Detail",
+        "type": "string"
+      },
+      "diagnostic_reference": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Diagnostic Reference"
+      },
+      "partial_result": {
+        "default": false,
+        "title": "Partial Result",
+        "type": "boolean"
+      },
+      "provider": {
+        "const": "os",
+        "default": "os",
+        "title": "Provider",
+        "type": "string"
+      },
+      "retryable": {
+        "default": false,
+        "title": "Retryable",
+        "type": "boolean"
+      },
+      "suggested_actions": {
+        "default": [],
+        "items": {
+          "maxLength": 96,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Suggested Actions",
+        "type": "array"
+      },
+      "summary": {
+        "maxLength": 256,
+        "title": "Summary",
+        "type": "string"
+      }
+    },
+    "required": [
+      "code",
+      "category",
+      "summary"
+    ],
+    "title": "Error",
+    "type": "object"
+  },
+  "Event": {
+    "$id": "urn:millrace-os:Event:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "contract": {
+        "const": "os.event.v1",
+        "default": "os.event.v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "durable": {
+        "const": false,
+        "default": false,
+        "title": "Durable",
+        "type": "boolean"
+      },
+      "kind": {
+        "const": "availability",
+        "default": "availability",
+        "title": "Kind",
+        "type": "string"
+      },
+      "replay": {
+        "const": "unavailable",
+        "default": "unavailable",
+        "title": "Replay",
+        "type": "string"
+      },
+      "scope": {
+        "const": "foundation-only",
+        "default": "foundation-only",
+        "title": "Scope",
+        "type": "string"
+      }
+    },
+    "title": "Event",
+    "type": "object"
+  },
+  "ExchangeInput": {
+    "$id": "urn:millrace-os:ExchangeInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "nonce": {
+        "maxLength": 64,
+        "minLength": 43,
+        "pattern": "^[A-Za-z0-9_-]+$",
+        "title": "Nonce",
+        "type": "string"
+      },
+      "recovery": {
+        "default": false,
+        "title": "Recovery",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "nonce"
+    ],
+    "title": "ExchangeInput",
+    "type": "object"
+  },
+  "Health": {
+    "$id": "urn:millrace-os:Health:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "status": {
+        "enum": [
+          "ok",
+          "unavailable"
+        ],
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "status"
+    ],
+    "title": "Health",
+    "type": "object"
+  },
+  "Identity": {
+    "$id": "urn:millrace-os:Identity:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authentication": {
+        "enum": [
+          "bearer",
+          "session"
+        ],
+        "title": "Authentication",
+        "type": "string"
+      },
+      "identity": {
+        "const": "local-operator",
+        "default": "local-operator",
+        "title": "Identity",
+        "type": "string"
+      },
+      "recovery_only": {
+        "title": "Recovery Only",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "authentication",
+      "recovery_only"
+    ],
+    "title": "Identity",
+    "type": "object"
+  },
+  "ProviderInfo": {
+    "$id": "urn:millrace-os:ProviderInfo:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authority": {
+        "enum": [
+          "workflow",
+          "terminal"
+        ],
+        "title": "Authority",
+        "type": "string"
+      },
+      "available": {
+        "const": false,
+        "default": false,
+        "title": "Available",
+        "type": "boolean"
+      },
+      "provider_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Provider Id",
+        "type": "string"
+      },
+      "reason": {
+        "const": "not_implemented",
+        "default": "not_implemented",
+        "title": "Reason",
+        "type": "string"
+      }
+    },
+    "required": [
+      "provider_id",
+      "authority"
+    ],
+    "title": "ProviderInfo",
+    "type": "object"
+  },
+  "Read-Diagnostics": {
+    "$defs": {
+      "Diagnostics": {
+        "additionalProperties": false,
+        "properties": {
+          "actions_available": {
+            "const": false,
+            "default": false,
+            "title": "Actions Available",
+            "type": "boolean"
+          },
+          "providers_available": {
+            "const": false,
+            "default": false,
+            "title": "Providers Available",
+            "type": "boolean"
+          },
+          "recovery_operations": {
+            "const": "diagnostics-only",
+            "default": "diagnostics-only",
+            "title": "Recovery Operations",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "recovery"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "storage_error": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Storage Error"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "Diagnostics",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:Read-Diagnostics:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authority": {
+        "const": "os-local",
+        "default": "os-local",
+        "title": "Authority",
+        "type": "string"
+      },
+      "compatibility": {
+        "const": "foundation-only",
+        "default": "foundation-only",
+        "title": "Compatibility",
+        "type": "string"
+      },
+      "contract": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Contract",
+        "type": "string"
+      },
+      "data": {
+        "$ref": "#/$defs/Diagnostics"
+      },
+      "freshness": {
+        "const": "current",
+        "default": "current",
+        "title": "Freshness",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "partial_reasons": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Partial Reasons",
+        "type": "array"
+      },
+      "redacted": {
+        "const": true,
+        "default": true,
+        "title": "Redacted",
+        "type": "boolean"
+      },
+      "source_cursor": {
+        "default": null,
+        "title": "Source Cursor",
+        "type": "null"
+      },
+      "source_provider": {
+        "const": "os",
+        "default": "os",
+        "title": "Source Provider",
+        "type": "string"
+      },
+      "warnings": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Warnings",
+        "type": "array"
+      }
+    },
+    "required": [
+      "contract",
+      "data",
+      "observed_at"
+    ],
+    "title": "Read[Diagnostics]",
+    "type": "object"
+  },
+  "Read-Identity": {
+    "$defs": {
+      "Identity": {
+        "additionalProperties": false,
+        "properties": {
+          "authentication": {
+            "enum": [
+              "bearer",
+              "session"
+            ],
+            "title": "Authentication",
+            "type": "string"
+          },
+          "identity": {
+            "const": "local-operator",
+            "default": "local-operator",
+            "title": "Identity",
+            "type": "string"
+          },
+          "recovery_only": {
+            "title": "Recovery Only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "authentication",
+          "recovery_only"
+        ],
+        "title": "Identity",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:Read-Identity:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authority": {
+        "const": "os-local",
+        "default": "os-local",
+        "title": "Authority",
+        "type": "string"
+      },
+      "compatibility": {
+        "const": "foundation-only",
+        "default": "foundation-only",
+        "title": "Compatibility",
+        "type": "string"
+      },
+      "contract": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Contract",
+        "type": "string"
+      },
+      "data": {
+        "$ref": "#/$defs/Identity"
+      },
+      "freshness": {
+        "const": "current",
+        "default": "current",
+        "title": "Freshness",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "partial_reasons": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Partial Reasons",
+        "type": "array"
+      },
+      "redacted": {
+        "const": true,
+        "default": true,
+        "title": "Redacted",
+        "type": "boolean"
+      },
+      "source_cursor": {
+        "default": null,
+        "title": "Source Cursor",
+        "type": "null"
+      },
+      "source_provider": {
+        "const": "os",
+        "default": "os",
+        "title": "Source Provider",
+        "type": "string"
+      },
+      "warnings": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Warnings",
+        "type": "array"
+      }
+    },
+    "required": [
+      "contract",
+      "data",
+      "observed_at"
+    ],
+    "title": "Read[Identity]",
+    "type": "object"
+  },
+  "Read-Page-ActionInfo": {
+    "$defs": {
+      "ActionInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "action_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Action Id",
+            "type": "string"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action_id",
+          "available"
+        ],
+        "title": "ActionInfo",
+        "type": "object"
+      },
+      "Page_ActionInfo_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/ActionInfo"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "default": null,
+            "title": "Next Cursor",
+            "type": "null"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[ActionInfo]",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:Read-Page-ActionInfo:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authority": {
+        "const": "os-local",
+        "default": "os-local",
+        "title": "Authority",
+        "type": "string"
+      },
+      "compatibility": {
+        "const": "foundation-only",
+        "default": "foundation-only",
+        "title": "Compatibility",
+        "type": "string"
+      },
+      "contract": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Contract",
+        "type": "string"
+      },
+      "data": {
+        "$ref": "#/$defs/Page_ActionInfo_"
+      },
+      "freshness": {
+        "const": "current",
+        "default": "current",
+        "title": "Freshness",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "partial_reasons": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Partial Reasons",
+        "type": "array"
+      },
+      "redacted": {
+        "const": true,
+        "default": true,
+        "title": "Redacted",
+        "type": "boolean"
+      },
+      "source_cursor": {
+        "default": null,
+        "title": "Source Cursor",
+        "type": "null"
+      },
+      "source_provider": {
+        "const": "os",
+        "default": "os",
+        "title": "Source Provider",
+        "type": "string"
+      },
+      "warnings": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Warnings",
+        "type": "array"
+      }
+    },
+    "required": [
+      "contract",
+      "data",
+      "observed_at"
+    ],
+    "title": "Read[Page[ActionInfo]]",
+    "type": "object"
+  },
+  "Read-Page-ProviderInfo": {
+    "$defs": {
+      "Page_ProviderInfo_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/ProviderInfo"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "default": null,
+            "title": "Next Cursor",
+            "type": "null"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[ProviderInfo]",
+        "type": "object"
+      },
+      "ProviderInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "enum": [
+              "workflow",
+              "terminal"
+            ],
+            "title": "Authority",
+            "type": "string"
+          },
+          "available": {
+            "const": false,
+            "default": false,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "provider_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "reason": {
+            "const": "not_implemented",
+            "default": "not_implemented",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "authority"
+        ],
+        "title": "ProviderInfo",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:Read-Page-ProviderInfo:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authority": {
+        "const": "os-local",
+        "default": "os-local",
+        "title": "Authority",
+        "type": "string"
+      },
+      "compatibility": {
+        "const": "foundation-only",
+        "default": "foundation-only",
+        "title": "Compatibility",
+        "type": "string"
+      },
+      "contract": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Contract",
+        "type": "string"
+      },
+      "data": {
+        "$ref": "#/$defs/Page_ProviderInfo_"
+      },
+      "freshness": {
+        "const": "current",
+        "default": "current",
+        "title": "Freshness",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "partial_reasons": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Partial Reasons",
+        "type": "array"
+      },
+      "redacted": {
+        "const": true,
+        "default": true,
+        "title": "Redacted",
+        "type": "boolean"
+      },
+      "source_cursor": {
+        "default": null,
+        "title": "Source Cursor",
+        "type": "null"
+      },
+      "source_provider": {
+        "const": "os",
+        "default": "os",
+        "title": "Source Provider",
+        "type": "string"
+      },
+      "warnings": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Warnings",
+        "type": "array"
+      }
+    },
+    "required": [
+      "contract",
+      "data",
+      "observed_at"
+    ],
+    "title": "Read[Page[ProviderInfo]]",
+    "type": "object"
+  },
+  "Read-Registry": {
+    "$defs": {
+      "Registry": {
+        "additionalProperties": false,
+        "properties": {
+          "registry": {
+            "const": "os.registry.v1",
+            "default": "os.registry.v1",
+            "title": "Registry",
+            "type": "string"
+          },
+          "schemas": {
+            "items": {
+              "$ref": "#/$defs/SchemaEntry"
+            },
+            "maxItems": 64,
+            "title": "Schemas",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schemas"
+        ],
+        "title": "Registry",
+        "type": "object"
+      },
+      "SchemaEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "contract_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "version": {
+            "const": 1,
+            "default": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "contract_id",
+          "sha256"
+        ],
+        "title": "SchemaEntry",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:Read-Registry:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authority": {
+        "const": "os-local",
+        "default": "os-local",
+        "title": "Authority",
+        "type": "string"
+      },
+      "compatibility": {
+        "const": "foundation-only",
+        "default": "foundation-only",
+        "title": "Compatibility",
+        "type": "string"
+      },
+      "contract": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Contract",
+        "type": "string"
+      },
+      "data": {
+        "$ref": "#/$defs/Registry"
+      },
+      "freshness": {
+        "const": "current",
+        "default": "current",
+        "title": "Freshness",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "partial_reasons": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Partial Reasons",
+        "type": "array"
+      },
+      "redacted": {
+        "const": true,
+        "default": true,
+        "title": "Redacted",
+        "type": "boolean"
+      },
+      "source_cursor": {
+        "default": null,
+        "title": "Source Cursor",
+        "type": "null"
+      },
+      "source_provider": {
+        "const": "os",
+        "default": "os",
+        "title": "Source Provider",
+        "type": "string"
+      },
+      "warnings": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Warnings",
+        "type": "array"
+      }
+    },
+    "required": [
+      "contract",
+      "data",
+      "observed_at"
+    ],
+    "title": "Read[Registry]",
+    "type": "object"
+  },
+  "Read-Version": {
+    "$defs": {
+      "Version": {
+        "additionalProperties": false,
+        "properties": {
+          "api": {
+            "const": "v1",
+            "default": "v1",
+            "title": "Api",
+            "type": "string"
+          },
+          "package": {
+            "const": "millrace-os",
+            "default": "millrace-os",
+            "title": "Package",
+            "type": "string"
+          },
+          "version": {
+            "const": "1.0.0",
+            "default": "1.0.0",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "title": "Version",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:Read-Version:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authority": {
+        "const": "os-local",
+        "default": "os-local",
+        "title": "Authority",
+        "type": "string"
+      },
+      "compatibility": {
+        "const": "foundation-only",
+        "default": "foundation-only",
+        "title": "Compatibility",
+        "type": "string"
+      },
+      "contract": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Contract",
+        "type": "string"
+      },
+      "data": {
+        "$ref": "#/$defs/Version"
+      },
+      "freshness": {
+        "const": "current",
+        "default": "current",
+        "title": "Freshness",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "partial_reasons": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Partial Reasons",
+        "type": "array"
+      },
+      "redacted": {
+        "const": true,
+        "default": true,
+        "title": "Redacted",
+        "type": "boolean"
+      },
+      "source_cursor": {
+        "default": null,
+        "title": "Source Cursor",
+        "type": "null"
+      },
+      "source_provider": {
+        "const": "os",
+        "default": "os",
+        "title": "Source Provider",
+        "type": "string"
+      },
+      "warnings": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "title": "Warnings",
+        "type": "array"
+      }
+    },
+    "required": [
+      "contract",
+      "data",
+      "observed_at"
+    ],
+    "title": "Read[Version]",
+    "type": "object"
+  },
+  "Receipt": {
+    "$id": "urn:millrace-os:Receipt:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "action_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Action Id",
+        "type": "string"
+      },
+      "outcome": {
+        "enum": [
+          "refused",
+          "pending",
+          "unknown"
+        ],
+        "title": "Outcome",
+        "type": "string"
+      },
+      "receipt_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Receipt Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "receipt_id",
+      "action_id",
+      "outcome"
+    ],
+    "title": "Receipt",
+    "type": "object"
+  },
+  "Registry": {
+    "$defs": {
+      "SchemaEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "contract_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "version": {
+            "const": 1,
+            "default": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "contract_id",
+          "sha256"
+        ],
+        "title": "SchemaEntry",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:Registry:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "registry": {
+        "const": "os.registry.v1",
+        "default": "os.registry.v1",
+        "title": "Registry",
+        "type": "string"
+      },
+      "schemas": {
+        "items": {
+          "$ref": "#/$defs/SchemaEntry"
+        },
+        "maxItems": 64,
+        "title": "Schemas",
+        "type": "array"
+      }
+    },
+    "required": [
+      "schemas"
+    ],
+    "title": "Registry",
+    "type": "object"
+  },
+  "Rotation": {
+    "$id": "urn:millrace-os:Rotation:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "status": {
+        "const": "rotated",
+        "default": "rotated",
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "title": "Rotation",
+    "type": "object"
+  },
+  "SessionOutput": {
+    "$id": "urn:millrace-os:SessionOutput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "csrf": {
+        "maxLength": 64,
+        "minLength": 43,
+        "pattern": "^[A-Za-z0-9_-]+$",
+        "title": "Csrf",
+        "type": "string"
+      },
+      "expires_in": {
+        "const": 900,
+        "default": 900,
+        "title": "Expires In",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "csrf"
+    ],
+    "title": "SessionOutput",
+    "type": "object"
+  },
+  "StorageRecord": {
+    "$id": "urn:millrace-os:StorageRecord:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "key": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Key",
+        "type": "string"
+      },
+      "schema_version": {
+        "const": 1,
+        "default": 1,
+        "title": "Schema Version",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "key"
+    ],
+    "title": "StorageRecord",
+    "type": "object"
+  },
+  "Version": {
+    "$id": "urn:millrace-os:Version:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "api": {
+        "const": "v1",
+        "default": "v1",
+        "title": "Api",
+        "type": "string"
+      },
+      "package": {
+        "const": "millrace-os",
+        "default": "millrace-os",
+        "title": "Package",
+        "type": "string"
+      },
+      "version": {
+        "const": "1.0.0",
+        "default": "1.0.0",
+        "title": "Version",
+        "type": "string"
+      }
+    },
+    "title": "Version",
+    "type": "object"
+  }
+}
