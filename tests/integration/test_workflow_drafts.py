@@ -110,12 +110,15 @@ def test_pause_prevalidate_publish_submit_leaves_explicit_continuation(
         )
     )
     assert accepted["status"] == "applied"
+    # A final receipt can precede return/join of its foreground call.
+    h.until(lambda: all(row["joined"] for row in h.service.router_workers.snapshot()))
     held = h.read(instance, run)
     assert held["status"] == "paused" and held["count"] == 1
     resumed = h.send(
         h.request("resume_run", instance, run, version=held["state_version"])
     )
     assert resumed["status"] == "refused" and resumed["code"] == "run_not_paused"
+    h.until(lambda: all(row["joined"] for row in h.service.router_workers.snapshot()))
     assert held["run_gate"] is None
     # A graph pause is plane-local and survives the explicit run-gate resume.
     held = h.read(instance, run)

@@ -475,6 +475,10 @@ while True: time.sleep(.05)
         # version. The original explicit version truthfully becomes stale.
         assert recovered["status"] == "refused"
         assert recovered["code"] == "stale_state_version"
+        # A final receipt can precede return/join of its foreground call.
+        h.until(
+            lambda: all(row["joined"] for row in h.service.router_workers.snapshot())
+        )
         unknown = h.read(instance, run)
         assert unknown["status"] == "paused" and not unknown["quiescent"]
         assert unknown["pause_reason"] == "writer_unknown"
