@@ -1,0 +1,208 @@
+{
+  "contract": "millrace-os-mcp-tools/v1",
+  "sha256": "ee849426232e7257f1c8c20cd017e441a1348f1c413d7f1f15c661727fd640cd",
+  "tools": [
+    {
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "Discover",
+        "type": "object"
+      },
+      "name": "millrace_v1_discover"
+    },
+    {
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          }
+        },
+        "required": [
+          "home"
+        ],
+        "title": "Home",
+        "type": "object"
+      },
+      "name": "millrace_v1_instances"
+    },
+    {
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "instance_id": {
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Instance Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "home",
+          "instance_id"
+        ],
+        "title": "Instance",
+        "type": "object"
+      },
+      "name": "millrace_v1_instance"
+    },
+    {
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "instance_id": {
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "run_id": {
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "home",
+          "instance_id",
+          "run_id"
+        ],
+        "title": "Run",
+        "type": "object"
+      },
+      "name": "millrace_v1_run"
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "JsonValue": {}
+        },
+        "additionalProperties": false,
+        "properties": {
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "request": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Request",
+            "type": "object"
+          }
+        },
+        "required": [
+          "home",
+          "request"
+        ],
+        "title": "Request",
+        "type": "object"
+      },
+      "name": "millrace_v1_request"
+    },
+    {
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "instance_id": {
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "request_id": {
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "home",
+          "instance_id",
+          "request_id"
+        ],
+        "title": "Receipt",
+        "type": "object"
+      },
+      "name": "millrace_v1_receipt"
+    },
+    {
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "instance_id": {
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "home",
+          "instance_id"
+        ],
+        "title": "Validate",
+        "type": "object"
+      },
+      "name": "millrace_v1_validate"
+    }
+  ]
+}

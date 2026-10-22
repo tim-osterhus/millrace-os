@@ -115,3 +115,33 @@ def test_sdist_includes_tests_and_docs_but_excludes_publication_controls() -> No
         assert "uv lock --check" in text
         assert "EXPECTED_WHEEL_SHA256" in text
         assert "EXPECTED_SDIST_SHA256" in text
+
+
+def test_mcp_is_explicit_optional_and_has_dedicated_schemas() -> None:
+    import json
+    import subprocess
+    import sys
+
+    project = tomllib.loads((Path(__file__).parents[2] / "pyproject.toml").read_text())
+    assert project["project"]["optional-dependencies"]["mcp"] == [
+        "mcp==1.30.0; python_version < '3.14'",
+        "PyJWT[crypto]>=2.10.1; python_version < '3.14'",
+    ]
+    assert project["tool"]["uv"]["environments"] == [
+        "python_version < '3.14'",
+        "python_version >= '3.14'",
+    ]
+    for name in ("mcp-config-v1.json", "mcp-tools-v1.json"):
+        assert json.loads(files("millrace_os").joinpath("schemas", name).read_text())
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import millrace_os.cli; "
+            "assert not any(x == 'mcp' or x.startswith('mcp.') for x in sys.modules)",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

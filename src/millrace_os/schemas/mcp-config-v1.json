@@ -1,0 +1,162 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "allowed_hosts": {
+      "anyOf": [
+        {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Allowed Hosts"
+    },
+    "allowed_origins": {
+      "anyOf": [
+        {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Allowed Origins"
+    },
+    "format": {
+      "const": "millrace-os-mcp-config/v1",
+      "title": "Format",
+      "type": "string"
+    },
+    "homes": {
+      "items": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Homes",
+      "type": "array"
+    },
+    "issuer_url": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Issuer Url"
+    },
+    "jwks_url": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Jwks Url"
+    },
+    "listen_port": {
+      "default": 8792,
+      "maximum": 65535,
+      "minimum": 1024,
+      "title": "Listen Port",
+      "type": "integer"
+    },
+    "os_credential_file": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Os Credential File",
+      "type": "string"
+    },
+    "os_origin": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "title": "Os Origin",
+      "type": "string"
+    },
+    "proxy_peer": {
+      "default": "127.0.0.1",
+      "title": "Proxy Peer",
+      "type": "string"
+    },
+    "resource_url": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resource Url"
+    },
+    "transport": {
+      "enum": [
+        "stdio",
+        "streamable-http"
+      ],
+      "title": "Transport",
+      "type": "string"
+    },
+    "trusted_subjects": {
+      "anyOf": [
+        {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Trusted Subjects"
+    }
+  },
+  "required": [
+    "format",
+    "os_origin",
+    "os_credential_file",
+    "homes",
+    "transport"
+  ],
+  "title": "MCPConfig",
+  "type": "object"
+}

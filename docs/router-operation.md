@@ -1,5 +1,12 @@
 # Headless router operation
 
+The optional [MCP bridge](mcp.md) reuses these controls and saved request envelopes.
+Direct LAD starts require an existing server-local project `request.md` with the
+intended bytes; missing input yields workflow-owned `INTAKE_MISSING`. MCP adds no
+upload, draft Apply or automatic acceptance/continuation tool. Keep the manual
+Apply journey below, then explicitly accept the pending revision and request
+continuation only when the resulting Core state requires it.
+
 Millrace OS 0.23.0 maps `/api/v1/router` to public Plus/Core controls. Core owns graph semantics, durable instances, runs, receipts, planes, seams, and effective writer facts. OS keeps no second run registry or scheduler.
 
 Install `millrace-os[router]==0.23.0` in Python 3.12 or later. Its optional dependency range is `millrace-plus[router]>=0.23.0,<0.24.0`. The selected release uses matched Core, Plus, and OS 0.23.0 artifacts. The public execution contract must be `millrace-router-execution/v2`; version equality alone is insufficient. Base installation supports service health, trust, and recovery without Core or Plus. Router calls load optional components lazily and refuse unavailable or incompatible contracts.

@@ -7,6 +7,7 @@ import base64
 import json
 import os
 import signal
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -60,6 +61,14 @@ class _PidFile:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="millrace-os")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    mcp = subparsers.add_parser("mcp", help="optional MCP bridge").add_subparsers(
+        dest="mcp_command", required=True
+    )
+    mcp_serve = mcp.add_parser("serve", help="serve existing OS controls")
+    mcp_serve.add_argument(
+        "--transport", choices=["stdio", "streamable-http"], default="stdio"
+    )
+    mcp_serve.add_argument("--config", required=True)
     serve = subparsers.add_parser(
         "serve", help="start the local daemon in the foreground"
     )
@@ -390,6 +399,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
     try:
+        if args.command == "mcp":
+            try:
+                if sys.version_info[:2] not in {(3, 12), (3, 13)}:
+                    raise ValueError("unsupported MCP profile")
+                from .mcp_bridge import serve
+                serve(args.config, args.transport)
+                return 0
+            except (ImportError, ValueError, OSError):
+                print(json.dumps({
+                    "error": "mcp_unavailable",
+                    "message": "MCP requires the explicit mcp extra, Python "
+                    "3.12/3.13 and valid configuration/backend.",
+                }), file=sys.stderr)
+                return 1
         if args.command == "router":
             return _router(args)
         if args.command == "serve":

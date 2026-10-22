@@ -27,6 +27,8 @@ python -m pip install 'millrace-os[router]==0.23.0'
 
 The router extra selects `millrace-plus[router]>=0.23.0,<0.24.0`, which supplies Core transitively. Base service startup does not import Core or Plus. Router operations refuse unavailable or incompatible components. The selected release uses Core, Plus, and OS 0.23.0 with `millrace-router-execution/v2`. Matching version numbers do not establish execution-contract compatibility or native provider qualification.
 
+The explicit optional `mcp` extra adds a foreground bridge to an already running OS API, using Python 3.12/3.13 and official MCP SDK 1.30.0. See [MCP configuration and recovery](docs/mcp.md) for seven fixed tools, local stdio, the trusted shared HTTP boundary and saved-request replay. Base installation remains independent of MCP.
+
 Start the installed service and inspect a configured Core home:
 
 ```bash

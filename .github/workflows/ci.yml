@@ -80,6 +80,7 @@ jobs:
           from pathlib import Path
           assert importlib.util.find_spec('millrace') is None
           assert importlib.util.find_spec('millrace_plus') is None
+          assert importlib.util.find_spec('mcp') is None
           from millrace_os.config import ApplicationConfig
           from millrace_os.router_client import RouterClient, RouterUnavailable
           from millrace_os.service import Service
@@ -96,3 +97,24 @@ jobs:
           PY
       - name: Check source unchanged
         run: git diff --exit-code
+
+  optional-mcp:
+    runs-on: macos-14
+    strategy:
+      matrix:
+        python: ['3.12', '3.13']
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+        with:
+          version: 0.13.5
+      - name: Install frozen optional profile
+        run: |
+          uv lock --check --no-sources --python '${{ matrix.python }}'
+          uv sync --frozen --no-editable --extra dev --extra router --extra mcp --python '${{ matrix.python }}'
+      - name: Verify installed SDK transports and base boundaries
+        run: |
+          env -u PYTHONPATH .venv/bin/python -m pytest -q -o pythonpath= tests/mcp tests/foundation/test_packaging.py
+          .venv/bin/ruff check src tests
