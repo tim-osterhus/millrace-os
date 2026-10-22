@@ -6,19 +6,6 @@ on:
   pull_request:
   workflow_call:
   workflow_dispatch:
-    inputs:
-      core_wheel_url:
-        description: P8b matched Core 0.23.0 wheel URL (only before final lock)
-        type: string
-      core_wheel_sha256:
-        description: SHA-256 of that Core wheel
-        type: string
-      plus_wheel_url:
-        description: P8b matched Plus 0.23.0 wheel URL (only before final lock)
-        type: string
-      plus_wheel_sha256:
-        description: SHA-256 of that Plus wheel
-        type: string
 
 permissions:
   contents: read
@@ -35,40 +22,31 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
         with:
           version: 0.13.5
-      - name: Select final registry lock or explicit P8b local wheels
-        env:
-          CORE_WHEEL_URL: ${{ inputs.core_wheel_url }}
-          CORE_WHEEL_SHA256: ${{ inputs.core_wheel_sha256 }}
-          PLUS_WHEEL_URL: ${{ inputs.plus_wheel_url }}
-          PLUS_WHEEL_SHA256: ${{ inputs.plus_wheel_sha256 }}
-        shell: bash
+      - name: Require final public registry lock
         run: |
-          if test -f uv.lock; then
-            uv lock --check --python 3.12
-            uv sync --frozen --no-editable --extra dev --extra router --python 3.12
-          else
-            echo 'P8b provisional verification: explicit matched local wheels; no project-lock freshness claim.'
-            uv venv --python 3.12 .venv
-            .venv/bin/python - <<'PY'
-          import hashlib, os, re, urllib.request
+          test -f uv.lock
+          uv lock --check --no-sources --python 3.12
+          python3 - <<'PYCODE'
+          import tomllib
           from pathlib import Path
-          root = Path('.ci-wheels')
-          root.mkdir()
-          for key, name in [('CORE', 'millrace_ai'), ('PLUS', 'millrace_plus')]:
-              url, digest = os.environ[key + '_WHEEL_URL'], os.environ[key + '_WHEEL_SHA256']
-              if not url.startswith('https://') or not re.fullmatch('[0-9a-f]{64}', digest):
-                  raise SystemExit('Absent lock requires explicit HTTPS matched wheel URL and SHA-256 inputs')
-              with urllib.request.urlopen(url, timeout=60) as response:
-                  content = response.read()
-              assert hashlib.sha256(content).hexdigest() == digest, key + ' wheel digest mismatch'
-              (root / (name + '-0.23.0-py3-none-any.whl')).write_bytes(content)
-          PY
-            uv pip install --python .venv/bin/python --find-links .ci-wheels \
-              '.[dev,router]' millrace-ai==0.23.0 millrace-plus==0.23.0
-          fi
+          project = tomllib.loads(Path("pyproject.toml").read_text())
+          assert not project.get("tool", {}).get("uv", {}).get("sources")
+          lock = tomllib.loads(Path("uv.lock").read_text())
+          versions = {}
+          for package in lock["package"]:
+              source = package["source"]
+              if package["name"] == "millrace-os":
+                  assert source == {"editable": "."}
+              else:
+                  assert source == {"registry": "https://pypi.org/simple"}, source
+              if package["name"] in {"millrace-ai", "millrace-plus", "millrace-os"}:
+                  versions[package["name"]] = package["version"]
+          assert versions == {"millrace-ai": "0.23.0", "millrace-plus": "0.23.0", "millrace-os": "0.23.0"}
+          PYCODE
+          uv sync --frozen --no-editable --extra dev --extra router --python 3.12
       - name: Verify selected installed identities outside checkout
         shell: bash
         run: |

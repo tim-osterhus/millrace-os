@@ -13,7 +13,7 @@ env:
   PYTHONDONTWRITEBYTECODE: '1'
   # P8d must freeze these exact reviewed artifact digests before the release tag.
   EXPECTED_WHEEL_SHA256: "9690986a0bc79a07ab640ededdc6e7b8efedc1332bab340dd3a938bc16ea448d"
-  EXPECTED_SDIST_SHA256: P8D_FREEZE_REQUIRED
+  EXPECTED_SDIST_SHA256: "6fbcd2272aceee9ed536f268f812a54faaa3c940683c103e1c84c38f293c76df"
   CORE_WHEEL_SHA256: "56d4bd001c9c5875b6f7fec55369754c43a07f5d2ce0e334a2057c63521b858c"
   PLUS_WHEEL_SHA256: "5c2025e4f6d592bf4c927d659b4d729e17a62e49bc13f5b380de1b2d6bff480f"
 
@@ -27,9 +27,10 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
         with:
           version: 0.13.5
+          checksum: f68d291c75783122dad58ab77def0e13f3233f358731db5d6d7e8715603b928f
       - name: Require final public registry lock and exact upstream artifacts
         run: |
           test -f uv.lock
