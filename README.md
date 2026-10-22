@@ -1,4 +1,16 @@
-# Millrace OS
+<div align="center">
+  <p>
+    <a href="https://pypi.org/project/millrace-os/"><img alt="PyPI v0.23.0" src="https://img.shields.io/badge/pypi-v0.23.0-orange.svg"></a>
+    <a href="https://www.python.org/downloads/"><img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12+-blue.svg"></a>
+    <a href="https://github.com/tim-osterhus/millrace-os/blob/main/LICENSE"><img alt="Apache-2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-green.svg"></a>
+  </p>
+  <img
+    src="https://raw.githubusercontent.com/tim-osterhus/millrace/main/docs/assets/images/millrace-icon-signal-transparent-glow.png"
+    alt="Millrace signal mark"
+    width="180"
+  />
+  <h1>Millrace OS</h1>
+</div>
 
 Millrace OS is a local service and command-line client for operating independent Millrace workflow instances.
 
@@ -22,7 +34,7 @@ millrace-os router inspect --home main --instance INSTANCE_ID --run RUN_ID
 millrace-os router request --home main --file saved-request.json
 ```
 
-The service creates an owner-only bearer credential. The client reads that configured credential and sends it only to the explicit loopback endpoint. See [router operation](docs/router-operation.md) for authoring and control examples.
+The service creates an owner-only bearer credential. The client reads that configured credential and sends it only to the explicit loopback endpoint. See [router operation](https://github.com/tim-osterhus/millrace-os/blob/v0.23.0/docs/router-operation.md) for authoring and control examples.
 
 ## Receipts and controller ownership
 
@@ -39,4 +51,4 @@ Workflow Apply freezes a draft, pauses its exact run, observes quiescence and fi
 - `workflow_drafts.py` stores drafts and serializes cooperating OS publications.
 - `api.py`, `contracts.py`, and `cli.py` define the shared HTTP and headless client surface.
 
-The browser is optional. Existing bootstrap and recovery pages remain available, and deterministic authoring needs neither a browser nor a model. Read [API foundations](docs/api-foundations.md), [service foundations](docs/foundation.md), and [legacy disposition](docs/architecture/legacy-disposition.md) for the retained trust and storage contracts. The package uses the [Apache 2.0 license](LICENSE).
+The browser is optional. Existing bootstrap and recovery pages remain available, and deterministic authoring needs neither a browser nor a model. Read [API foundations](https://github.com/tim-osterhus/millrace-os/blob/v0.23.0/docs/api-foundations.md), [service foundations](https://github.com/tim-osterhus/millrace-os/blob/v0.23.0/docs/foundation.md), and [legacy disposition](https://github.com/tim-osterhus/millrace-os/blob/v0.23.0/docs/architecture/legacy-disposition.md) for the retained trust and storage contracts. The package uses the [Apache 2.0 license](https://github.com/tim-osterhus/millrace-os/blob/v0.23.0/LICENSE).
