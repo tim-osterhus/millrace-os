@@ -1,6 +1,7 @@
 name: Publish to PyPI
 
 on:
+  workflow_dispatch:
   push:
     tags: [v0.23.0]
 
@@ -11,6 +12,7 @@ env:
   # Independent of the commit containing only publication digest pins.
   SOURCE_DATE_EPOCH: '1580601600'
   PYTHONDONTWRITEBYTECODE: '1'
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
   # P8d must freeze these exact reviewed artifact digests before the release tag.
   EXPECTED_WHEEL_SHA256: "e0834a68455cf9988274b14374b3b37f5e8083b91337487254a6cd07ca202d77"
   EXPECTED_SDIST_SHA256: "2822bffb83999702131f6e1127920271acaba42792f67feabebace63bb896c32"
@@ -19,14 +21,136 @@ env:
 
 jobs:
   tests:
-    uses: ./.github/workflows/ci.yml
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/tags/v0.23.0') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+          ref: 6d000614bb61b60e4ec3b40430813a531be0179b
+          fetch-depth: 0
+      - name: Verify immutable release source and control-only recovery
+        run: |
+          python3 - <<'PYCODE'
+          import os, subprocess
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          source = "6d000614bb61b60e4ec3b40430813a531be0179b"
+          assert git("rev-parse", "HEAD") == source
+          assert git("rev-parse", "refs/tags/v0.23.0") == "304c82196392b25bc95f2cc4d8f5886b41a07bd2"
+          assert git("rev-parse", "refs/tags/v0.23.0^{}") == source
+          if os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch":
+              assert os.environ["GITHUB_REF"] == "refs/heads/main"
+              changed = git("diff", "--name-only", source, os.environ["GITHUB_SHA"]).splitlines()
+              assert changed == [".github/workflows/publish-to-pypi.yml"], changed
+          else:
+              assert os.environ["GITHUB_EVENT_NAME"] == "push"
+              assert os.environ["GITHUB_REF"] == "refs/tags/v0.23.0"
+              assert os.environ["GITHUB_SHA"] == source
+          PYCODE
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+        with:
+          version: 0.13.5
+      - name: Require final public registry lock
+        run: |
+          test -f uv.lock
+          uv lock --check --no-sources --python 3.12
+          python3 - <<'PYCODE'
+          import tomllib
+          from pathlib import Path
+          project = tomllib.loads(Path("pyproject.toml").read_text())
+          assert not project.get("tool", {}).get("uv", {}).get("sources")
+          lock = tomllib.loads(Path("uv.lock").read_text())
+          versions = {}
+          for package in lock["package"]:
+              source = package["source"]
+              if package["name"] == "millrace-os":
+                  assert source == {"editable": "."}
+              else:
+                  assert source == {"registry": "https://pypi.org/simple"}, source
+              if package["name"] in {"millrace-ai", "millrace-plus", "millrace-os"}:
+                  versions[package["name"]] = package["version"]
+          assert versions == {"millrace-ai": "0.23.0", "millrace-plus": "0.23.0", "millrace-os": "0.23.0"}
+          PYCODE
+          uv sync --frozen --no-editable --extra dev --extra router --python 3.12
+      - name: Verify selected installed identities outside checkout
+        shell: bash
+        run: |
+          python_path="$PWD/.venv/bin/python"
+          cd "$RUNNER_TEMP"
+          env -u PYTHONPATH "$python_path" - <<'PY'
+          import importlib.metadata as m
+          from pathlib import Path
+          import millrace, millrace_plus, millrace_os
+          for name, module in [('millrace-ai', millrace), ('millrace-plus', millrace_plus), ('millrace-os', millrace_os)]:
+              assert m.version(name) == '0.23.0', name
+              assert 'site-packages' in str(Path(module.__file__).resolve()), module.__file__
+          from millrace_plus.router import require_core
+          require_core()
+          PY
+      - name: Active OS tests and lint
+        run: |
+          env -u PYTHONPATH .venv/bin/python -m pytest -q -o pythonpath= tests
+          .venv/bin/ruff check src tests
+      - name: Build wheel and sdist
+        run: uv build --python 3.12 --force-pep517
+      - name: Verify base installation without router dependencies
+        shell: bash
+        run: |
+          uv venv --python 3.12 .ci-base
+          uv pip install --python .ci-base/bin/python dist/millrace_os-0.23.0-py3-none-any.whl
+          python_path="$PWD/.ci-base/bin/python"
+          cd "$RUNNER_TEMP"
+          env -u PYTHONPATH "$python_path" - <<'PY'
+          import importlib.util, tempfile
+          from pathlib import Path
+          assert importlib.util.find_spec('millrace') is None
+          assert importlib.util.find_spec('millrace_plus') is None
+          from millrace_os.config import ApplicationConfig
+          from millrace_os.router_client import RouterClient, RouterUnavailable
+          from millrace_os.service import Service
+          with tempfile.TemporaryDirectory() as folder:
+              root = Path(folder)
+              service = Service(ApplicationConfig(config_dir=root/'config', state_dir=root/'state', credential_path=root/'config/credentials.json'))
+              assert service.app.version == '0.23.0'
+              try:
+                  RouterClient({'main': root/'core'}).list_instances('main')
+              except RouterUnavailable as error:
+                  assert error.code == 'router_unavailable'
+              else:
+                  raise AssertionError('missing optional router must refuse')
+          PY
+      - name: Check source unchanged
+        run: git diff --exit-code
   build:
     needs: tests
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/tags/v0.23.0') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           persist-credentials: false
+          ref: 6d000614bb61b60e4ec3b40430813a531be0179b
+          fetch-depth: 0
+      - name: Verify immutable release source and control-only recovery
+        run: |
+          python3 - <<'PYCODE'
+          import os, subprocess
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          source = "6d000614bb61b60e4ec3b40430813a531be0179b"
+          assert git("rev-parse", "HEAD") == source
+          assert git("rev-parse", "refs/tags/v0.23.0") == "304c82196392b25bc95f2cc4d8f5886b41a07bd2"
+          assert git("rev-parse", "refs/tags/v0.23.0^{}") == source
+          if os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch":
+              assert os.environ["GITHUB_REF"] == "refs/heads/main"
+              changed = git("diff", "--name-only", source, os.environ["GITHUB_SHA"]).splitlines()
+              assert changed == [".github/workflows/publish-to-pypi.yml"], changed
+          else:
+              assert os.environ["GITHUB_EVENT_NAME"] == "push"
+              assert os.environ["GITHUB_REF"] == "refs/tags/v0.23.0"
+              assert os.environ["GITHUB_SHA"] == source
+          PYCODE
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
         with:
           version: 0.13.5
@@ -98,7 +222,7 @@ jobs:
             release-sha256.txt
   publish:
     needs: build
-    if: github.ref == 'refs/tags/v0.23.0'
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/tags/v0.23.0') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -119,13 +243,21 @@ jobs:
               'millrace_os-0.23.0.tar.gz': os.environ['EXPECTED_SDIST_SHA256'],
           }
           root = Path('release')
-          assert {p.name for p in root.iterdir()} == set(expected) | {'release-sha256.txt'}
-          Path('dist').mkdir()
+          assert root.is_dir() and not root.is_symlink()
+          assert {p.name for p in root.iterdir()} == {'dist', 'release-sha256.txt'}
+          manifest = root / 'release-sha256.txt'
+          assert manifest.is_file() and not manifest.is_symlink()
+          packages = root / 'dist'
+          assert packages.is_dir() and not packages.is_symlink()
+          assert {p.name for p in packages.iterdir()} == set(expected)
           for name, digest in expected.items():
-              path = root / name
+              path = packages / name
+              assert path.is_file() and not path.is_symlink(), name
               assert hashlib.sha256(path.read_bytes()).hexdigest() == digest, name
-              path.rename(Path('dist') / name)
+          assert manifest.read_text() == ''.join(
+              digest + '  dist/' + name + '\n' for name, digest in expected.items()
+          )
           PY
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
         with:
-          packages-dir: dist/
+          packages-dir: release/dist/
