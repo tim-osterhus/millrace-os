@@ -7,6 +7,167 @@ from uuid import uuid4
 import pytest
 
 
+def test_final_receipt_stops_watcher_without_completing_owned_call(
+    router_factory, tmp_path
+):
+    import threading
+
+    from millrace_os.router_client import RouterClient
+
+    class CountingClient(RouterClient):
+        watcher_reads = 0
+        started_ids = None
+
+        def execute_request(self, home, request, on_started=None):
+            def started(ids):
+                self.started_ids = ids
+                on_started(ids)
+
+            return super().execute_request(home, request, on_started=started)
+
+        def receipt(self, *args, **kwargs):
+            if threading.current_thread().name.startswith("millrace-os-observe-"):
+                self.watcher_reads += 1
+            return super().receipt(*args, **kwargs)
+
+    client = CountingClient({"default": tmp_path / "watch-receipt/core"})
+    h = router_factory("watch-receipt", router_client=client)
+    workflow, project = h.flow(wait=True)
+    instance = h.create(workflow, project)
+    client.watcher_reads = 0
+    start = h.request("start_run", instance, version=1, payload={"edit_mode": "locked"})
+    h.send(start, wait=False)
+    call = h.service.router_workers.submit("default", start)
+    try:
+        h.until(lambda: (project / "started").exists())
+        h.until(lambda: call.receipt and call.receipt["status"] == "applied")
+        assert client.started_ids == {"instance_id": instance, "run_id": call.run_id}
+        # Core's callback supplied IDs only: the watcher had to acquire a receipt.
+        assert client.watcher_reads > 0
+        call.watcher.join(timeout=1)
+        assert not call.watcher.is_alive()
+        reads = client.watcher_reads
+        assert call.thread.is_alive() and not call.done.is_set() and not call.joined
+        observed = h.observe(start["request_id"]).json()
+        assert observed["phase"] == "call_active"
+        assert observed["core_receipt"] == call.receipt
+        assert client.watcher_reads == reads
+        assert any(
+            row["observation"]["request_id"] == start["request_id"]
+            and not row["joined"]
+            for row in h.service.router_workers.snapshot()
+        )
+    finally:
+        run = h.until(lambda: call.run_id)
+        cancel = h.request("cancel_run", instance, run)
+        h.send(cancel)
+        (project / "release").write_text("exact waiting graph cleanup")
+        h.settled(instance, run, "cancelled")
+        h.until(
+            lambda: all(row["joined"] for row in h.service.router_workers.snapshot())
+        )
+        assert call.done.is_set() and call.joined
+        assert not call.thread.is_alive() and not call.watcher.is_alive()
+
+
+@pytest.mark.parametrize("resolution", ["refused", "applied"])
+def test_delayed_queued_return_cannot_replace_final_watched_receipt(
+    router_factory, tmp_path, resolution
+):
+    import copy
+    import threading
+
+    from millrace_plus.router import control
+
+    from millrace_os.router_client import RouterClient
+
+    queued_ready, release_queued = threading.Event(), threading.Event()
+
+    class DelayedClient(RouterClient):
+        def execute_request(self, home, request, on_started=None):
+            result = super().execute_request(home, request, on_started=on_started)
+            if request["operation"] == "start_run" and result["status"] == "queued":
+                queued_ready.set()
+                assert release_queued.wait(10)
+            return result
+
+    client = DelayedClient({"default": tmp_path / "queued-return/core"})
+    h = router_factory("queued-return", router_client=client)
+    workflow, project = h.flow(wait=True)
+    instance = h.create(workflow, project)
+    entered, release_holder = threading.Event(), threading.Event()
+    external_ids, errors = {}, []
+
+    def started(ids):
+        external_ids.update(ids)
+        entered.set()
+        assert release_holder.wait(10)
+
+    def hold():
+        try:
+            control.execute_request(
+                h.request(
+                    "start_run", instance, version=1, payload={"edit_mode": "locked"}
+                ),
+                state_home=h.home,
+                on_started=started,
+            )
+        except BaseException as exc:
+            errors.append(getattr(exc, "code", None))
+
+    holder = threading.Thread(target=hold, daemon=False)
+    holder.start()
+    call = None
+    try:
+        assert entered.wait(3)
+        if resolution == "applied":
+            receipt = control.execute_request(
+                h.request(
+                    "cancel_plane", instance, external_ids["run_id"], plane="main"
+                ),
+                state_home=h.home,
+            )
+            assert receipt["status"] == "queued"
+        request = h.request(
+            "start_run", instance, version=2 if resolution == "applied" else 1,
+            payload={"edit_mode": "locked"},
+        )
+        h.send(request, wait=False)
+        call = h.service.router_workers.submit("default", request)
+        assert queued_ready.wait(3)
+        h.until(lambda: call.receipt and call.receipt["status"] == "queued")
+        release_holder.set()
+        h.until(lambda: call.receipt and call.receipt["status"] == resolution)
+        call.watcher.join(timeout=1)
+        assert not call.watcher.is_alive()
+        assert call.thread.is_alive() and not call.done.is_set() and not call.joined
+        final = copy.deepcopy(call.receipt)
+        targets = call.instance_id, call.run_id
+        release_queued.set()
+        call.thread.join(timeout=3)
+        assert not call.thread.is_alive()
+        assert call.result["status"] == "queued"
+        assert call.receipt == final
+        assert (call.instance_id, call.run_id) == targets
+        assert h.observe(request["request_id"]).json()["core_receipt"] == final
+    finally:
+        release_holder.set()
+        release_queued.set()
+        (project / "release").write_text("exact queued-return fixture cleanup")
+        holder.join(timeout=5)
+        assert not holder.is_alive()
+        for run in control.inspect_instance(instance, state_home=h.home)["runs"]:
+            if run["status"] not in {"succeeded", "failed", "cancelled"}:
+                h.send(h.request("cancel_run", instance, run["id"]))
+                h.settled(instance, run["id"], "cancelled")
+        h.service.request_shutdown(cancel=True)
+        assert h.service.wait_for_stop(5)
+        assert all(row["joined"] for row in h.service.router_workers.snapshot())
+        assert errors == (["project_owned"] if resolution == "applied" else [])
+        if call is not None:
+            assert call.done.is_set() and call.joined
+
+
 def test_inventory_receipt_and_replay_truth(router_harness):
     h = router_harness
     workflow, project = h.flow()

@@ -191,6 +191,13 @@ class RouterWorkers:
             # A previous same-ID body is never trusted as this call's receipt.
             return
         with self._lock:
+            if (
+                receipt.get("status") == "queued"
+                and call.receipt is not None
+                and call.receipt.get("status") in {"applied", "refused"}
+            ):
+                # The physical call can return its older queued snapshot later.
+                return
             call.receipt = copy.deepcopy(receipt)
             call.instance_id = receipt.get("instance_id") or call.instance_id
             call.run_id = receipt.get("run_id") or call.run_id
@@ -243,6 +250,12 @@ class RouterWorkers:
             and call.receipt is not None
             and call.receipt.get("status") == "queued"
         ):
+            with self._lock:
+                if call.receipt is not None and call.receipt.get("status") in {
+                    "applied",
+                    "refused",
+                }:
+                    return
             try:
                 receipt = self.client.receipt(
                     call.home,
