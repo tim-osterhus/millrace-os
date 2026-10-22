@@ -97,3 +97,35 @@ def test_credential_store_refuses_symlink_and_dangling_parent(tmp_path) -> None:
     dangling.symlink_to(tmp_path / "missing", target_is_directory=True)
     with pytest.raises(PermissionError, match="symbolic link"):
         CredentialStore(dangling / "credentials.json").ensure()
+
+
+def test_router_homes_are_explicit_canonical_and_reject_aliases(tmp_path):
+    values = {
+        "MILLRACE_OS_CONFIG_DIR": str(tmp_path / "config"),
+        "MILLRACE_OS_STATE_DIR": str(tmp_path / "state"),
+        "MILLRACE_OS_ROUTER_STATE_HOMES": '{"primary":"'
+        + str(tmp_path / "core")
+        + '"}',
+    }
+    config = ApplicationConfig.from_environment(values)
+    assert config.router_state_homes == {"primary": (tmp_path / "core").resolve()}
+    assert not (tmp_path / "core").exists()
+    for invalid in ('{"a":"one","a":"two"}', "[]", '{"a":1}'):
+        with pytest.raises(ConfigurationError):
+            ApplicationConfig.from_environment(
+                {**values, "MILLRACE_OS_ROUTER_STATE_HOMES": invalid}
+            )
+    with pytest.raises(ConfigurationError, match="aliases"):
+        ApplicationConfig(
+            config_dir=tmp_path / "c",
+            state_dir=tmp_path / "s",
+            credential_path=tmp_path / "c/token",
+            router_state_homes={"a": tmp_path / "core", "b": tmp_path / "core/../core"},
+        )
+    with pytest.raises(ConfigurationError, match="name"):
+        ApplicationConfig(
+            config_dir=tmp_path / "c",
+            state_dir=tmp_path / "s",
+            credential_path=tmp_path / "c/token",
+            router_state_homes={"../arbitrary": tmp_path / "core"},
+        )

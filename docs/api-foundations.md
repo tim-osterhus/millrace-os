@@ -1,8 +1,6 @@
 # OS API foundations
 
-This packet implements local trust and OS-owned version-one contracts. No Core
-mapping, provider execution, durable jobs, receipts or released integration is
-implemented. All 89 released OS/provider gates remain NOT_RUN.
+The retained foundation implements local trust and OS-owned version-one contracts. Millrace OS 0.23.0 adds the public router mapping documented in `router-operation.md`. Core retains durable execution and receipt authority. Historical released OS/provider gates remain separate evidence.
 
 `millrace-os serve` creates the owner-only bearer credential. CLI/script clients
 read that explicitly configured credential file and send `Authorization: Bearer
@@ -72,8 +70,7 @@ assets only. Every other data route requires bearer or cookie authentication.
   inputs and outputs. Rotation returns only status. Exchange needs exact Origin.
 - `GET /api/v1/recovery/diagnostics`: authenticated, redacted, storage-independent.
 
-No other route accepts query parameters. JSON mutations are capped at 4096 bytes,
-including chunked bodies, and require application/json. Auth/Origin checks happen
+Documented router GET routes additionally accept exact home/target query keys. Unknown or duplicate router query keys are refused. JSON mutations are capped at 4096 bytes, including chunked bodies, and require application/json. Only exact router draft file-set/per-file PUT uploads permit 1 MiB of encoded JSON. Auth/Origin checks happen
 before input validation or handlers. Unknown input fields are forbidden. Public
 validation errors never include rejected values. Error envelopes are stable and
 bounded; this foundation does not claim a diagnostic record or receipt exists.
@@ -82,3 +79,13 @@ bounded; this foundation does not claim a diagnostic record or receipt exists.
 events and storage models. `api.export_artifacts(app)` generates deterministic
 OpenAPI 3.1 and JSON Schema 2020-12 artifacts plus a version/digest registry. All
 three JSON files are packaged wheel resources and checked byte-for-byte by tests.
+
+## Router contracts
+
+`RouterRead` reports exact Core data with Core authority and an observation time. It never inherits foundation-only compatibility or redaction claims. Validation includes a typed `validation_context` and positive observed `run_state_version` for run-aware validation. Nested plane/node settings remain intact.
+
+`RouterCallObservation` separates owned-call phase from the immutable Core receipt. Queued, applied, and refused receipts retain their exact IDs, request digest, plane target, state version, and stop sets. An applied pause receipt does not establish final writer drain. OS worker errors remain sanitized OS errors, never fabricated refused Core receipts.
+
+Router controls use tracked non-daemon workers. Core is imported lazily through the public Plus execution/v2 handshake. Missing or mismatched Core produces a typed router availability error without changing foundation trust/readiness. Catalog authoring imports independently and does not require Core.
+
+The packaged JSON schemas and OpenAPI derive from the source models/routes through the existing exporter. Session mutations document Origin and CSRF requirements. The original action shell and foundation SSE remain separate unavailable/non-durable surfaces.

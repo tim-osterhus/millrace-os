@@ -6,7 +6,14 @@ import hashlib
 import json
 from typing import Annotated, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    JsonValue,
+    model_validator,
+)
 
 Identifier = Annotated[
     str, Field(min_length=1, max_length=96, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
@@ -58,7 +65,7 @@ class Read(Contract, Generic[T]):  # noqa: UP046 - Pydantic generic schema names
 
 class Version(Contract):
     package: Literal["millrace-os"] = "millrace-os"
-    version: Literal["1.0.0"] = "1.0.0"
+    version: Literal["0.23.0"] = "0.23.0"
     api: Literal["v1"] = "v1"
 
 
@@ -180,7 +187,166 @@ class Registry(Contract):
     schemas: Annotated[list[SchemaEntry], Field(max_length=64)]
 
 
+class RouterRead(Contract, Generic[T]):  # noqa: UP046
+    contract: Literal["millrace-os-router-read/v1"] = "millrace-os-router-read/v1"
+    home: Identifier
+    data: T
+    source_provider: Literal["core"] = "core"
+    authority: Literal["core-state-home"] = "core-state-home"
+    observed_at: Annotated[str, Field(max_length=40)]
+
+
+class RouterCallObservation(Contract):
+    contract: Literal["millrace-os-router-call/v1"] = "millrace-os-router-call/v1"
+    home: Identifier
+    request_id: Identifier
+    request_digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None
+    instance_id: Identifier | None
+    run_id: Identifier | None
+    source: Literal["os_owned_call", "core_receipt"]
+    phase: Literal[
+        "admission_pending",
+        "call_active",
+        "call_returned",
+        "call_failed",
+        "receipt_observed",
+    ]
+    core_receipt: dict[str, JsonValue] | None
+    observed_at: Annotated[str, Field(max_length=40)]
+
+
+class RouterRequestInput(Contract):
+    home: Identifier
+    request: dict[str, JsonValue]
+
+
+class RouterValidationContext(Contract):
+    kind: Literal["instance", "run"]
+    instance_id: Identifier
+    run_id: Identifier | None
+    settings_version: Annotated[int, Field(ge=1)]
+    run_state_version: Annotated[int, Field(ge=1)] | None = None
+
+    @model_validator(mode="after")
+    def coherent_target(self):
+        if self.kind == "run" and (
+            self.run_id is None or self.run_state_version is None
+        ):
+            raise ValueError("run validation requires observed run state")
+        if self.kind == "instance" and (
+            self.run_id is not None or self.run_state_version is not None
+        ):
+            raise ValueError("instance validation has no run state")
+        return self
+
+
+class RouterValidation(Contract):
+    valid: bool
+    revision_id: str | None
+    draft_revision: dict[str, JsonValue] | None = None
+    diagnostics: list[str]
+    diagnostic_details: list[str] = Field(default_factory=list)
+    validation_context: RouterValidationContext
+    resolved_nodes: dict[str, dict[str, dict[str, JsonValue]]]
+    warnings: list[str]
+
+
+class RouterValidateInput(Contract):
+    home: Identifier
+    instance_id: Identifier
+    run_id: Identifier | None = None
+    draft_id: Identifier | None = None
+
+
+class DraftFile(Contract):
+    path: Annotated[str, Field(min_length=1, max_length=512)]
+    content_base64: Annotated[str, Field(max_length=1048576)]
+
+
+class DraftCreateInput(Contract):
+    home: Identifier
+    files: Annotated[list[DraftFile], Field(max_length=256)] = Field(
+        default_factory=list
+    )
+
+
+class DraftFilesInput(Contract):
+    home: Identifier
+    files: Annotated[list[DraftFile], Field(max_length=256)]
+
+
+class DraftFileInput(DraftFile):
+    home: Identifier
+
+
+class DraftValidateInput(Contract):
+    home: Identifier
+    instance_id: Identifier
+    run_id: Identifier | None = None
+
+
+class DraftApplyInput(Contract):
+    home: Identifier
+    instance_id: Identifier
+    run_id: Identifier
+    base_state_version: Annotated[int, Field(ge=1)]
+    request_id: Annotated[
+        str, Field(min_length=32, max_length=32, pattern=r"^[0-9a-f]{32}$")
+    ]
+
+
+class PublicationRepairInput(Contract):
+    home: Identifier
+    instance_id: Identifier
+
+
+class DraftRead(Contract):
+    contract: Literal["millrace-os-draft/v1"] = "millrace-os-draft/v1"
+    home: Identifier
+    draft_id: Identifier
+    files: list[DraftFile]
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+
+class CatalogInitInput(Contract):
+    home: Identifier
+    selector: Annotated[str, Field(min_length=1, max_length=256)]
+    destination: Annotated[str, Field(min_length=1, max_length=4096)]
+
+
+class CatalogCopyInput(Contract):
+    home: Identifier
+    source: Annotated[str, Field(min_length=1, max_length=4096)] | None = None
+    destination: Annotated[str, Field(min_length=1, max_length=4096)]
+    draft_id: Identifier | None = None
+
+
+class RouterLocalRead(Contract):
+    contract: Literal["millrace-os-router-local/v1"] = "millrace-os-router-local/v1"
+    home: Identifier
+    authority: Literal["os-client"] = "os-client"
+    observed_at: Annotated[str, Field(max_length=40)]
+    data: JsonValue
+
+
 MODELS = [
+    RouterRead[JsonValue],
+    RouterRead[RouterValidation],
+    RouterCallObservation,
+    RouterRequestInput,
+    RouterValidationContext,
+    RouterValidation,
+    RouterValidateInput,
+    DraftCreateInput,
+    DraftFilesInput,
+    DraftFileInput,
+    DraftValidateInput,
+    DraftApplyInput,
+    PublicationRepairInput,
+    DraftRead,
+    CatalogInitInput,
+    CatalogCopyInput,
+    RouterLocalRead,
     Health,
     Error,
     Version,

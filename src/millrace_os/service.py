@@ -52,6 +52,7 @@ class ProviderProcessBoundary(Protocol):
 class ServiceDependencies:
     provider_processes: ProviderProcessBoundary | None = None
     state_factory: Callable[[Path], SQLiteState] = SQLiteState.open
+    router_client: object | None = None
 
 
 def _public_liveness(service: Service) -> tuple[dict[str, str], int]:
@@ -67,7 +68,7 @@ def create_app(service: Service) -> FastAPI:
 
     app = FastAPI(
         title="Millrace OS",
-        version="1.0.0",
+        version="0.23.0",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
@@ -95,6 +96,20 @@ class Service:
 
         self.trust = LocalTrust(CredentialStore(config.credential_path))
         self.event_connections = 0
+        from .router_client import RouterClient
+        from .router_workers import RouterWorkers
+        from .workflow_drafts import WorkflowDrafts
+
+        self.router_client = self.dependencies.router_client or RouterClient(
+            config.router_state_homes
+        )
+        self.router_workers = RouterWorkers(self.router_client)
+        self.workflow_drafts = WorkflowDrafts(
+            config.state_dir, self.router_client, self.router_workers
+        )
+        self.router_workers.admission_guard = self.workflow_drafts.acquire
+        self._shutdown_thread: threading.Thread | None = None
+        self._shutdown_lock = threading.Lock()
         self.app = create_app(self)
         self._server: uvicorn.Server | None = None
         self._server_socket: socket.socket | None = None
@@ -174,6 +189,8 @@ class Service:
         if self._lifecycle != "stopped":
             raise ServiceLifecycleError("service is already started")
         self._recovery = None
+        self._shutdown_thread = None
+        self.router_workers.reopen()
         self._server_error = None
         self._ready.clear()
         self._stopped.clear()
@@ -271,9 +288,38 @@ class Service:
     def wait_for_stop(self, timeout: float | None = None) -> bool:
         return self._stopped.wait(timeout)
 
+    def request_shutdown(self, *, cancel: bool = False) -> None:
+        """Set closing intent and start one owned drain coordinator without joining."""
+        with self._shutdown_lock:
+            if self._lifecycle == "stopped":
+                return
+            repeated = self._shutdown_thread is not None
+            self._lifecycle = "closing"
+            self.router_workers.request_shutdown(cancel=cancel or repeated)
+            if repeated:
+                return
+            self._shutdown_thread = threading.Thread(
+                target=self._drain_and_stop, name="millrace-os-drain", daemon=False
+            )
+            self._shutdown_thread.start()
+
+    def _drain_and_stop(self) -> None:
+        self.router_workers.drain()
+        self._finish_stop()
+
     def stop(self) -> None:
+        """Drain router calls before closing HTTP and OS state."""
         if self._lifecycle == "stopped":
             return
+        # Calling stop to await a previously requested drain must not turn a
+        # graceful pause into the explicit second-shutdown cancellation intent.
+        if self._shutdown_thread is None:
+            self.request_shutdown()
+        thread = self._shutdown_thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join()
+
+    def _finish_stop(self) -> None:
         self._lifecycle = "stopping"
         self._abort_server()
         self._server = None
@@ -288,7 +334,7 @@ class Service:
     def run_forever(self) -> None:
         self.start()
         try:
-            while self._lifecycle == "running":
+            while self._lifecycle in {"running", "closing"}:
                 if self._server_thread is not None:
                     self._server_thread.join(timeout=0.5)
         finally:

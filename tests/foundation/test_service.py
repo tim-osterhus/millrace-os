@@ -245,3 +245,73 @@ def test_localhost_loopback_service_starts_when_explicitly_configured(tmp_path) 
         assert json.loads(body)["status"] == "ok"
     finally:
         service.stop()
+
+
+def test_late_public_stop_cannot_escape_final_drain_seal(tmp_path, monkeypatch):
+    import threading
+
+    import httpx
+
+    from millrace_os.credentials import CredentialStore
+    from millrace_os.router_client import RouterClient
+
+    entered, release = threading.Event(), threading.Event()
+
+    class DelayedStop(RouterClient):
+        def execute_request(self, home, request, on_started=None):
+            entered.set()
+            assert release.wait(5)
+            return super().execute_request(home, request, on_started)
+
+    config = _config(tmp_path)
+    router = DelayedStop({"default": tmp_path / "core"})
+    service = Service(config, dependencies=ServiceDependencies(router_client=router))
+    service.start()
+    drained, finish = threading.Event(), threading.Event()
+    original_finish = service._finish_stop
+
+    def finish_boundary():
+        drained.set()
+        assert finish.wait(5)
+        original_finish()
+
+    monkeypatch.setattr(service, "_finish_stop", finish_boundary)
+    http = httpx.Client(
+        base_url=service.browser_endpoint,
+        headers={
+            "Authorization": "Bearer "
+            + CredentialStore(config.credential_path).ensure()
+        },
+        timeout=2,
+        trust_env=False,
+    )
+    try:
+        service.request_shutdown()
+        assert drained.wait(2)
+        assert service.state is not None
+        # The final boundary has no outstanding calls. A stop arriving after
+        # that atomic handoff must be refused before it can enter any facade.
+        request = {
+            "format": "millrace-router-request/v2",
+            "operation": "pause_run",
+            "instance_id": "0" * 32,
+            "run_id": "1" * 32,
+            "plane_id": None,
+            "request_id": "late-stop",
+            "expected_state_version": None,
+            "payload": {},
+        }
+        response = http.post(
+            "/api/v1/router/requests", json={"home": "default", "request": request}
+        )
+        assert response.status_code == 503, response.text
+        assert not entered.is_set()
+        assert service.router_workers.snapshot() == []
+        finish.set()
+        assert service.wait_for_stop(3)
+        assert service.state is None
+    finally:
+        release.set()
+        finish.set()
+        service.stop()
+        http.close()

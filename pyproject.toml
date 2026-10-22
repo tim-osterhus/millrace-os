@@ -4,8 +4,9 @@ build-backend = "uv_build"
 
 [project]
 name = "millrace-os"
-version = "1.0.0"
-description = "A small, local, restartable foundation service for Millrace OS Release 1."
+version = "0.23.0"
+description = "A local headless service for independent Millrace workflow instances."
+readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -17,6 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+router = ["millrace-plus[router]>=0.23.0,<0.24.0"]
 dev = ["pytest==9.0.2", "ruff==0.14.14", "httpx==0.28.1"]
 browser = ["playwright==1.55.0"]
 
@@ -26,6 +28,8 @@ millrace-os = "millrace_os.cli:main"
 [tool.uv.build-backend]
 module-root = "src"
 module-name = "millrace_os"
+source-include = ["docs/**", "tests/**", "uv.lock"]
+source-exclude = ["/.github", "/.gitignore", "/dist", "/.venv", "__pycache__", "*.pyc", ".DS_Store"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,42 @@
+# Millrace OS
+
+Millrace OS is a local service and command-line client for operating independent Millrace workflow instances.
+
+Use it to inspect runs, submit exact control requests, and publish workflow edits through one authenticated loopback API. Core owns instance inventory, execution, receipts, planes, and writer state. OS owns named state-home selections, drafts, and the lifetime of its controller calls.
+
+Millrace OS 0.23.0 requires Python 3.12 or later. Install the base service independently, or include the optional public router controls:
+
+```bash
+python -m pip install 'millrace-os==0.23.0'
+python -m pip install 'millrace-os[router]==0.23.0'
+```
+
+The router extra selects `millrace-plus[router]>=0.23.0,<0.24.0`, which supplies Core transitively. Base service startup does not import Core or Plus. Router operations refuse unavailable or incompatible components. The selected release uses Core, Plus, and OS 0.23.0 with `millrace-router-execution/v2`. Matching version numbers do not establish execution-contract compatibility or native provider qualification.
+
+Start the installed service and inspect a configured Core home:
+
+```bash
+millrace-os serve --router-state-home main=/absolute/path/to/core-state
+millrace-os router instances --home main
+millrace-os router inspect --home main --instance INSTANCE_ID --run RUN_ID
+millrace-os router request --home main --file saved-request.json
+```
+
+The service creates an owner-only bearer credential. The client reads that configured credential and sends it only to the explicit loopback endpoint. See [router operation](docs/router-operation.md) for authoring and control examples.
+
+## Receipts and controller ownership
+
+A request file contains the complete `millrace-router-request/v2` envelope, including its request ID, target IDs, expected state version, and payload. OS forwards it unchanged. A queued receipt means Core admitted the request. It does not mean the request applied or its writers stopped.
+
+OS tracks every public call that could acquire Core's controller lock. The first shutdown requests pause and drains those calls before closing HTTP and local storage. A second deliberate shutdown requests Core cancellation. Unrelated provider-hosted processes retain their own lifecycle.
+
+Workflow Apply freezes a draft, pauses its exact run, observes quiescence and final call drain, validates, publishes the files, and submits the revision. It leaves the run paused with a pending revision. Acceptance requires an explicit later request. Core decides whether acceptance can continue runnable planes.
+
+## Source boundaries
+
+- `router_client.py` calls public Plus controls and catalog functions.
+- `router_workers.py` owns bounded controller and control-ingress calls.
+- `workflow_drafts.py` stores drafts and serializes cooperating OS publications.
+- `api.py`, `contracts.py`, and `cli.py` define the shared HTTP and headless client surface.
+
+The browser is optional. Existing bootstrap and recovery pages remain available, and deterministic authoring needs neither a browser nor a model. Read [API foundations](docs/api-foundations.md), [service foundations](docs/foundation.md), and [legacy disposition](docs/architecture/legacy-disposition.md) for the retained trust and storage contracts. The package uses the [Apache 2.0 license](LICENSE).

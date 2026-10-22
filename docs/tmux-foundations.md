@@ -1,9 +1,9 @@
 # Stock tmux provider foundation
 
-OS-P03 adds a small in-process reader for the pinned stock tmux executable.
+The retained OS-P03 foundation supplies a small in-process reader for the pinned stock tmux executable.
 `TmuxProvider` accepts a `TmuxConfig` with an absolute executable and an
 explicit absolute Unix socket. A missing socket is unavailable; the provider
-never falls back to tmux's default server. The production configuration uses
+never falls back to tmux's default server. The provider default uses
 the recorded 3.7c executable and SHA-256
 `1d101560ca3d4fb6f86bb53e6d9946e7b98444343d1fdab4a2a6e72980e232a5`.
 
@@ -59,4 +59,4 @@ an inventory.
 
 The provider has no Core workspace/run mapping and no mutation or lifecycle
 authority. Positive ensure, relaunch, pause, resume, workflow-state projection,
-and released qualification remain later packet work.
+and general native qualification are outside this read-only provider. Current workflow operation uses [public router controls](router-operation.md). The Release 1 inventory retains its separate historical 3.7b evidence; neither record qualifies every tmux installation.

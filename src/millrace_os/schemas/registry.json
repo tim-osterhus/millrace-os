@@ -27,8 +27,48 @@
       "version": 1
     },
     {
+      "contract_id": "CatalogCopyInput",
+      "sha256": "44971a08c97fe64fd2039964bfe8a83f6fde89432e81a7c38f9289a1764d9d96",
+      "version": 1
+    },
+    {
+      "contract_id": "CatalogInitInput",
+      "sha256": "de4526868a31698ed41bf3884f00acecf4b9f6b24fbec32f3f83657a8cc928b8",
+      "version": 1
+    },
+    {
       "contract_id": "Diagnostics",
       "sha256": "b61d56d2ddc0f1701b5f3ba4f55e706a9498a6e3ef60551765a1c45d6d86dcf8",
+      "version": 1
+    },
+    {
+      "contract_id": "DraftApplyInput",
+      "sha256": "e4e88744765951dcaa9b7ba6232f0963447d493b9196042a994fda481f3c5cf1",
+      "version": 1
+    },
+    {
+      "contract_id": "DraftCreateInput",
+      "sha256": "81413be708f79e796563405005dbbdcb2a6edc09effb821a54735555d09d4e82",
+      "version": 1
+    },
+    {
+      "contract_id": "DraftFileInput",
+      "sha256": "4654978b105c2914a08a85110b6f2581af29c2545c0954f4b26115a3c3f28b39",
+      "version": 1
+    },
+    {
+      "contract_id": "DraftFilesInput",
+      "sha256": "77b2c8d7bd05c70d73c6061de6aa8f638afb5a843be3135a33e0378cfb23ea7d",
+      "version": 1
+    },
+    {
+      "contract_id": "DraftRead",
+      "sha256": "710998fcbf9399471245ce71fa86ebd8058edef395593deecbd6d3c8f898d089",
+      "version": 1
+    },
+    {
+      "contract_id": "DraftValidateInput",
+      "sha256": "44b25ab9ce851192a2bf8a66062df7372c9b759428c182cdbdf4f46986a41875",
       "version": 1
     },
     {
@@ -62,6 +102,11 @@
       "version": 1
     },
     {
+      "contract_id": "PublicationRepairInput",
+      "sha256": "9252bbd4a929f8f142e56323741dc2c9f2487013ba5a7dcf5442f56463061e09",
+      "version": 1
+    },
+    {
       "contract_id": "Read-Diagnostics",
       "sha256": "2c37ae517b532b87476f5b9d895407a91d1c006e7fb4a59b542de0ebf818e958",
       "version": 1
@@ -88,7 +133,7 @@
     },
     {
       "contract_id": "Read-Version",
-      "sha256": "0d8d98e8f66eaed8de3512e8bc2b07ee1760e732139aaac093ccc1e68d37106e",
+      "sha256": "217b25dfd5c518b007b438b09e4b86ae11aaad69b12877fb2dc202fa621b8217",
       "version": 1
     },
     {
@@ -107,6 +152,46 @@
       "version": 1
     },
     {
+      "contract_id": "RouterCallObservation",
+      "sha256": "1f4a01942f393c5669a959e0c49919f3a28f9c9e5da91605bd344b6dd58cc4a7",
+      "version": 1
+    },
+    {
+      "contract_id": "RouterLocalRead",
+      "sha256": "b9b393e5d6d2b46d886cd8c543d6bdd8575977c86ac1e1bcfaebcb6bef94a116",
+      "version": 1
+    },
+    {
+      "contract_id": "RouterRead-JsonValue",
+      "sha256": "e6ba8e14d76e63b7b18eedc01b7e8673f6962ec5362e64d6b102d0a0dbbc96e0",
+      "version": 1
+    },
+    {
+      "contract_id": "RouterRead-RouterValidation",
+      "sha256": "33a5f250e212a6184e1488b9fd7e4562c1b6c30dd243df0ef6863e5cb19e0ca1",
+      "version": 1
+    },
+    {
+      "contract_id": "RouterRequestInput",
+      "sha256": "421e6015434f8e475b76783aa2a8074c385554759efb8dbb0db74904217d9bc0",
+      "version": 1
+    },
+    {
+      "contract_id": "RouterValidateInput",
+      "sha256": "f4309e890fe0dd8f189fc2b625a714371e5fc113ab6d40312a2e3a63b783cb90",
+      "version": 1
+    },
+    {
+      "contract_id": "RouterValidation",
+      "sha256": "45a2f268201481fbe58d9462eaacd1743c584ec4b26733ca2527e872d4740be4",
+      "version": 1
+    },
+    {
+      "contract_id": "RouterValidationContext",
+      "sha256": "07d11721f9f65b8858a1afb5cb601862b79011e377c7d633e9df24337986652a",
+      "version": 1
+    },
+    {
       "contract_id": "SessionOutput",
       "sha256": "aeb2b843cd3ca8b2f681a2ec8f3220406a4a32e2fa511417c892d29c8a212871",
       "version": 1
@@ -118,7 +203,7 @@
     },
     {
       "contract_id": "Version",
-      "sha256": "3d052c4b4026568a043058202f5a3bd2f657e7c2f75f607238a6eea6fb171b3d",
+      "sha256": "9d2c9bb2e5fd36fb45525753b031a4d43ddc5f1f8212e277d9c37b0788a60d2c",
       "version": 1
     }
   ]

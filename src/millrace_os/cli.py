@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import signal
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 from dataclasses import replace
+from pathlib import Path
 
 from .config import ApplicationConfig, ConfigurationError, _endpoint_host
 from .credentials import CredentialStore
@@ -62,6 +65,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     _add_config_options(serve)
     serve.add_argument("--no-pid-file", action="store_true")
+    serve.add_argument(
+        "--router-state-home", action="append", default=[], metavar="NAME=PATH"
+    )
     for name in ("health", "readiness"):
         query = subparsers.add_parser(name, help="query the local daemon")
         _add_config_options(query)
@@ -74,6 +80,62 @@ def _parser() -> argparse.ArgumentParser:
     _add_config_options(rotate)
     stop = subparsers.add_parser("stop", help="stop the recorded local daemon")
     stop.add_argument("--state-dir")
+    stop.add_argument("--timeout", type=float, default=5.0)
+    router = subparsers.add_parser(
+        "router", help="operate public Core controls headlessly"
+    )
+    commands = router.add_subparsers(dest="router_command", required=True)
+    for name in ("instances", "inspect", "request", "validate"):
+        command = commands.add_parser(name)
+        _add_config_options(command)
+        command.add_argument("--home", required=True)
+        if name == "inspect":
+            command.add_argument("--instance", required=True)
+            command.add_argument("--run")
+        elif name == "request":
+            choice = command.add_mutually_exclusive_group(required=True)
+            choice.add_argument("--file")
+            choice.add_argument("--request-id")
+            command.add_argument("--instance")
+            command.add_argument("--run")
+        elif name == "validate":
+            command.add_argument("--instance", required=True)
+            command.add_argument("--run")
+            command.add_argument("--draft")
+    catalog = commands.add_parser("catalog").add_subparsers(
+        dest="catalog_command", required=True
+    )
+    for name in ("list", "init", "copy"):
+        command = catalog.add_parser(name)
+        _add_config_options(command)
+        command.add_argument("--home", required=True)
+        if name == "init":
+            command.add_argument("--selector", required=True)
+            command.add_argument("--destination", required=True)
+        elif name == "copy":
+            choice = command.add_mutually_exclusive_group(required=True)
+            choice.add_argument("--source")
+            choice.add_argument("--draft")
+            command.add_argument("--destination", required=True)
+    drafts = commands.add_parser("draft").add_subparsers(
+        dest="draft_command", required=True
+    )
+    for name in ("create", "read", "put", "validate", "apply", "repair-publication"):
+        command = drafts.add_parser(name)
+        _add_config_options(command)
+        command.add_argument("--home", required=True)
+        if name not in {"create", "repair-publication"}:
+            command.add_argument("--draft", required=True)
+        if name == "put":
+            command.add_argument("--path", required=True)
+            command.add_argument("--file", required=True)
+        if name in {"validate", "apply", "repair-publication"}:
+            command.add_argument("--instance", required=True)
+        if name in {"validate", "apply"}:
+            command.add_argument("--run", required=name == "apply")
+        if name == "apply":
+            command.add_argument("--base-state-version", type=int, required=True)
+            command.add_argument("--request-id", required=True)
     return parser
 
 
@@ -98,6 +160,19 @@ def _config(args: argparse.Namespace) -> ApplicationConfig:
         }.items()
         if value is not None
     }
+    selected_homes = getattr(args, "router_state_home", [])
+    if selected_homes:
+        homes = dict(config.router_state_homes)
+        names = set()
+        for item in selected_homes:
+            name, separator, path = item.partition("=")
+            if not separator or not name or not path or name in names:
+                raise ConfigurationError(
+                    "state homes require unique NAME=PATH selections"
+                )
+            names.add(name)
+            homes[name] = Path(path)
+        updates["router_state_homes"] = homes
     if args.config_dir and args.credential_path is None:
         updates["credential_path"] = os.path.join(args.config_dir, "credentials.json")
     return replace(config, **updates)
@@ -114,7 +189,7 @@ def _serve(args: argparse.Namespace) -> int:
         print(f"READY {service.browser_endpoint}", flush=True)
 
         def request_stop(_signum: int, _frame: object) -> None:
-            service.stop()
+            service.request_shutdown()
 
         signal.signal(signal.SIGTERM, request_stop)
         signal.signal(signal.SIGINT, request_stop)
@@ -188,15 +263,135 @@ def _stop(args: argparse.Namespace) -> int:
     if args.state_dir:
         config = replace(config, state_dir=args.state_dir)
     identity = read_identity(config.pid_path)
-    stop_verified(identity, timeout=5.0)
+    if not 0 < args.timeout <= 86400:
+        raise ConfigurationError(
+            "stop observation timeout must be positive and at most 86400 seconds"
+        )
+    stop_verified(identity, timeout=args.timeout)
     print(json.dumps({"status": "stopped", "pid": identity.pid}))
     return 0
+
+
+def _router(args):
+    config = _config(args)
+    route = "/api/v1/router"
+    method = "GET"
+    body = None
+    query = {"home": args.home}
+    command = args.router_command
+    if command == "instances":
+        route += "/instances"
+    elif command == "inspect":
+        route += "/instances/" + urllib.parse.quote(args.instance, safe="")
+        if args.run:
+            route += "/runs/" + urllib.parse.quote(args.run, safe="")
+    elif command == "request":
+        if args.file:
+            request = json.loads(Path(args.file).read_bytes())
+            if not isinstance(request, dict):
+                raise ConfigurationError(
+                    "request file must contain an exact saved JSON envelope"
+                )
+            method, body = "POST", {"home": args.home, "request": request}
+            route += "/requests"
+        else:
+            route += "/requests/" + urllib.parse.quote(args.request_id, safe="")
+            if args.instance:
+                query["instance_id"] = args.instance
+            if args.run:
+                query["run_id"] = args.run
+    elif command == "validate":
+        method, route = "POST", route + "/validate"
+        body = {
+            "home": args.home,
+            "instance_id": args.instance,
+            "run_id": args.run,
+            "draft_id": args.draft,
+        }
+    elif command == "catalog":
+        action = args.catalog_command
+        if action == "list":
+            route += "/catalog/templates"
+        else:
+            method, route = "POST", route + "/catalog/" + action
+            body = {"home": args.home, "destination": args.destination}
+            if action == "init":
+                body["selector"] = args.selector
+            else:
+                body.update(source=args.source, draft_id=args.draft)
+    else:
+        action = args.draft_command
+        if action == "create":
+            method, route, body = (
+                "POST",
+                route + "/drafts",
+                {"home": args.home, "files": []},
+            )
+        elif action == "repair-publication":
+            method, route, body = (
+                "POST",
+                route + "/repair-publication",
+                {"home": args.home, "instance_id": args.instance},
+            )
+        else:
+            route += "/drafts/" + urllib.parse.quote(args.draft, safe="")
+            if action == "put":
+                method, route = "PUT", route + "/file"
+                body = {
+                    "home": args.home,
+                    "path": args.path,
+                    "content_base64": base64.b64encode(
+                        Path(args.file).read_bytes()
+                    ).decode(),
+                }
+            elif action in {"validate", "apply"}:
+                method, route = "POST", route + "/" + action
+                body = {
+                    "home": args.home,
+                    "instance_id": args.instance,
+                    "run_id": args.run,
+                }
+                if action == "apply":
+                    body.update(
+                        base_state_version=args.base_state_version,
+                        request_id=args.request_id,
+                    )
+    if method == "GET":
+        route += "?" + urllib.parse.urlencode(query)
+    token = CredentialStore(config.credential_path).ensure()
+    endpoint = f"http://{_endpoint_host(config.host)}:{config.port}"
+    headers = {"Authorization": "Bearer " + token}
+    raw = None
+    if body is not None:
+        raw = json.dumps(body, allow_nan=False).encode()
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(
+        endpoint + route, data=raw, headers=headers, method=method
+    )
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *_args, **_kwargs):
+            return None
+
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    try:
+        with opener.open(request, timeout=5) as response:
+            print(response.read(4 * 1048576).decode())
+        return 0
+    except urllib.error.HTTPError as exc:
+        print(exc.read(4096).decode())
+        return 1
+    except (OSError, ValueError):
+        print(json.dumps({"error": "router_observation_unavailable"}))
+        return 1
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
     try:
+        if args.command == "router":
+            return _router(args)
         if args.command == "serve":
             return _serve(args)
         if args.command in {"open", "rotate-credential"}:

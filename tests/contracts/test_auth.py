@@ -192,3 +192,40 @@ def test_refusals_never_echo_credentials_and_host_cannot_change_origin(tmp_path)
         headers={**bearer, "Content-Type": "application/json"},
     )
     assert response.status_code == 413
+
+
+def test_router_routes_preserve_host_origin_csrf_and_recovery_scope(tmp_path):
+    service, client, bearer = setup(tmp_path)
+    read = "/api/v1/router/instances?home=default"
+    mutate = "/api/v1/router/drafts"
+    body = {"home": "default", "files": []}
+    assert client.get(read).status_code == 401
+    assert client.post(mutate, json=body).status_code == 401
+    for headers in ({**bearer, "Host": "evil.example"}, {**bearer, "Origin": "null"}):
+        response = client.get(read, headers=headers)
+        assert response.status_code == 403
+        assert "access-control-allow-origin" not in response.headers
+    _, csrf = bootstrap(client, bearer)
+    assert client.post(mutate, json=body).json()["code"] == "wrong_origin"
+    assert (
+        client.post(
+            mutate, json=body, headers={"Origin": "http://127.0.0.1:8731"}
+        ).json()["code"]
+        == "invalid_csrf"
+    )
+    # A valid session crosses trust, then reaches the configured-home boundary.
+    response = client.post(
+        mutate,
+        json=body,
+        headers={"Origin": "http://127.0.0.1:8731", "X-CSRF-Token": csrf},
+    )
+    assert (
+        response.status_code == 422 and response.json()["code"] == "unknown_router_home"
+    )
+    damaged, recovery, recovery_bearer = setup(tmp_path / "recovery", damaged=True)
+    bootstrap(recovery, recovery_bearer, recovery=True)
+    blocked = recovery.get(read)
+    assert (
+        blocked.status_code == 403 and blocked.json()["code"] == "recovery_session_only"
+    )
+    assert recovery.get("/api/v1/recovery/diagnostics").status_code == 200

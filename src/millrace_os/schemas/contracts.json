@@ -123,6 +123,94 @@
     "title": "BootstrapNonce",
     "type": "object"
   },
+  "CatalogCopyInput": {
+    "$id": "urn:millrace-os:CatalogCopyInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "destination": {
+        "maxLength": 4096,
+        "minLength": 1,
+        "title": "Destination",
+        "type": "string"
+      },
+      "draft_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Draft Id"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "source": {
+        "anyOf": [
+          {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Source"
+      }
+    },
+    "required": [
+      "home",
+      "destination"
+    ],
+    "title": "CatalogCopyInput",
+    "type": "object"
+  },
+  "CatalogInitInput": {
+    "$id": "urn:millrace-os:CatalogInitInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "destination": {
+        "maxLength": 4096,
+        "minLength": 1,
+        "title": "Destination",
+        "type": "string"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "selector": {
+        "maxLength": 256,
+        "minLength": 1,
+        "title": "Selector",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "selector",
+      "destination"
+    ],
+    "title": "CatalogInitInput",
+    "type": "object"
+  },
   "Diagnostics": {
     "$id": "urn:millrace-os:Diagnostics:1",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -174,6 +262,303 @@
       "status"
     ],
     "title": "Diagnostics",
+    "type": "object"
+  },
+  "DraftApplyInput": {
+    "$id": "urn:millrace-os:DraftApplyInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "base_state_version": {
+        "minimum": 1,
+        "title": "Base State Version",
+        "type": "integer"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "instance_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Instance Id",
+        "type": "string"
+      },
+      "request_id": {
+        "maxLength": 32,
+        "minLength": 32,
+        "pattern": "^[0-9a-f]{32}$",
+        "title": "Request Id",
+        "type": "string"
+      },
+      "run_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Run Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "instance_id",
+      "run_id",
+      "base_state_version",
+      "request_id"
+    ],
+    "title": "DraftApplyInput",
+    "type": "object"
+  },
+  "DraftCreateInput": {
+    "$defs": {
+      "DraftFile": {
+        "additionalProperties": false,
+        "properties": {
+          "content_base64": {
+            "maxLength": 1048576,
+            "title": "Content Base64",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content_base64"
+        ],
+        "title": "DraftFile",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:DraftCreateInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "files": {
+        "items": {
+          "$ref": "#/$defs/DraftFile"
+        },
+        "maxItems": 256,
+        "title": "Files",
+        "type": "array"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home"
+    ],
+    "title": "DraftCreateInput",
+    "type": "object"
+  },
+  "DraftFileInput": {
+    "$id": "urn:millrace-os:DraftFileInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "content_base64": {
+        "maxLength": 1048576,
+        "title": "Content Base64",
+        "type": "string"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "path": {
+        "maxLength": 512,
+        "minLength": 1,
+        "title": "Path",
+        "type": "string"
+      }
+    },
+    "required": [
+      "path",
+      "content_base64",
+      "home"
+    ],
+    "title": "DraftFileInput",
+    "type": "object"
+  },
+  "DraftFilesInput": {
+    "$defs": {
+      "DraftFile": {
+        "additionalProperties": false,
+        "properties": {
+          "content_base64": {
+            "maxLength": 1048576,
+            "title": "Content Base64",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content_base64"
+        ],
+        "title": "DraftFile",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:DraftFilesInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "files": {
+        "items": {
+          "$ref": "#/$defs/DraftFile"
+        },
+        "maxItems": 256,
+        "title": "Files",
+        "type": "array"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "files"
+    ],
+    "title": "DraftFilesInput",
+    "type": "object"
+  },
+  "DraftRead": {
+    "$defs": {
+      "DraftFile": {
+        "additionalProperties": false,
+        "properties": {
+          "content_base64": {
+            "maxLength": 1048576,
+            "title": "Content Base64",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content_base64"
+        ],
+        "title": "DraftFile",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:DraftRead:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "contract": {
+        "const": "millrace-os-draft/v1",
+        "default": "millrace-os-draft/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "draft_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Draft Id",
+        "type": "string"
+      },
+      "files": {
+        "items": {
+          "$ref": "#/$defs/DraftFile"
+        },
+        "title": "Files",
+        "type": "array"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "sha256": {
+        "pattern": "^[0-9a-f]{64}$",
+        "title": "Sha256",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "draft_id",
+      "files",
+      "sha256"
+    ],
+    "title": "DraftRead",
+    "type": "object"
+  },
+  "DraftValidateInput": {
+    "$id": "urn:millrace-os:DraftValidateInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "instance_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Instance Id",
+        "type": "string"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Run Id"
+      }
+    },
+    "required": [
+      "home",
+      "instance_id"
+    ],
+    "title": "DraftValidateInput",
     "type": "object"
   },
   "Error": {
@@ -454,6 +839,33 @@
       "authority"
     ],
     "title": "ProviderInfo",
+    "type": "object"
+  },
+  "PublicationRepairInput": {
+    "$id": "urn:millrace-os:PublicationRepairInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "instance_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Instance Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "instance_id"
+    ],
+    "title": "PublicationRepairInput",
     "type": "object"
   },
   "Read-Diagnostics": {
@@ -1143,8 +1555,8 @@
             "type": "string"
           },
           "version": {
-            "const": "1.0.0",
-            "default": "1.0.0",
+            "const": "0.23.0",
+            "default": "0.23.0",
             "title": "Version",
             "type": "string"
           }
@@ -1345,6 +1757,709 @@
     "title": "Rotation",
     "type": "object"
   },
+  "RouterCallObservation": {
+    "$defs": {
+      "JsonValue": {}
+    },
+    "$id": "urn:millrace-os:RouterCallObservation:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "contract": {
+        "const": "millrace-os-router-call/v1",
+        "default": "millrace-os-router-call/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "core_receipt": {
+        "anyOf": [
+          {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Core Receipt"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "instance_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Instance Id"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "phase": {
+        "enum": [
+          "admission_pending",
+          "call_active",
+          "call_returned",
+          "call_failed",
+          "receipt_observed"
+        ],
+        "title": "Phase",
+        "type": "string"
+      },
+      "request_digest": {
+        "anyOf": [
+          {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Request Digest"
+      },
+      "request_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Request Id",
+        "type": "string"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Run Id"
+      },
+      "source": {
+        "enum": [
+          "os_owned_call",
+          "core_receipt"
+        ],
+        "title": "Source",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "request_id",
+      "request_digest",
+      "instance_id",
+      "run_id",
+      "source",
+      "phase",
+      "core_receipt",
+      "observed_at"
+    ],
+    "title": "RouterCallObservation",
+    "type": "object"
+  },
+  "RouterLocalRead": {
+    "$defs": {
+      "JsonValue": {}
+    },
+    "$id": "urn:millrace-os:RouterLocalRead:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authority": {
+        "const": "os-client",
+        "default": "os-client",
+        "title": "Authority",
+        "type": "string"
+      },
+      "contract": {
+        "const": "millrace-os-router-local/v1",
+        "default": "millrace-os-router-local/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "data": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "observed_at",
+      "data"
+    ],
+    "title": "RouterLocalRead",
+    "type": "object"
+  },
+  "RouterRead-JsonValue": {
+    "$defs": {
+      "JsonValue": {}
+    },
+    "$id": "urn:millrace-os:RouterRead-JsonValue:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authority": {
+        "const": "core-state-home",
+        "default": "core-state-home",
+        "title": "Authority",
+        "type": "string"
+      },
+      "contract": {
+        "const": "millrace-os-router-read/v1",
+        "default": "millrace-os-router-read/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "data": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "source_provider": {
+        "const": "core",
+        "default": "core",
+        "title": "Source Provider",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "data",
+      "observed_at"
+    ],
+    "title": "RouterRead[JsonValue]",
+    "type": "object"
+  },
+  "RouterRead-RouterValidation": {
+    "$defs": {
+      "JsonValue": {},
+      "RouterValidation": {
+        "additionalProperties": false,
+        "properties": {
+          "diagnostic_details": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Diagnostic Details",
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "draft_revision": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Draft Revision"
+          },
+          "resolved_nodes": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "title": "Resolved Nodes",
+            "type": "object"
+          },
+          "revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Id"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          },
+          "validation_context": {
+            "$ref": "#/$defs/RouterValidationContext"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "valid",
+          "revision_id",
+          "diagnostics",
+          "validation_context",
+          "resolved_nodes",
+          "warnings"
+        ],
+        "title": "RouterValidation",
+        "type": "object"
+      },
+      "RouterValidationContext": {
+        "additionalProperties": false,
+        "properties": {
+          "instance_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "instance",
+              "run"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "run_state_version": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run State Version"
+          },
+          "settings_version": {
+            "minimum": 1,
+            "title": "Settings Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "instance_id",
+          "run_id",
+          "settings_version"
+        ],
+        "title": "RouterValidationContext",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:RouterRead-RouterValidation:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authority": {
+        "const": "core-state-home",
+        "default": "core-state-home",
+        "title": "Authority",
+        "type": "string"
+      },
+      "contract": {
+        "const": "millrace-os-router-read/v1",
+        "default": "millrace-os-router-read/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "data": {
+        "$ref": "#/$defs/RouterValidation"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "source_provider": {
+        "const": "core",
+        "default": "core",
+        "title": "Source Provider",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "data",
+      "observed_at"
+    ],
+    "title": "RouterRead[RouterValidation]",
+    "type": "object"
+  },
+  "RouterRequestInput": {
+    "$defs": {
+      "JsonValue": {}
+    },
+    "$id": "urn:millrace-os:RouterRequestInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "request": {
+        "additionalProperties": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "title": "Request",
+        "type": "object"
+      }
+    },
+    "required": [
+      "home",
+      "request"
+    ],
+    "title": "RouterRequestInput",
+    "type": "object"
+  },
+  "RouterValidateInput": {
+    "$id": "urn:millrace-os:RouterValidateInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "draft_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Draft Id"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "instance_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Instance Id",
+        "type": "string"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Run Id"
+      }
+    },
+    "required": [
+      "home",
+      "instance_id"
+    ],
+    "title": "RouterValidateInput",
+    "type": "object"
+  },
+  "RouterValidation": {
+    "$defs": {
+      "JsonValue": {},
+      "RouterValidationContext": {
+        "additionalProperties": false,
+        "properties": {
+          "instance_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "instance",
+              "run"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "run_state_version": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run State Version"
+          },
+          "settings_version": {
+            "minimum": 1,
+            "title": "Settings Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "instance_id",
+          "run_id",
+          "settings_version"
+        ],
+        "title": "RouterValidationContext",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:RouterValidation:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "diagnostic_details": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Diagnostic Details",
+        "type": "array"
+      },
+      "diagnostics": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Diagnostics",
+        "type": "array"
+      },
+      "draft_revision": {
+        "anyOf": [
+          {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Draft Revision"
+      },
+      "resolved_nodes": {
+        "additionalProperties": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          "type": "object"
+        },
+        "title": "Resolved Nodes",
+        "type": "object"
+      },
+      "revision_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Revision Id"
+      },
+      "valid": {
+        "title": "Valid",
+        "type": "boolean"
+      },
+      "validation_context": {
+        "$ref": "#/$defs/RouterValidationContext"
+      },
+      "warnings": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Warnings",
+        "type": "array"
+      }
+    },
+    "required": [
+      "valid",
+      "revision_id",
+      "diagnostics",
+      "validation_context",
+      "resolved_nodes",
+      "warnings"
+    ],
+    "title": "RouterValidation",
+    "type": "object"
+  },
+  "RouterValidationContext": {
+    "$id": "urn:millrace-os:RouterValidationContext:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "instance_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Instance Id",
+        "type": "string"
+      },
+      "kind": {
+        "enum": [
+          "instance",
+          "run"
+        ],
+        "title": "Kind",
+        "type": "string"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Run Id"
+      },
+      "run_state_version": {
+        "anyOf": [
+          {
+            "minimum": 1,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Run State Version"
+      },
+      "settings_version": {
+        "minimum": 1,
+        "title": "Settings Version",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "kind",
+      "instance_id",
+      "run_id",
+      "settings_version"
+    ],
+    "title": "RouterValidationContext",
+    "type": "object"
+  },
   "SessionOutput": {
     "$id": "urn:millrace-os:SessionOutput:1",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1413,8 +2528,8 @@
         "type": "string"
       },
       "version": {
-        "const": "1.0.0",
-        "default": "1.0.0",
+        "const": "0.23.0",
+        "default": "0.23.0",
         "title": "Version",
         "type": "string"
       }

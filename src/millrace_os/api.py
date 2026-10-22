@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import secrets
+import uuid
 from datetime import UTC, datetime
 from importlib.resources import files
+from pathlib import Path as FilePath
 from typing import Annotated, Literal
 
 from fastapi import FastAPI, Header, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from pydantic import JsonValue
 from starlette.exceptions import HTTPException
 
 from .auth import COOKIE, SESSION_TTL, TrustError
@@ -20,7 +24,16 @@ from .contracts import (
     ActionInput,
     BootstrapInput,
     BootstrapNonce,
+    CatalogCopyInput,
+    CatalogInitInput,
     Diagnostics,
+    DraftApplyInput,
+    DraftCreateInput,
+    DraftFile,
+    DraftFileInput,
+    DraftFilesInput,
+    DraftRead,
+    DraftValidateInput,
     Error,
     Event,
     ExchangeInput,
@@ -30,14 +43,37 @@ from .contracts import (
     Page,
     PageQuery,
     ProviderInfo,
+    PublicationRepairInput,
     Read,
     Registry,
     Rotation,
+    RouterCallObservation,
+    RouterLocalRead,
+    RouterRead,
+    RouterRequestInput,
+    RouterValidateInput,
+    RouterValidation,
     SessionOutput,
     Version,
     canonical,
     schema_artifacts,
 )
+from .paths import UnsafePathError
+from .router_client import RouterUnavailable
+
+DEFAULT_BODY_LIMIT = 4096
+DRAFT_UPLOAD_LIMIT = 1048576
+
+
+def body_limit(path, method):
+    parts = path.split("/")
+    upload = (
+        method.upper() == "PUT"
+        and len(parts) == 7
+        and parts[:5] == ["", "api", "v1", "router", "drafts"]
+        and parts[6] in {"file", "files"}
+    )
+    return DRAFT_UPLOAD_LIMIT if upload else DEFAULT_BODY_LIMIT
 
 
 def error_response(code: str, status: int) -> JSONResponse:
@@ -50,7 +86,12 @@ def error_response(code: str, status: int) -> JSONResponse:
         if status in {429, 503}
         else "request"
     )
-    payload = Error(code=code, category=category, summary=code.replace("_", " "))
+    payload = Error(
+        code=code,
+        category=category,
+        summary=code.replace("_", " "),
+        retryable=code in {"router_busy", "router_read_busy", "publication_busy"},
+    )
     headers = {"WWW-Authenticate": "Bearer"} if status == 401 else {}
     return JSONResponse(payload.model_dump(), status_code=status, headers=headers)
 
@@ -131,11 +172,32 @@ def configure_api(app: FastAPI, service):
                 # Bound even chunked bodies before Pydantic parsing.
                 body = bytearray()
                 async for chunk in request.stream():
-                    if len(body) + len(chunk) > 4096:
+                    if len(body) + len(chunk) > body_limit(path, request.method):
                         raise TrustError("request_too_large", 413)
                     body.extend(chunk)
                 request._body = bytes(body)
-            if request.query_params and path not in {
+            if path.startswith("/api/v1/router/") and request.method == "GET":
+                parts = path.split("/")
+                documented = (
+                    path
+                    in {"/api/v1/router/instances", "/api/v1/router/catalog/templates"}
+                    or (
+                        len(parts) == 6
+                        and parts[4] in {"instances", "requests", "drafts"}
+                    )
+                    or (
+                        len(parts) == 8
+                        and parts[4] == "instances"
+                        and parts[6] == "runs"
+                    )
+                )
+                allowed = {"home"} if documented else set()
+                if documented and parts[4] == "requests":
+                    allowed |= {"instance_id", "run_id"}
+                keys = [key for key, value in request.query_params.multi_items()]
+                if len(keys) != len(set(keys)) or set(keys) - allowed:
+                    raise TrustError("invalid_request", 422)
+            elif request.query_params and path not in {
                 "/api/v1/providers",
                 "/api/v1/actions",
             }:
@@ -161,6 +223,14 @@ def configure_api(app: FastAPI, service):
     async def validation_error(request, exc):
         # Pydantic errors may contain input secrets and filesystem details.
         return error_response("invalid_request", 422)
+
+    @app.exception_handler(RouterUnavailable)
+    async def router_error(request, exc):
+        return error_response(exc.code, exc.status)
+
+    @app.exception_handler(UnsafePathError)
+    async def path_error(request, exc):
+        return error_response("unsafe_path", 422)
 
     @app.exception_handler(TrustError)
     async def trust_error(request, exc):
@@ -342,6 +412,8 @@ def configure_api(app: FastAPI, service):
 
         return StreamingResponse(notification(), media_type="text/event-stream")
 
+    configure_router_api(app, service)
+
     # Document uniform typed refusals without FastAPI's input-echoing 422 schema.
     for route in app.routes:
         if getattr(route, "include_in_schema", False):
@@ -349,6 +421,290 @@ def configure_api(app: FastAPI, service):
                 route.responses.setdefault(
                     status, {"model": Error, "description": "Typed refusal"}
                 )
+
+
+def configure_router_api(app, service):
+    """Bind the small public router surface to the same owned service calls."""
+
+    read_slots = asyncio.Semaphore(8)
+
+    async def offload(function, *args, **kwargs):
+        if read_slots.locked():
+            raise RouterUnavailable("router_read_busy", 429)
+        async with read_slots:
+            return await asyncio.to_thread(function, *args, **kwargs)
+
+    async def wait_owned(call):
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + service.router_workers.observation_timeout
+        while not call.done.is_set() and loop.time() < deadline:
+            await asyncio.sleep(min(0.01, max(0, deadline - loop.time())))
+        return service.router_workers.call_observation(call)
+
+    def core_read(home, data):
+        return RouterRead(
+            contract="millrace-os-router-read/v1",
+            home=home,
+            data=data,
+            source_provider="core",
+            authority="core-state-home",
+            observed_at=datetime.now(UTC).isoformat(),
+        )
+
+    def local_read(home, data):
+        return RouterLocalRead(
+            home=home, data=data, observed_at=datetime.now(UTC).isoformat()
+        )
+
+    def status(observation):
+        receipt = observation.core_receipt
+        return (
+            200
+            if receipt and receipt.get("status") in {"applied", "refused"}
+            else 202
+            if observation.phase in {"admission_pending", "call_active"}
+            or (receipt and receipt.get("status") == "queued")
+            else 200
+        )
+
+    async def local_call(
+        home, operation, body, callback, *, instance_id=None, run_id=None
+    ):
+        request = {
+            "format": "millrace-os-local-request/v1",
+            "operation": operation,
+            "instance_id": instance_id,
+            "run_id": run_id,
+            "plane_id": None,
+            "request_id": body.get("request_id") or uuid.uuid4().hex,
+            "expected_state_version": body.get("base_state_version"),
+            "payload": body,
+        }
+        call = service.router_workers.submit(
+            home, request, operation=callback, bypass_guard=True
+        )
+        observation = await wait_owned(call)
+        if call.error:
+            return JSONResponse(call.error.model_dump(), status_code=call.error_status)
+        if call.done.is_set():
+            result = (
+                call.result.model_dump()
+                if hasattr(call.result, "model_dump")
+                else call.result
+            )
+            return local_read(home, result)
+        return JSONResponse(
+            local_read(home, {"observation": observation.model_dump()}).model_dump(),
+            status_code=202,
+        )
+
+    @app.get("/api/v1/router/instances", response_model=RouterRead[JsonValue])
+    async def router_instances(home: Identifier):
+        return core_read(
+            home, await offload(service.router_client.list_instances, home)
+        )
+
+    @app.get(
+        "/api/v1/router/instances/{instance_id}", response_model=RouterRead[JsonValue]
+    )
+    async def router_instance(instance_id: Identifier, home: Identifier):
+        return core_read(
+            home,
+            await offload(service.router_client.inspect_instance, home, instance_id),
+        )
+
+    @app.get(
+        "/api/v1/router/instances/{instance_id}/runs/{run_id}",
+        response_model=RouterRead[JsonValue],
+    )
+    async def router_run(instance_id: Identifier, run_id: Identifier, home: Identifier):
+        return core_read(
+            home,
+            await offload(service.router_client.inspect_run, home, instance_id, run_id),
+        )
+
+    @app.post(
+        "/api/v1/router/requests",
+        response_model=RouterCallObservation,
+        responses={202: {"model": RouterCallObservation}},
+    )
+    async def router_request(body: RouterRequestInput):
+        call = service.router_workers.submit(body.home, body.request)
+        observation = await wait_owned(call)
+        if call.error:
+            return JSONResponse(call.error.model_dump(), status_code=call.error_status)
+        return JSONResponse(observation.model_dump(), status_code=status(observation))
+
+    @app.get(
+        "/api/v1/router/requests/{request_id}",
+        response_model=RouterCallObservation,
+        responses={202: {"model": RouterCallObservation}},
+    )
+    async def router_observe(
+        request_id: Identifier,
+        home: Identifier,
+        instance_id: Identifier | None = None,
+        run_id: Identifier | None = None,
+    ):
+        if run_id is not None and instance_id is None:
+            raise RouterUnavailable("invalid_request", 422)
+        observation = await offload(
+            service.router_workers.observe,
+            home,
+            request_id,
+            instance_id=instance_id,
+            run_id=run_id,
+        )
+        return JSONResponse(observation.model_dump(), status_code=status(observation))
+
+    @app.post(
+        "/api/v1/router/validate",
+        response_model=RouterRead[RouterValidation],
+        response_model_exclude_unset=True,
+    )
+    async def router_validate(body: RouterValidateInput):
+        workflow = (
+            service.workflow_drafts.workflow_file(body.home, body.draft_id)
+            if body.draft_id
+            else None
+        )
+        data = await offload(
+            service.router_client.validate_revision,
+            body.home,
+            body.instance_id,
+            run_id=body.run_id,
+            workflow_file=workflow,
+        )
+        RouterValidation.model_validate(data)
+        return core_read(body.home, data)
+
+    @app.get("/api/v1/router/catalog/templates", response_model=RouterLocalRead)
+    async def catalog_list(home: Identifier):
+        return local_read(
+            home,
+            await offload(service.router_client.catalog, home, "list_templates"),
+        )
+
+    @app.post(
+        "/api/v1/router/catalog/init",
+        response_model=RouterLocalRead,
+        responses={202: {"model": RouterLocalRead}},
+    )
+    async def catalog_init(body: CatalogInitInput):
+        return await local_call(
+            body.home,
+            "catalog_init",
+            body.model_dump(),
+            lambda: service.router_client.catalog(
+                body.home,
+                "init_template",
+                selector=body.selector,
+                destination=FilePath(body.destination),
+            ),
+        )
+
+    @app.post(
+        "/api/v1/router/catalog/copy",
+        response_model=RouterLocalRead,
+        responses={202: {"model": RouterLocalRead}},
+    )
+    async def catalog_copy(body: CatalogCopyInput):
+        if (body.source is None) == (body.draft_id is None):
+            raise RouterUnavailable("invalid_request", 422)
+
+        def copy_draft():
+            source = (
+                service.workflow_drafts.workflow_file(body.home, body.draft_id).parent
+                if body.draft_id
+                else FilePath(body.source)
+            )
+            return service.router_client.catalog(
+                body.home,
+                "copy_workflow",
+                source=source,
+                destination=FilePath(body.destination),
+            )
+
+        return await local_call(
+            body.home, "catalog_copy", body.model_dump(), copy_draft
+        )
+
+    @app.post("/api/v1/router/drafts", response_model=DraftRead)
+    async def draft_create(body: DraftCreateInput):
+        if service.router_workers._closing:
+            raise RouterUnavailable("router_closing", 503)
+        return await offload(service.workflow_drafts.create, body.home, body.files)
+
+    @app.get("/api/v1/router/drafts/{draft_id}", response_model=DraftRead)
+    async def draft_read(draft_id: Identifier, home: Identifier):
+        return await offload(service.workflow_drafts.read, home, draft_id)
+
+    @app.put("/api/v1/router/drafts/{draft_id}/files", response_model=DraftRead)
+    async def draft_files(draft_id: Identifier, body: DraftFilesInput):
+        if service.router_workers._closing:
+            raise RouterUnavailable("router_closing", 503)
+        return await offload(
+            service.workflow_drafts.put, body.home, draft_id, body.files, replace=True
+        )
+
+    @app.put("/api/v1/router/drafts/{draft_id}/file", response_model=DraftRead)
+    async def draft_file(draft_id: Identifier, body: DraftFileInput):
+        if service.router_workers._closing:
+            raise RouterUnavailable("router_closing", 503)
+        return await offload(
+            service.workflow_drafts.put,
+            body.home,
+            draft_id,
+            [DraftFile(path=body.path, content_base64=body.content_base64)],
+        )
+
+    @app.post(
+        "/api/v1/router/drafts/{draft_id}/validate",
+        response_model=RouterRead[RouterValidation],
+        response_model_exclude_unset=True,
+    )
+    async def draft_validate(draft_id: Identifier, body: DraftValidateInput):
+        data = await offload(
+            service.workflow_drafts.validate,
+            body.home,
+            draft_id,
+            body.instance_id,
+            body.run_id,
+        )
+        RouterValidation.model_validate(data)
+        return core_read(body.home, data)
+
+    @app.post("/api/v1/router/drafts/{draft_id}/apply", response_model=RouterLocalRead)
+    async def draft_apply(draft_id: Identifier, body: DraftApplyInput):
+        return await local_call(
+            body.home,
+            "draft_apply",
+            body.model_dump(),
+            lambda: service.workflow_drafts.apply(
+                body.home,
+                draft_id,
+                body.instance_id,
+                body.run_id,
+                body.base_state_version,
+                body.request_id,
+            ),
+            instance_id=body.instance_id,
+            run_id=body.run_id,
+        )
+
+    @app.post(
+        "/api/v1/router/repair-publication",
+        response_model=RouterLocalRead,
+        responses={202: {"model": RouterLocalRead}},
+    )
+    async def publication_repair(body: PublicationRepairInput):
+        return await local_call(
+            body.home,
+            "repair_publication",
+            body.model_dump(),
+            lambda: service.workflow_drafts.repair(body.home, body.instance_id),
+            instance_id=body.instance_id,
+        )
 
 
 def export_artifacts(app):
@@ -369,7 +725,10 @@ def export_artifacts(app):
                 operation["security"] = [{"Bearer": []}, {"Session": []}]
             if name in {"/api/v1/auth/bootstrap", "/api/v1/auth/rotate"}:
                 operation["security"] = [{"Bearer": []}]
-            if method == "post":
+            if method in {"post", "put", "patch"}:
+                operation.setdefault("requestBody", {})["x-max-body-bytes"] = (
+                    body_limit(name, method)
+                )
                 operation.setdefault("parameters", []).append(
                     {
                         "name": "Origin",
@@ -381,7 +740,7 @@ def export_artifacts(app):
                         "schema": {"type": "string", "maxLength": 256},
                     }
                 )
-                if name.startswith("/api/v1/actions/"):
+                if name.startswith(("/api/v1/actions/", "/api/v1/router/")):
                     operation["parameters"].append(
                         {
                             "name": "X-CSRF-Token",

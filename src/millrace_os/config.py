@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .paths import ensure_directory
@@ -61,6 +63,7 @@ class ApplicationConfig:
     host: str = "127.0.0.1"
     port: int = 8731
     socket_path: Path | None = None
+    router_state_homes: dict[str, Path] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "config_dir", Path(self.config_dir).expanduser())
@@ -79,6 +82,23 @@ class ApplicationConfig:
             )
         if self.socket_path is not None:
             object.__setattr__(self, "socket_path", Path(self.socket_path).expanduser())
+
+        homes = {}
+        seen = set()
+        for name, raw in self.router_state_homes.items():
+            if (
+                not isinstance(name, str)
+                or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}", name) is None
+            ):
+                raise ConfigurationError("invalid router state-home name")
+            if not isinstance(raw, (str, Path)) or not str(raw):
+                raise ConfigurationError("invalid router state-home path")
+            path = Path(raw).expanduser().resolve()
+            if path in seen:
+                raise ConfigurationError("router state-home aliases are not allowed")
+            seen.add(path)
+            homes[name] = path
+        object.__setattr__(self, "router_state_homes", homes)
 
     @classmethod
     def from_environment(
@@ -108,6 +128,9 @@ class ApplicationConfig:
             host=_validate_loopback(values.get("MILLRACE_OS_HOST", "127.0.0.1")),
             port=_parse_port(values.get("MILLRACE_OS_PORT")),
             socket_path=None,
+            router_state_homes=parse_router_homes(
+                values.get("MILLRACE_OS_ROUTER_STATE_HOMES", "{}")
+            ),
         )
 
     @property
@@ -125,3 +148,27 @@ class ApplicationConfig:
     def ensure_directories(self) -> None:
         for path in (self.config_dir, self.state_dir):
             ensure_directory(path)
+
+
+def parse_router_homes(raw: str) -> dict[str, Path]:
+    """Read the explicit environment JSON map without accepting duplicate names."""
+
+    def pairs(items):
+        result = {}
+        for name, value in items:
+            if name in result:
+                raise ConfigurationError("duplicate router state-home name")
+            result[name] = value
+        return result
+
+    try:
+        values = json.loads(raw, object_pairs_hook=pairs)
+        if not isinstance(values, dict) or any(
+            not isinstance(v, str) for v in values.values()
+        ):
+            raise ValueError
+        return {name: Path(value) for name, value in values.items()}
+    except (ValueError, TypeError) as exc:
+        raise ConfigurationError(
+            "router state homes must be a JSON name/path map"
+        ) from exc

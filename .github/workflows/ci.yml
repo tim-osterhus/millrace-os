@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      core_wheel_url:
+        description: P8b matched Core 0.23.0 wheel URL (only before final lock)
+        type: string
+      core_wheel_sha256:
+        description: SHA-256 of that Core wheel
+        type: string
+      plus_wheel_url:
+        description: P8b matched Plus 0.23.0 wheel URL (only before final lock)
+        type: string
+      plus_wheel_sha256:
+        description: SHA-256 of that Plus wheel
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_DATE_EPOCH: '1580601600'
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: 0.9.30
+      - name: Select final registry lock or explicit P8b local wheels
+        env:
+          CORE_WHEEL_URL: ${{ inputs.core_wheel_url }}
+          CORE_WHEEL_SHA256: ${{ inputs.core_wheel_sha256 }}
+          PLUS_WHEEL_URL: ${{ inputs.plus_wheel_url }}
+          PLUS_WHEEL_SHA256: ${{ inputs.plus_wheel_sha256 }}
+        shell: bash
+        run: |
+          if test -f uv.lock; then
+            uv lock --check --python 3.12
+            uv sync --frozen --no-editable --extra dev --extra router --python 3.12
+          else
+            echo 'P8b provisional verification: explicit matched local wheels; no project-lock freshness claim.'
+            uv venv --python 3.12 .venv
+            .venv/bin/python - <<'PY'
+          import hashlib, os, re, urllib.request
+          from pathlib import Path
+          root = Path('.ci-wheels')
+          root.mkdir()
+          for key, name in [('CORE', 'millrace_ai'), ('PLUS', 'millrace_plus')]:
+              url, digest = os.environ[key + '_WHEEL_URL'], os.environ[key + '_WHEEL_SHA256']
+              if not url.startswith('https://') or not re.fullmatch('[0-9a-f]{64}', digest):
+                  raise SystemExit('Absent lock requires explicit HTTPS matched wheel URL and SHA-256 inputs')
+              with urllib.request.urlopen(url, timeout=60) as response:
+                  content = response.read()
+              assert hashlib.sha256(content).hexdigest() == digest, key + ' wheel digest mismatch'
+              (root / (name + '-0.23.0-py3-none-any.whl')).write_bytes(content)
+          PY
+            uv pip install --python .venv/bin/python --find-links .ci-wheels \
+              '.[dev,router]' millrace-ai==0.23.0 millrace-plus==0.23.0
+          fi
+      - name: Verify selected installed identities outside checkout
+        shell: bash
+        run: |
+          python_path="$PWD/.venv/bin/python"
+          cd "$RUNNER_TEMP"
+          env -u PYTHONPATH "$python_path" - <<'PY'
+          import importlib.metadata as m
+          from pathlib import Path
+          import millrace, millrace_plus, millrace_os
+          for name, module in [('millrace-ai', millrace), ('millrace-plus', millrace_plus), ('millrace-os', millrace_os)]:
+              assert m.version(name) == '0.23.0', name
+              assert 'site-packages' in str(Path(module.__file__).resolve()), module.__file__
+          from millrace_plus.router import require_core
+          require_core()
+          PY
+      - name: Active OS tests and lint
+        run: |
+          env -u PYTHONPATH .venv/bin/python -m pytest -q -o pythonpath= tests
+          .venv/bin/ruff check src tests
+      - name: Build wheel and sdist
+        run: uv build --python 3.12 --force-pep517
+      - name: Verify base installation without router dependencies
+        shell: bash
+        run: |
+          uv venv --python 3.12 .ci-base
+          uv pip install --python .ci-base/bin/python dist/millrace_os-0.23.0-py3-none-any.whl
+          python_path="$PWD/.ci-base/bin/python"
+          cd "$RUNNER_TEMP"
+          env -u PYTHONPATH "$python_path" - <<'PY'
+          import importlib.util, tempfile
+          from pathlib import Path
+          assert importlib.util.find_spec('millrace') is None
+          assert importlib.util.find_spec('millrace_plus') is None
+          from millrace_os.config import ApplicationConfig
+          from millrace_os.router_client import RouterClient, RouterUnavailable
+          from millrace_os.service import Service
+          with tempfile.TemporaryDirectory() as folder:
+              root = Path(folder)
+              service = Service(ApplicationConfig(config_dir=root/'config', state_dir=root/'state', credential_path=root/'config/credentials.json'))
+              assert service.app.version == '0.23.0'
+              try:
+                  RouterClient({'main': root/'core'}).list_instances('main')
+              except RouterUnavailable as error:
+                  assert error.code == 'router_unavailable'
+              else:
+                  raise AssertionError('missing optional router must refuse')
+          PY
+      - name: Check source unchanged
+        run: git diff --exit-code

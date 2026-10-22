@@ -75,3 +75,48 @@ def test_events_are_authenticated_non_durable_bounded_and_explicit(tmp_path):
         )
     service.event_connections = 8
     assert client.get("/api/v1/events", headers=bearer).status_code == 429
+
+
+def test_router_query_and_exact_envelope_boundaries(tmp_path):
+    service, client, bearer = setup(tmp_path)
+    for query in (
+        "home=a&home=b",
+        "home=default&extra=x",
+        "home=",
+        "state_home=/tmp/arbitrary",
+    ):
+        result = client.get("/api/v1/router/instances?" + query, headers=bearer)
+        assert result.status_code == 422, result.text
+    for body in (
+        {"home": "default", "request": {}, "extra": True},
+        {"home": "default", "request": []},
+        {"home": "default", "request": {"format": "millrace-router-request/v1"}},
+    ):
+        result = client.post("/api/v1/router/requests", json=body, headers=bearer)
+        assert result.status_code == 422, result.text
+    result = client.post(
+        "/api/v1/router/requests",
+        content=b'{"private":"secret"}',
+        headers={**bearer, "Content-Type": "text/plain"},
+    )
+    assert result.status_code == 415 and "secret" not in result.text
+
+
+def test_router_absence_is_sanitized_without_breaking_foundation(tmp_path, monkeypatch):
+    from millrace_os.router_client import RouterUnavailable
+
+    service, client, bearer = setup(tmp_path)
+
+    def unavailable(*args, **kwargs):
+        raise RouterUnavailable("router_unavailable", 503)
+
+    monkeypatch.setattr(service.router_client, "list_instances", unavailable)
+    response = client.get("/api/v1/router/instances?home=default", headers=bearer)
+    assert (
+        response.status_code == 503 and response.json()["code"] == "router_unavailable"
+    )
+    assert response.json()["provider"] == "os"
+    assert "core_receipt" not in response.json()
+    assert client.get("/api/v1/version", headers=bearer).status_code == 200
+    assert client.get("/api/v1/identity", headers=bearer).status_code == 200
+    assert client.get("/api/v1/health").status_code == 200

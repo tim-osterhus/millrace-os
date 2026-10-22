@@ -1,20 +1,24 @@
-# Independent OS foundation candidate
+# Independent OS service foundation
 
 Python 3.12, FastAPI 0.116.1, Pydantic 2.11.9 and uvicorn 0.35.0 are the
-foundation stack. `uv.lock` pins transitive artifacts. Build with `uv build`;
-the wheel includes the OS migration resources and needs no source checkout.
+foundation stack for Millrace OS 0.23.0. The base service has no Core or Plus dependency. Install `millrace-os[router]==0.23.0` for the optional public controls.
+The wheel includes OS migration resources and needs no source checkout.
+
+During P8b integration, `uv.lock` is deliberately absent. Verify explicit matched local Core, Plus, and OS wheels in a separate environment. These checks make no lock-freshness claim. After Core and Plus 0.23.0 are public, P8d must generate a registry-only lock, run `uv lock --check`, repeat frozen checks, and rebuild the final OS artifacts. Never write local paths or Git sources into that release lock. Builds use the fixed `SOURCE_DATE_EPOCH=1580601600`, independent of publication-control pin commits. Build with `uv build --force-pep517`.
+
+Current CI accepts explicit matched local wheel inputs only while the lock is absent. A present lock must pass freshness checks. Tag publication always refuses an absent or stale lock.
 
 `millrace-os serve` starts the foreground service on the configured explicit
 loopback host and nonzero port (default 127.0.0.1:8731). A collision is an error;
 the service never chooses another port. `health` returns minimal public liveness.
-All state, recovery and schema HTTP reads remain closed pending OS-P02 trust.
+Authenticated state, recovery, schema, and router reads use the local trust boundary described in `api-foundations.md`.
 
 `stop` requires the owner-only JSON daemon identity record. On supported macOS,
 libproc supplies native process birth seconds and microseconds, fenced around
 command inspection. UID, PID, parent, command and birth identity must match an OS
 serve command before SIGTERM. Observation failures and changed identity are errors;
-success requires observed exit within five seconds. Other platforms fail closed.
-No provider or external process is stopped by service shutdown.
+success requires observed exit within the configured observation timeout (five seconds by default). Other platforms fail closed.
+Service shutdown owns its bounded Core call workers and drains them before closing HTTP and local storage. Unrelated provider-hosted processes retain their own lifecycle.
 
 Configured lexical ancestors and targets reject symlinks, foreign ownership and
 unsafe writable parents before mutation. Existing files are never chmodded.
@@ -26,6 +30,4 @@ not restore old bytes over concurrent writers. Runtime directories must remain
 owned by the operator; these checks are not a defense against an adversarial
 process running with the same UID and racing filesystem or signal operations.
 
-This is a foundation candidate, not a released OS qualification. Authentication,
-full recovery, Core mappings, tmux and all 89 released integration gates remain
-outside this packet (NOT_RUN).
+The retained foundation and headless router mapping have separate verification evidence. The historical Release 1 ledger does not qualify the current router release, all native providers, or the historical 89 integration gates. See [router operation](router-operation.md) for current controls.

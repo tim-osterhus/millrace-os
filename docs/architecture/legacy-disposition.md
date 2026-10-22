@@ -1,5 +1,18 @@
 # Release 1 legacy disposition and ownership ledger
 
+## Current v0.23 guidance
+
+This document preserves the frozen Release 1 historical record below. Its package identities, artifact paths, SHA-256 values, refusal rules, and selected-plan/daemon commands describe that historical release. They are not current v0.23 installation or operating requirements.
+
+Millrace OS 0.23.0 operates through public Plus/Core router controls. Read [router operation](../router-operation.md) for current requests, receipts, draft Apply, explicit continuation, and shutdown. Current graphs use `millrace-router/v3`, stores use `millrace-router-store/v7`, and the execution contract is `millrace-router-execution/v2`. Old stores remain paired with their matching historical runtime and environment. No migration or private-state access is supplied.
+
+For historical Core paths removed from the active tree, use preserved Git object `af2ceb0ab10d1b265b4ec65c9658e16c66b71a6b:PATH` in the Core repository. For the exact earlier identity/digest rows below, use their recorded commit and artifact path. Historical Plus paths use the recorded commit, or preserved object `ad91c7f31cfb24b2fc3793b54efd90848a7f7327:PATH` in the Plus repository. These references preserve access without restoring obsolete runtime requirements.
+
+The historical `uv.lock` row is retained verbatim. P8b omits that stale lock. P8d creates and verifies the new registry-only lock after Core and Plus 0.23.0 publication.
+
+## Frozen Release 1 record
+
+
 **Status:** frozen for Packet 01. **Authority:** read-only evidence only; this
 document does not authorize importing a private runtime, mutating a historical
 checkout, or reconstructing an unavailable contract.
@@ -7,7 +20,7 @@ checkout, or reconstructing an unavailable contract.
 ## Method and decision vocabulary
 
 The inventory was performed against the frozen checkouts under
-`/Users/timinator/Desktop/Millrace-Dev/dev/` and `ref/`. The historical
+`dev/` and `ref/` in the original coordination workspace. The historical
 checkouts remain read-only. A disposition means:
 
 | Decision | Meaning in Release 1 |
@@ -59,3 +72,11 @@ and this evidence ledger. Packet 01 does not own DTOs, workflow routes,
 providers, actions, events, Mission Control, qualification, candidate
 authoring, remote access, or dynamic plugins. Later packets must consume
 `docs/compatibility/release-1-contract-inventory.md` as a named input.
+
+## v0.23 headless router successor
+
+The v0.23 service supersedes only the earlier prohibition on service ownership of controller execution. OS owns bounded public Core call workers and their drain/join lifecycle. Core/Plus retain invocation, child-process, writer, receipt, and hold authority. The existing unrelated provider-hosted-process shutdown boundary remains intact.
+
+The router client uses public Plus controls and execution/v2. It adds no Core-private imports, graph parser, scheduler, provider registry, durable OS job registry, or run-state mirror. Named configured state homes select Core authority. The existing SQLite schema stores no duplicate router rows.
+
+Manual workflow Apply uses OS-owned frozen drafts and a cooperating per-instance publication lock outside Core's instances directory. Apply pauses, drains, validates, publishes, and submits. It leaves explicit acceptance and continuation to later operator requests. Automatic continuation and a later-stop ordering guard remain deferred. Existing bootstrap/recovery assets and local trust/path/process-identity protections remain in force.
