@@ -237,7 +237,16 @@ class RouterHarness:
         )
 
     def settled(self, instance, run, status):
+        """Read stable quiescent state after this run's owned calls have joined."""
+
         def state():
+            if any(
+                not row["joined"]
+                and row["observation"]["instance_id"] == instance
+                and row["observation"]["run_id"] == run
+                for row in self.service.router_workers.snapshot()
+            ):
+                return None
             value = self.read(instance, run)
             return value if value["status"] == status and value["quiescent"] else None
 

@@ -309,6 +309,7 @@ def test_recurring_seam_selection_and_consumer_progress_survive_restart(router_h
         )
     )
     _joined(h)
+    before = h.read(instance, run)
     assert before["planes"]["beta"]["selected"] == {"delivery": 1}
     assert before["planes"]["beta"]["progress"] == {}
     assert [o["sequence"] for o in before["seam_occurrences"]] == [1, 2]
@@ -409,7 +410,16 @@ while True: time.sleep(.05)
             p: int((project / p / "step-started").read_text())
             for p in ("alpha", "beta")
         }
-        before = h.read(instance, run)
+
+        def started():
+            value = h.read(instance, run)
+            return (
+                value
+                if {i["plane_id"]: i["pid"] for i in value["invocations"]} == pids
+                else None
+            )
+
+        before = h.until(started)
         assert {i["plane_id"]: i["pid"] for i in before["invocations"]} == pids
         assert before["count"] == 2 and not before["quiescent"]
         assert child.poll() is None and child.pid not in pids.values()
@@ -645,7 +655,20 @@ raise SystemExit(main())
                 for plane in ("alpha", "beta")
             )
         )
-        before = h.read(instance, run)
+
+        def started():
+            value = h.read(instance, run)
+            invocations = value["invocations"]
+            return (
+                value
+                if len(invocations) == 2
+                and all(
+                    type(row["pid"]) is int and row["pid"] > 0 for row in invocations
+                )
+                else None
+            )
+
+        before = h.until(started)
         assert before["count"] == 2 and not before["quiescent"]
         identities = {row["plane_id"]: row["id"] for row in before["invocations"]}
         pids = {row["plane_id"]: row["pid"] for row in before["invocations"]}

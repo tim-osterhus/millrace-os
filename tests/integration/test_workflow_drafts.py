@@ -842,7 +842,7 @@ while True:time.sleep(.05)
             else None
         )
         assert reconciled["status"] == "applied"
-        stopped = h.read(instance, run)
+        stopped = h.settled(instance, run, "paused")
         assert stopped["quiescent"] and stopped["count"] == 1
         assert stopped["invocations"][0]["writer_state"] == "stopped"
         fact = next(

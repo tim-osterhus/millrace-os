@@ -109,6 +109,7 @@ def test_request_observation_never_fabricates_receipt_or_loses_owner(
     # The same saved body observes the original call; it cannot create twice.
     created = h.send(request)
     instance = created["instance_id"]
+    h.until(lambda: all(row["joined"] for row in h.service.router_workers.snapshot()))
     h.service.router_workers.observation_ttl = 300
     start = h.request("start_run", instance, version=1, payload={"edit_mode": "locked"})
     h.send(start, wait=False)
@@ -433,7 +434,11 @@ while True: time.sleep(.05)
         run = start["run_id"]
         h.until(lambda: (project / "writer.pid").exists())
         writer_pid = int((project / "writer.pid").read_text())
-        before = h.read(instance, run)
+        before = h.until(
+            lambda: value
+            if (value := h.read(instance, run))["invocations"][0]["pid"] == writer_pid
+            else None
+        )
         assert before["count"] == 1 and not before["quiescent"]
         assert child.poll() is None and writer_pid != child.pid
         os.kill(child.pid, signal.SIGKILL)
