@@ -210,6 +210,7 @@ def test_partial_publication_restart_and_cancelled_terminal_repair(
     assert response.status_code == 200
     h.stop()
     h.start()
+    h.service.router_workers.observation_timeout = 2
     refused = h.http.post(
         "/api/v1/router/requests",
         json={
@@ -230,9 +231,12 @@ def test_partial_publication_restart_and_cancelled_terminal_repair(
         cancelled = h.send(h.request("cancel_run", instance, run))
         assert cancelled["status"] == "applied"
         terminal = h.settled(instance, run, "cancelled")
-    repaired = h.post(
-        "repair-publication", {"home": "default", "instance_id": instance}
-    )["data"]
+    response = h.http.post(
+        "/api/v1/router/repair-publication",
+        json={"home": "default", "instance_id": instance},
+    )
+    assert response.status_code == 200, response.text
+    repaired = response.json()["data"]
     for name, content in files.items():
         assert (workflow / name).read_text() == content
     repaired_run = h.read(instance, run)

@@ -16,7 +16,9 @@ Millrace OS is a local service and command-line client for operating independent
 
 Use it to inspect runs, submit exact control requests, and publish workflow edits through one authenticated loopback API. Core owns instance inventory, execution, receipts, planes, and writer state. OS owns named state-home selections, drafts, and the lifetime of its controller calls.
 
-Millrace OS 0.23.0 requires Python 3.12 or later. Install the base service independently, or include the optional public router controls:
+Millrace OS 0.23.0 requires Python 3.12 or later. Native daemon identity and stop controls support macOS; other platforms fail closed for those controls.
+
+Install the base service independently, or include the optional public router controls:
 
 ```bash
 python -m pip install 'millrace-os==0.23.0'

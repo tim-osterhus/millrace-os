@@ -4,9 +4,9 @@ Python 3.12, FastAPI 0.116.1, Pydantic 2.11.9 and uvicorn 0.35.0 are the
 foundation stack for Millrace OS 0.23.0. The base service has no Core or Plus dependency. Install `millrace-os[router]==0.23.0` for the optional public controls.
 The wheel includes OS migration resources and needs no source checkout.
 
-During P8b integration, `uv.lock` is deliberately absent. Verify explicit matched local Core, Plus, and OS wheels in a separate environment. These checks make no lock-freshness claim. After Core and Plus 0.23.0 are public, P8d must generate a registry-only lock, run `uv lock --check`, repeat frozen checks, and rebuild the final OS artifacts. Never write local paths or Git sources into that release lock. Builds use the fixed `SOURCE_DATE_EPOCH=1580601600`, independent of publication-control pin commits. Build with `uv build --force-pep517`.
+The release includes `uv.lock` with public-registry dependencies and exact Core, Plus, and OS 0.23.0 selections. CI checks lock freshness with `uv lock --check --no-sources --python 3.12` and installs the frozen development and router environment. Tag publication requires a present, fresh lock. Dependency sources use public PyPI; the OS project itself is the local root.
 
-Current CI accepts explicit matched local wheel inputs only while the lock is absent. A present lock must pass freshness checks. Tag publication always refuses an absent or stale lock.
+Builds use the fixed `SOURCE_DATE_EPOCH=1580601600`, independent of publication-control pin commits. Build with `uv build --force-pep517`.
 
 `millrace-os serve` starts the foreground service on the configured explicit
 loopback host and nonzero port (default 127.0.0.1:8731). A collision is an error;
