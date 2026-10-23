@@ -47,10 +47,10 @@ def test_release_identity_optional_router_and_generated_contracts(tmp_path) -> N
     root = Path(__file__).parents[2]
     project = tomllib.loads((root / "pyproject.toml").read_text())["project"]
     assert project["name"] == "millrace-os"
-    assert project["version"] == __version__ == Version().version == "0.23.0"
+    assert project["version"] == __version__ == Version().version == "0.23.1"
     assert project["requires-python"] == ">=3.12"
     assert project["optional-dependencies"]["router"] == [
-        "millrace-plus[router]>=0.23.0,<0.24.0"
+        "millrace-plus[router]>=0.23.1,<0.24.0"
     ]
     service = Service(
         ApplicationConfig(

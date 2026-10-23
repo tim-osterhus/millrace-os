@@ -7,9 +7,9 @@ upload, draft Apply or automatic acceptance/continuation tool. Keep the manual
 Apply journey below, then explicitly accept the pending revision and request
 continuation only when the resulting Core state requires it.
 
-Millrace OS 0.23.0 maps `/api/v1/router` to public Plus/Core controls. Core owns graph semantics, durable instances, runs, receipts, planes, seams, and effective writer facts. OS keeps no second run registry or scheduler.
+Millrace OS 0.23.1 maps `/api/v1/router` to public Plus/Core controls. Core owns graph semantics, durable instances, runs, receipts, planes, seams, and effective writer facts. OS keeps no second run registry or scheduler.
 
-Install `millrace-os[router]==0.23.0` in Python 3.12 or later. Its optional dependency range is `millrace-plus[router]>=0.23.0,<0.24.0`. The selected release uses matched Core, Plus, and OS 0.23.0 artifacts. The public execution contract must be `millrace-router-execution/v2`; version equality alone is insufficient. Base installation supports service health, trust, and recovery without Core or Plus. Router calls load optional components lazily and refuse unavailable or incompatible contracts.
+Install `millrace-os[router]==0.23.1` in Python 3.12 or later. Its optional dependency range is `millrace-plus[router]>=0.23.1,<0.24.0`. The selected release uses matched Core, Plus, and OS 0.23.1 artifacts. The public execution contract must be `millrace-router-execution/v2`; version equality alone is insufficient. Base installation supports service health, trust, and recovery without Core or Plus. Router calls load optional components lazily and refuse unavailable or incompatible contracts.
 
 Start the service with explicit named homes:
 
@@ -18,6 +18,8 @@ millrace-os serve --router-state-home main=/absolute/path/to/core-state
 ```
 
 Repeat `--router-state-home NAME=PATH` for additional homes. Names must be unique. Canonical path aliases are refused. `MILLRACE_OS_ROUTER_STATE_HOMES` accepts an equivalent JSON object mapping names to paths. HTTP clients select a configured name, never an arbitrary Core state root.
+
+The router extra requires Plus 0.23.1 for this release's bundled LAD workflow, subworkflow commands, Paperclip bridge, and OpenCode adapter.
 
 ## Inspect and submit
 

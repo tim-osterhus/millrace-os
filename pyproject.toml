@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "millrace-os"
-version = "0.23.0"
+version = "0.23.1"
 description = "A local headless service for independent Millrace workflow instances."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -19,7 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 mcp = ["mcp==1.30.0; python_version < '3.14'", "PyJWT[crypto]>=2.10.1; python_version < '3.14'"]
-router = ["millrace-plus[router]>=0.23.0,<0.24.0"]
+router = ["millrace-plus[router]>=0.23.1,<0.24.0"]
 dev = ["pytest==9.0.2", "ruff==0.14.14", "httpx==0.28.1"]
 browser = ["playwright==1.55.0"]
 

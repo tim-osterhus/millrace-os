@@ -68,7 +68,7 @@ def create_app(service: Service) -> FastAPI:
 
     app = FastAPI(
         title="Millrace OS",
-        version="0.23.0",
+        version="0.23.1",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,

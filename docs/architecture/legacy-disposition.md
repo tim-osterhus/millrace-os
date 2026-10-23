@@ -4,11 +4,11 @@
 
 This document preserves the frozen Release 1 historical record below. Its package identities, artifact paths, SHA-256 values, refusal rules, and selected-plan/daemon commands describe that historical release. They are not current v0.23 installation or operating requirements.
 
-Millrace OS 0.23.0 operates through public Plus/Core router controls. Read [router operation](../router-operation.md) for current requests, receipts, draft Apply, explicit continuation, and shutdown. Current graphs use `millrace-router/v3`, stores use `millrace-router-store/v7`, and the execution contract is `millrace-router-execution/v2`. Old stores remain paired with their matching historical runtime and environment. No migration or private-state access is supplied.
+Millrace OS 0.23.1 operates through public Plus/Core router controls. Read [router operation](../router-operation.md) for current requests, receipts, draft Apply, explicit continuation, and shutdown. Current graphs use `millrace-router/v3`, stores use `millrace-router-store/v7`, and the execution contract is `millrace-router-execution/v2`. Old stores remain paired with their matching historical runtime and environment. No migration or private-state access is supplied.
 
 For historical Core paths removed from the active tree, use preserved Git object `af2ceb0ab10d1b265b4ec65c9658e16c66b71a6b:PATH` in the Core repository. For the exact earlier identity/digest rows below, use their recorded commit and artifact path. Historical Plus paths use the recorded commit, or preserved object `ad91c7f31cfb24b2fc3793b54efd90848a7f7327:PATH` in the Plus repository. These references preserve access without restoring obsolete runtime requirements.
 
-The historical `uv.lock` row is retained verbatim. P8b omits that stale lock. P8d creates and verifies the new registry-only lock after Core and Plus 0.23.0 publication.
+The historical `uv.lock` row is retained verbatim. The v0.23.0 cutover replaced that stale lock after Core and Plus 0.23.0 publication. See [service foundations](../foundation.md) for current registry-only lock requirements.
 
 ## Frozen Release 1 record
 

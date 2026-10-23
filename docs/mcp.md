@@ -8,7 +8,7 @@ cancelling its work.
 Install the explicit `mcp` extra with Python 3.12 or 3.13:
 
 ```bash
-python -m pip install 'millrace-os[mcp]'
+python -m pip install 'millrace-os[mcp]==0.23.1'
 millrace-os mcp serve --config /absolute/path/to/mcp.json
 ```
 
@@ -162,3 +162,8 @@ solver partition covering the full unchanged base range. This prevents uv 0.13.5
 from leaking MCP's inactive Python 3.14 Pydantic requirement. MCP/PyJWT retain
 their `<3.14` markers. Local candidate Core/Plus wheel overrides are separate
 integration evidence, not a final unpublished public registry lock.
+
+The selected shared-server proof used two pinned SDK clients and one deterministic
+workflow with no model calls. It covers that exact deployment and request profile.
+Native provider, named GUI-client and general cross-platform claims need separate
+evidence. Live Paperclip task/account/server proof remains deferred.

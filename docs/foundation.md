@@ -1,10 +1,10 @@
 # Independent OS service foundation
 
 Python 3.12, FastAPI 0.116.1, Pydantic 2.11.9 and uvicorn 0.35.0 are the
-foundation stack for Millrace OS 0.23.0. The base service has no Core or Plus dependency. Install `millrace-os[router]==0.23.0` for the optional public controls.
+foundation stack for Millrace OS 0.23.1. The base service has no Core or Plus dependency. Install `millrace-os[router]==0.23.1` for the optional public controls.
 The wheel includes OS migration resources and needs no source checkout.
 
-The release includes `uv.lock` with public-registry dependencies and exact Core, Plus, and OS 0.23.0 selections. CI checks lock freshness with `uv lock --check --no-sources --python 3.12` and installs the frozen development and router environment. Tag publication requires a present, fresh lock. Dependency sources use public PyPI; the OS project itself is the local root.
+Release publication requires `uv.lock` with public-registry dependencies and exact Core, Plus, and OS 0.23.1 selections. CI checks lock freshness with `uv lock --check --no-sources --python 3.12` and installs the frozen development and router environment. Tag publication requires a present, fresh lock. Dependency sources use public PyPI; the OS project itself is the local root.
 
 Builds use the fixed `SOURCE_DATE_EPOCH=1580601600`, independent of publication-control pin commits. Build with `uv build --force-pep517`.
 

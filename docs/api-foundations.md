@@ -1,6 +1,6 @@
 # OS API foundations
 
-The retained foundation implements local trust and OS-owned version-one contracts. Millrace OS 0.23.0 adds the public router mapping documented in `router-operation.md`. Core retains durable execution and receipt authority. Historical released OS/provider gates remain separate evidence.
+The retained foundation implements local trust and OS-owned version-one contracts. Millrace OS 0.23.1 adds the public router mapping documented in `router-operation.md`. Core retains durable execution and receipt authority. Historical released OS/provider gates remain separate evidence.
 
 `millrace-os serve` creates the owner-only bearer credential. CLI/script clients
 read that explicitly configured credential file and send `Authorization: Bearer

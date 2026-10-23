@@ -1,6 +1,6 @@
 <div align="center">
   <p>
-    <a href="https://pypi.org/project/millrace-os/"><img alt="PyPI v0.23.0" src="https://img.shields.io/badge/pypi-v0.23.0-orange.svg"></a>
+    <a href="https://pypi.org/project/millrace-os/"><img alt="PyPI v0.23.1" src="https://img.shields.io/badge/pypi-v0.23.1-orange.svg"></a>
     <a href="https://www.python.org/downloads/"><img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12+-blue.svg"></a>
     <a href="https://github.com/tim-osterhus/millrace-os/blob/main/LICENSE"><img alt="Apache-2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-green.svg"></a>
   </p>
@@ -16,18 +16,20 @@ Millrace OS is a local service and command-line client for operating independent
 
 Use it to inspect runs, submit exact control requests, and publish workflow edits through one authenticated loopback API. Core owns instance inventory, execution, receipts, planes, and writer state. OS owns named state-home selections, drafts, and the lifetime of its controller calls.
 
-Millrace OS 0.23.0 requires Python 3.12 or later. Native daemon identity and stop controls support macOS; other platforms fail closed for those controls.
+Millrace OS 0.23.1 requires Python 3.12 or later. Native daemon identity and stop controls support macOS. Other platforms fail closed for those controls.
 
 Install the base service independently, or include the optional public router controls:
 
 ```bash
-python -m pip install 'millrace-os==0.23.0'
-python -m pip install 'millrace-os[router]==0.23.0'
+python -m pip install 'millrace-os==0.23.1'
+python -m pip install 'millrace-os[router]==0.23.1'
 ```
 
-The router extra selects `millrace-plus[router]>=0.23.0,<0.24.0`, which supplies Core transitively. Base service startup does not import Core or Plus. Router operations refuse unavailable or incompatible components. The selected release uses Core, Plus, and OS 0.23.0 with `millrace-router-execution/v2`. Matching version numbers do not establish execution-contract compatibility or native provider qualification.
+The router extra selects `millrace-plus[router]>=0.23.1,<0.24.0`, which supplies Core transitively. Base service startup does not import Core or Plus. Router operations refuse unavailable or incompatible components. The selected release uses Core, Plus, and OS 0.23.1 with `millrace-router-execution/v2`. Matching version numbers do not establish execution-contract compatibility or native provider qualification.
 
-The explicit optional `mcp` extra adds a foreground bridge to an already running OS API, using Python 3.12/3.13 and official MCP SDK 1.30.0. See [MCP configuration and recovery](docs/mcp.md) for seven fixed tools, local stdio, the trusted shared HTTP boundary and saved-request replay. Base installation remains independent of MCP.
+The router extra requires Plus 0.23.1 for this release's bundled LAD workflow, subworkflow commands, Paperclip bridge, and OpenCode adapter.
+
+The explicit optional `mcp` extra adds a foreground bridge to an already running OS API. It uses Python 3.12/3.13 and official MCP SDK 1.30.0. See [MCP configuration and recovery](docs/mcp.md) for seven fixed tools, local stdio, the trusted shared HTTP boundary and saved-request replay. Base installation remains independent of MCP.
 
 Start the installed service and inspect a configured Core home:
 
@@ -38,7 +40,7 @@ millrace-os router inspect --home main --instance INSTANCE_ID --run RUN_ID
 millrace-os router request --home main --file saved-request.json
 ```
 
-The service creates an owner-only bearer credential. The client reads that configured credential and sends it only to the explicit loopback endpoint. See [router operation](https://github.com/tim-osterhus/millrace-os/blob/v0.23.0/docs/router-operation.md) for authoring and control examples.
+The service creates an owner-only bearer credential. The client reads that configured credential and sends it only to the explicit loopback endpoint. See [router operation](https://github.com/tim-osterhus/millrace-os/blob/v0.23.1/docs/router-operation.md) for authoring and control examples.
 
 ## Receipts and controller ownership
 
@@ -55,4 +57,4 @@ Workflow Apply freezes a draft, pauses its exact run, observes quiescence and fi
 - `workflow_drafts.py` stores drafts and serializes cooperating OS publications.
 - `api.py`, `contracts.py`, and `cli.py` define the shared HTTP and headless client surface.
 
-The browser is optional. Existing bootstrap and recovery pages remain available, and deterministic authoring needs neither a browser nor a model. Read [API foundations](https://github.com/tim-osterhus/millrace-os/blob/v0.23.0/docs/api-foundations.md), [service foundations](https://github.com/tim-osterhus/millrace-os/blob/v0.23.0/docs/foundation.md), and [legacy disposition](https://github.com/tim-osterhus/millrace-os/blob/v0.23.0/docs/architecture/legacy-disposition.md) for the retained trust and storage contracts. The package uses the [Apache 2.0 license](https://github.com/tim-osterhus/millrace-os/blob/v0.23.0/LICENSE).
+The browser is optional. Existing bootstrap and recovery pages remain available, and deterministic authoring needs neither a browser nor a model. Read [API foundations](https://github.com/tim-osterhus/millrace-os/blob/v0.23.1/docs/api-foundations.md), [service foundations](https://github.com/tim-osterhus/millrace-os/blob/v0.23.1/docs/foundation.md), and [legacy disposition](https://github.com/tim-osterhus/millrace-os/blob/v0.23.1/docs/architecture/legacy-disposition.md) for the retained trust and storage contracts. The package uses the [Apache 2.0 license](https://github.com/tim-osterhus/millrace-os/blob/v0.23.1/LICENSE).

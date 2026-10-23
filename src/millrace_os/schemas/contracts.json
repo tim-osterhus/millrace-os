@@ -1555,8 +1555,8 @@
             "type": "string"
           },
           "version": {
-            "const": "0.23.0",
-            "default": "0.23.0",
+            "const": "0.23.1",
+            "default": "0.23.1",
             "title": "Version",
             "type": "string"
           }
@@ -2528,8 +2528,8 @@
         "type": "string"
       },
       "version": {
-        "const": "0.23.0",
-        "default": "0.23.0",
+        "const": "0.23.1",
+        "default": "0.23.1",
         "title": "Version",
         "type": "string"
       }
