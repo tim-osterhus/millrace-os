@@ -321,17 +321,31 @@ def test_create_restart_requires_exact_post_replay(mcp_harness):
     h = mcp_harness
     config = configuration(h)
     request, _ = create_request(h)
+    saved_request = json.loads(json.dumps(request))
     first = direct(
         config, "millrace_v1_request", {"home": "default", "request": request}
     )
     receipt = h.send(request)
     h.stop()
     h.start()
-    after = direct(
-        configuration(h), "millrace_v1_request", {"home": "default", "request": request}
-    )
+
+    def replay_observation():
+        after = direct(
+            configuration(h),
+            "millrace_v1_request",
+            {"home": "default", "request": request},
+        )
+        assert request == saved_request
+        assert after["os"]["request_id"] == request["request_id"]
+        assert after["os"]["request_digest"] == receipt["request_digest"]
+        assert after["os"]["instance_id"] in {None, receipt["instance_id"]}
+        assert after["os"]["run_id"] is None
+        return after if after["os"]["core_receipt"] is not None else None
+
+    after = h.until(replay_observation)
     assert after["os"]["core_receipt"] == receipt
     assert first["os"]["request_digest"] == after["os"]["request_digest"]
+    assert len(h.http.get("/api/v1/router/instances?home=default").json()["data"]) == 1
     missing = direct(
         configuration(h),
         "millrace_v1_receipt",
@@ -383,6 +397,7 @@ def test_simultaneous_targeted_controls_keep_one_saved_identity(
     run = started["run_id"]
     h.until(lambda: (project / "started").exists())
     pause = h.request("pause_run", instance, run)
+    observed_receipts = []
     with http_bridge(config, signing, mcp_port) as base:
         job = base | {
             "calls": [
@@ -402,11 +417,20 @@ def test_simultaneous_targeted_controls_keep_one_saved_identity(
             assert (
                 observation["instance_id"] == instance and observation["run_id"] == run
             )
-            assert observation["core_receipt"]["status"] == "queued"
-    # The shared bridge and both clients close while OS still owns the stop.
+            receipt = observation["core_receipt"]
+            assert receipt["status"] in {"queued", "applied"}
+            assert receipt["request_id"] == pause["request_id"]
+            assert receipt["instance_id"] == instance and receipt["run_id"] == run
+            assert receipt["request_digest"] == observation["request_digest"]
+            observed_receipts.append(receipt)
+    # Closing the bridge and clients preserves the saved control identity.
     (project / "release").write_text("finish active invocation")
     applied = h.send(pause)
     assert applied["status"] == "applied"
+    for receipt in observed_receipts:
+        assert receipt["request_digest"] == applied["request_digest"]
+        if receipt["status"] == "applied":
+            assert receipt == applied
     paused = h.settled(instance, run, "paused")
     replay = direct(
         config, "millrace_v1_request", {"home": "default", "request": pause}
