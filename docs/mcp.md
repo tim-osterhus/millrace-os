@@ -89,8 +89,14 @@ Verification requires RS256, exact issuer/audience, allowed subject and operator
 scope. Tokens are at most 16 KiB. Required exp/iat and optional nbf must be finite
 numeric times with zero leeway. JWKS uses only the configured HTTPS URL, a
 five-second total timeout, 256-KiB response cap, no redirects or ambient proxies,
-and at most a 300-second cache. A missing key gets one bounded refresh. Token
-key URLs are never fetched. Configuration changes require explicit restart.
+and a hard 300-second cache lifetime. Fresh known keys verify without waiting
+for a refresh. Missing or expired keys may trigger a refresh, with at least
+30 seconds between attempts across all key IDs, including failed attempts.
+This fixed internal availability policy can delay key rotation or recovery
+after an issuer outage by up to 30 seconds; it is not an RFC requirement.
+Expired keys refuse during the cooldown. Only eligible RSA/RS256 signing keys
+require nonempty, unique key IDs; irrelevant keys are ignored. Token key URLs
+are never fetched. Configuration changes require explicit restart.
 
 Selected HTTP requests use JSON POST; GET event streams are excluded. Initialize
 carries the selected protocol version; subsequent operations require its header.
@@ -165,5 +171,9 @@ integration evidence, not a final unpublished public registry lock.
 
 The selected shared-server proof used two pinned SDK clients and one deterministic
 workflow with no model calls. It covers that exact deployment and request profile.
+That predecessor proof used the earlier auth implementation. The release auth
+repair has deterministic issuer/cache and SDK regression coverage; it has not
+repeated the external issuer/proxy deployment, so exact-artifact native proof
+does not carry forward from the predecessor.
 Native provider, named GUI-client and general cross-platform claims need separate
 evidence. Live Paperclip task/account/server proof remains deferred.

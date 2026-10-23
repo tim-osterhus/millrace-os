@@ -27,6 +27,7 @@ class ResourceVerifier:
         )
         self.keys: dict = {}
         self.loaded = 0.0
+        self.next_refresh = 0.0
         self.lock = asyncio.Lock()
 
     async def close(self) -> None:
@@ -47,15 +48,16 @@ class ResourceVerifier:
                     raise ValueError("invalid keys")
                 selected = {}
                 for key in keys:
-                    kid = key.get("kid")
-                    if not isinstance(kid, str) or not kid or kid in selected:
-                        raise ValueError("invalid key identity")
-                    if (
+                    if not (
                         key.get("kty") == "RSA"
                         and key.get("alg", "RS256") == "RS256"
                         and key.get("use", "sig") == "sig"
                     ):
-                        selected[kid] = jwt.PyJWK.from_dict(key, algorithm="RS256").key
+                        continue
+                    kid = key.get("kid")
+                    if not isinstance(kid, str) or not kid or kid in selected:
+                        raise ValueError("invalid key identity")
+                    selected[kid] = jwt.PyJWK.from_dict(key, algorithm="RS256").key
                 self.keys = selected
                 self.loaded = time.monotonic()
 
@@ -72,10 +74,19 @@ class ResourceVerifier:
                 or any(k in header for k in ("jku", "x5u", "crit", "jwk"))
             ):
                 return None
-            async with self.lock:
-                if time.monotonic() - self.loaded >= 300 or kid not in self.keys:
-                    await self._refresh()
-                key = self.keys.get(kid)
+            now = time.monotonic()
+            key = self.keys.get(kid) if now - self.loaded < 300 else None
+            if key is None:
+                async with self.lock:
+                    now = time.monotonic()
+                    key = self.keys.get(kid) if now - self.loaded < 300 else None
+                    if key is None:
+                        if now < self.next_refresh:
+                            return None
+                        # Gate attempts before I/O, including failed/cancelled fetches.
+                        self.next_refresh = now + 30
+                        await self._refresh()
+                        key = self.keys.get(kid)
             if key is None:
                 return None
             claims = jwt.decode(
