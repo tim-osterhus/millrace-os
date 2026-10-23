@@ -415,16 +415,16 @@ wheels = [
 
 [[package]]
 name = "millrace-ai"
-version = "0.23.0"
+version = "0.23.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e6/9b/d37613e7c2e2384890fd44c37981b8ec23eede579dd6b24803bb74b85d49/millrace_ai-0.23.0.tar.gz", hash = "sha256:4a8716cfd1e02c86165372ff005e241dc14346b5c6b51389fa634f9b3aecef5c", size = 915894, upload-time = "2026-10-22T03:15:42.355Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/3b/6eb1b9297ed42d210a024663c6fe3e5de20a2b6faa4f0064e3cc7af60663/millrace_ai-0.23.1.tar.gz", hash = "sha256:9cd836b5c689444def1c2351360a817f4455ad5756baf69b73b5d08ca0132489", size = 917645, upload-time = "2026-10-23T06:49:01.739Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4a/e1/9aa5f83eb3e41946021484170d450c5510ddc14e7e68ef80202a33733bc0/millrace_ai-0.23.0-py3-none-any.whl", hash = "sha256:56d4bd001c9c5875b6f7fec55369754c43a07f5d2ce0e334a2057c63521b858c", size = 75846, upload-time = "2026-10-22T03:15:40.888Z" },
+    { url = "https://files.pythonhosted.org/packages/06/a1/ba1b50c88a00fdfc9bfed1e3359549cf1afcfa7e7bc7e5e264b972cabe50/millrace_ai-0.23.1-py3-none-any.whl", hash = "sha256:b5c2ac37259031136384e1d573dae8ea0e7597e5b1c792bd26ae42c019ab7778", size = 75970, upload-time = "2026-10-23T06:49:00.489Z" },
 ]
 
 [[package]]
 name = "millrace-os"
-version = "0.23.0"
+version = "0.23.1"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -454,7 +454,7 @@ requires-dist = [
     { name = "fastapi", specifier = "==0.116.1" },
     { name = "httpx", marker = "extra == 'dev'", specifier = "==0.28.1" },
     { name = "mcp", marker = "python_full_version < '3.14' and extra == 'mcp'", specifier = "==1.30.0" },
-    { name = "millrace-plus", extras = ["router"], marker = "extra == 'router'", specifier = ">=0.23.0,<0.24.0" },
+    { name = "millrace-plus", extras = ["router"], marker = "extra == 'router'", specifier = ">=0.23.1,<0.24.0" },
     { name = "playwright", marker = "extra == 'browser'", specifier = "==1.55.0" },
     { name = "pydantic", specifier = "==2.11.9" },
     { name = "pyjwt", extras = ["crypto"], marker = "python_full_version < '3.14' and extra == 'mcp'", specifier = ">=2.10.1" },
@@ -466,11 +466,11 @@ provides-extras = ["mcp", "router", "dev", "browser"]
 
 [[package]]
 name = "millrace-plus"
-version = "0.23.0"
+version = "0.23.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/63/5a/a0b0f42eed20356a21f7dbe343e7bbc3512979f4bdc32bb23606c6eb628f/millrace_plus-0.23.0.tar.gz", hash = "sha256:b80634643ab3c555e1733c93a3cd66281279b100c3247c3d8c54502346709fcd", size = 169683, upload-time = "2026-10-22T03:38:59.741Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3d/90/74d617d307648069797934018542674fd8c358f975316514946c7a544a95/millrace_plus-0.23.1.tar.gz", hash = "sha256:b666e736f8ffa3a4df98039f6197c9da1b36729a645479f1e69ff3ca27d440f2", size = 324410, upload-time = "2026-10-23T08:36:59.651Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/47/17/39805f53f71ad8d10875df732b0eb6c7cb2673fb42a225636b9cc3c36902/millrace_plus-0.23.0-py3-none-any.whl", hash = "sha256:5c2025e4f6d592bf4c927d659b4d729e17a62e49bc13f5b380de1b2d6bff480f", size = 85452, upload-time = "2026-10-22T03:38:58.265Z" },
+    { url = "https://files.pythonhosted.org/packages/78/a1/3ee082496927ab2d2129c94677820bd05ce02905c78b091b9e7b504c17e2/millrace_plus-0.23.1-py3-none-any.whl", hash = "sha256:6a6718ad1e733ac25113bd464d8f46737a89364050ceaa7b54c1b03967c1cb30", size = 214869, upload-time = "2026-10-23T08:36:58.255Z" },
 ]
 
 [package.optional-dependencies]
