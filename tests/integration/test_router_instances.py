@@ -1314,3 +1314,30 @@ def test_invalid_run_id_shutdown_waits_for_public_call_then_closes(
             # no Core state/hold is edited, and no preceding assertion uses this.
             h.service.router_workers.reopen()
         h.service.stop()
+
+
+
+def test_optional_run_null_captures_round_trip_real_http_reader(router_harness):
+    import math
+
+    h = router_harness
+    workflow, project = h.flow()
+    file = workflow / "workflow.json"
+    graph = json.loads(file.read_text())
+    graph["format"], graph["limits"] = "millrace-router/v4", {}
+    file.write_text(json.dumps(graph))
+    instance = h.create(workflow, project)
+    started = h.start_run(instance)
+    view = h.settled(instance, started["run_id"], "succeeded")
+    for key in ("startup_cap", "startup_elapsed", "startup_deadline", "cap",
+                "max_elapsed", "deadline"):
+        assert key in view and view[key] is None
+    assert view["count"] == len(view["invocations"]) > 0
+    assert all(i["run_deadline"] is None and math.isfinite(i["deadline"])
+               for i in view["invocations"])
+    response = h.http.get(
+        f"/api/v1/router/instances/{instance}/runs/{view['id']}?home=default"
+    )
+    assert response.status_code == 200
+    assert response.json()["source_provider"] == "core"
+    assert response.json()["data"] == view
