@@ -215,6 +215,37 @@ class RouterCallObservation(Contract):
     observed_at: Annotated[str, Field(max_length=40)]
 
 
+class RouterCallObservationV2(Contract):
+    contract: Literal["millrace-os-router-call/v2"] = "millrace-os-router-call/v2"
+    home: Identifier
+    request_id: Identifier
+    request_digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None
+    instance_id: Identifier | None
+    run_id: Identifier | None
+    source: Literal["os_owned_call", "core_receipt"]
+    phase: Literal[
+        "admission_pending",
+        "call_active",
+        "call_returned",
+        "call_failed",
+        "receipt_observed",
+    ]
+    core_receipt: dict[str, JsonValue] | None
+    observed_at: Annotated[str, Field(max_length=40)]
+    holder_joined: bool | None
+
+
+class RouterObservationCapabilities(Contract):
+    contract: Literal["millrace-os-router-observation-capabilities/v1"] = (
+        "millrace-os-router-observation-capabilities/v1"
+    )
+    home: Identifier
+    observation_contracts: list[
+        Literal["millrace-os-router-call/v1", "millrace-os-router-call/v2"]
+    ]
+    holder_joined_supported: bool
+
+
 class RouterRequestInput(Contract):
     home: Identifier
     request: dict[str, JsonValue]
@@ -333,6 +364,8 @@ MODELS = [
     RouterRead[JsonValue],
     RouterRead[RouterValidation],
     RouterCallObservation,
+    RouterCallObservationV2,
+    RouterObservationCapabilities,
     RouterRequestInput,
     RouterValidationContext,
     RouterValidation,

@@ -120,3 +120,170 @@ def test_router_absence_is_sanitized_without_breaking_foundation(tmp_path, monke
     assert client.get("/api/v1/version", headers=bearer).status_code == 200
     assert client.get("/api/v1/identity", headers=bearer).status_code == 200
     assert client.get("/api/v1/health").status_code == 200
+
+
+def test_options_validates_home_without_core_effects(tmp_path, monkeypatch):
+    service, client, bearer = setup(tmp_path)
+    home = tmp_path / "untouched-core"
+    service.router_client.homes = {"default": home}
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("capability discovery must not read or mutate Core")
+
+    monkeypatch.setattr(service.router_client, "_control", forbidden)
+    monkeypatch.setattr(service.router_workers, "submit", forbidden)
+    route = "/api/v1/router/requests"
+    result = client.options(route + "?home=default", headers=bearer)
+    assert result.status_code == 200, result.text
+    assert result.json() == {
+        "contract": "millrace-os-router-observation-capabilities/v1",
+        "home": "default",
+        "observation_contracts": [
+            "millrace-os-router-call/v1", "millrace-os-router-call/v2"
+        ],
+        "holder_joined_supported": True,
+    }
+    assert not home.exists()
+    for query in (
+        "", "home=", "home=unknown", "home=bad/name", "home=default&home=default",
+        "home=default&extra=x", "state_home=/tmp/core",
+    ):
+        response = client.options(
+            route + ("?" + query if query else ""), headers=bearer
+        )
+        assert response.status_code == 422, response.text
+    response = client.options(
+        "/api/v1/router/validate?home=default", headers=bearer
+    )
+    assert response.status_code == 422
+    assert service.router_workers.snapshot() == []
+    assert not home.exists()
+
+
+def test_call_v2_negotiation_precedes_dispatch(tmp_path, monkeypatch):
+    service, client, bearer = setup(tmp_path)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("unsupported negotiation reached Core")
+
+    monkeypatch.setattr(service.router_workers, "submit", forbidden)
+    monkeypatch.setattr(service.router_workers, "observe", forbidden)
+    for accept in (
+        "application/vnd.millrace.router-call.v3+json",
+        "application/vnd.millrace.router-call.v2",
+        "application/vnd.millrace.router-call+json",
+        "application/vnd.millrace.router-call.v2+json;q=0",
+        "application/json, application/vnd.millrace.router-call.v2+json",
+    ):
+        headers = {**bearer, "Accept": accept}
+        post = client.post(
+            "/api/v1/router/requests", headers=headers,
+            json={"home": "default", "request": {}},
+        )
+        get = client.get("/api/v1/router/requests/call?home=default", headers=headers)
+        for response in (post, get):
+            assert response.status_code == 406, response.text
+            assert response.json()["code"] == "unsupported_observation_version"
+    assert service.router_workers.snapshot() == []
+
+
+def test_repeated_accept_vendor_refuses_before_dispatch(tmp_path, monkeypatch):
+    service, client, bearer = setup(tmp_path)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("repeated unsupported Accept reached Core")
+
+    monkeypatch.setattr(service.router_workers, "submit", forbidden)
+    monkeypatch.setattr(service.router_workers, "observe", forbidden)
+    unsupported = "application/vnd.millrace.router-call.v3+json"
+    for first in (
+        "application/json", "*/*",
+        "application/vnd.millrace.router-call.v1+json",
+        "application/vnd.millrace.router-call.v2+json",
+    ):
+        headers = [*bearer.items(), ("Accept", first), ("Accept", unsupported)]
+        post = client.post(
+            "/api/v1/router/requests", headers=headers,
+            json={"home": "default", "request": {}},
+        )
+        get = client.get("/api/v1/router/requests/call?home=default", headers=headers)
+        for response in (post, get):
+            assert response.status_code == 406, response.text
+            assert response.json()["code"] == "unsupported_observation_version"
+    assert service.router_workers.snapshot() == []
+
+
+def test_v1_observation_payload_unchanged(tmp_path, monkeypatch):
+    from millrace_os.contracts import RouterCallObservation, RouterCallObservationV2
+
+    service, client, bearer = setup(tmp_path)
+    payload = {
+        "home": "default", "request_id": "call", "request_digest": None,
+        "instance_id": None, "run_id": None, "source": "core_receipt",
+        "phase": "receipt_observed", "core_receipt": None,
+        "observed_at": "2026-10-25T00:00:00+00:00",
+    }
+
+    def observe(*args, version=1, **kwargs):
+        if version == 2:
+            return RouterCallObservationV2(**payload, holder_joined=None)
+        return RouterCallObservation(**payload)
+
+    monkeypatch.setattr(service.router_workers, "observe", observe)
+    route = "/api/v1/router/requests/call?home=default"
+    for accept in (
+        "*/*", "application/json", "application/json;q=1",
+        "application/json, */*;q=0.8", "text/plain",
+        "application/vnd.millrace.router-call.v1+json",
+    ):
+        response = client.get(route, headers={**bearer, "Accept": accept})
+        assert response.json() == {"contract": "millrace-os-router-call/v1", **payload}
+    media = "application/vnd.millrace.router-call.v2+json"
+    response = client.get(route, headers={**bearer, "Accept": "  " + media + " "})
+    assert response.json() == {
+        "contract": "millrace-os-router-call/v2", **payload, "holder_joined": None
+    }
+    assert response.headers["content-type"] == media
+
+
+def test_repeated_ordinary_accept_preserves_v1_on_post_and_get(tmp_path, monkeypatch):
+    import threading
+    from types import SimpleNamespace
+
+    from millrace_os.contracts import RouterCallObservation
+
+    service, client, bearer = setup(tmp_path)
+    payload = RouterCallObservation(
+        home="default", request_id="call", request_digest=None,
+        instance_id=None, run_id=None, source="core_receipt",
+        phase="receipt_observed", core_receipt=None,
+        observed_at="2026-10-25T00:00:00+00:00",
+    )
+    done = threading.Event()
+    done.set()
+    observed_versions = []
+
+    def observe(*args, version=1, **kwargs):
+        observed_versions.append(version)
+        return payload
+
+    monkeypatch.setattr(
+        service.router_workers, "submit",
+        lambda *args: SimpleNamespace(done=done, error=None),
+    )
+    monkeypatch.setattr(service.router_workers, "call_observation", observe)
+    monkeypatch.setattr(service.router_workers, "observe", observe)
+    headers = [
+        *bearer.items(), ("Accept", "application/json;q=1"),
+        ("Accept", "text/plain, */*;q=0.8"),
+    ]
+    post = client.post(
+        "/api/v1/router/requests", headers=headers,
+        json={"home": "default", "request": {}},
+    )
+    get = client.get("/api/v1/router/requests/call?home=default", headers=headers)
+    for response in (post, get):
+        assert response.status_code == 200, response.text
+        assert response.json() == payload.model_dump()
+        assert "holder_joined" not in response.json()
+    assert observed_versions == [1, 1]

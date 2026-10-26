@@ -66,3 +66,52 @@ def test_router_schema_preserves_validation_version_and_distinct_authority(tmp_p
     assert "/api/v1/router/requests/{request_id}" in paths
     assert "/api/v1/router/drafts/{draft_id}/apply" in paths
     assert paths["/api/v1/router/validate"]["post"]["responses"]["200"]
+
+
+def test_call_v1_schema_stays_exact_with_separate_v2():
+    import pytest
+    from pydantic import ValidationError
+
+    from millrace_os.contracts import (
+        RouterCallObservation,
+        RouterCallObservationV2,
+        RouterObservationCapabilities,
+    )
+
+    schemas, registry = schema_artifacts()
+    # Frozen strict-v1 digest from the admitted preimage registry.
+    entry = next(
+        e for e in registry.schemas if e.contract_id == "RouterCallObservation"
+    )
+    assert entry.sha256 == (
+        "1f4a01942f393c5669a959e0c49919f3a28f9c9e5da91605bd344b6dd58cc4a7"
+    )
+    assert "holder_joined" not in schemas["RouterCallObservation"]["properties"]
+    v2 = schemas["RouterCallObservationV2"]
+    assert "holder_joined" in v2["required"]
+    assert v2["additionalProperties"] is False
+    payload = {
+        "home": "default", "request_id": "call", "request_digest": None,
+        "instance_id": None, "run_id": None, "source": "core_receipt",
+        "phase": "receipt_observed", "core_receipt": None,
+        "observed_at": "2026-10-25T00:00:00+00:00",
+    }
+    for joined in (True, False, None):
+        raw = {
+            **payload, "contract": "millrace-os-router-call/v2",
+            "holder_joined": joined,
+        }
+        assert RouterCallObservationV2.model_validate(raw).holder_joined is joined
+        with pytest.raises(ValidationError):
+            RouterCallObservation.model_validate(raw)
+    for extra in (
+        {}, {"holder_joined": 1}, {"holder_joined": "true"},
+        {"holder_joined": True, "extra": 1},
+    ):
+        with pytest.raises(ValidationError):
+            RouterCallObservationV2.model_validate({**payload, **extra})
+    with pytest.raises(ValidationError):
+        RouterObservationCapabilities.model_validate({
+            "home": "default", "observation_contracts": [],
+            "holder_joined_supported": 1,
+        })

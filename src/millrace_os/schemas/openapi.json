@@ -1381,6 +1381,134 @@
         "title": "RouterCallObservation",
         "type": "object"
       },
+      "RouterCallObservationV2": {
+        "additionalProperties": false,
+        "properties": {
+          "contract": {
+            "const": "millrace-os-router-call/v2",
+            "default": "millrace-os-router-call/v2",
+            "title": "Contract",
+            "type": "string"
+          },
+          "core_receipt": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Core Receipt"
+          },
+          "holder_joined": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder Joined"
+          },
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "instance_id": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance Id"
+          },
+          "observed_at": {
+            "maxLength": 40,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "phase": {
+            "enum": [
+              "admission_pending",
+              "call_active",
+              "call_returned",
+              "call_failed",
+              "receipt_observed"
+            ],
+            "title": "Phase",
+            "type": "string"
+          },
+          "request_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Digest"
+          },
+          "request_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "source": {
+            "enum": [
+              "os_owned_call",
+              "core_receipt"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "home",
+          "request_id",
+          "request_digest",
+          "instance_id",
+          "run_id",
+          "source",
+          "phase",
+          "core_receipt",
+          "observed_at",
+          "holder_joined"
+        ],
+        "title": "RouterCallObservationV2",
+        "type": "object"
+      },
       "RouterLocalRead": {
         "additionalProperties": false,
         "properties": {
@@ -1418,6 +1546,46 @@
           "data"
         ],
         "title": "RouterLocalRead",
+        "type": "object"
+      },
+      "RouterObservationCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "contract": {
+            "const": "millrace-os-router-observation-capabilities/v1",
+            "default": "millrace-os-router-observation-capabilities/v1",
+            "title": "Contract",
+            "type": "string"
+          },
+          "holder_joined_supported": {
+            "title": "Holder Joined Supported",
+            "type": "boolean"
+          },
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "observation_contracts": {
+            "items": {
+              "enum": [
+                "millrace-os-router-call/v1",
+                "millrace-os-router-call/v2"
+              ],
+              "type": "string"
+            },
+            "title": "Observation Contracts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "home",
+          "observation_contracts",
+          "holder_joined_supported"
+        ],
+        "title": "RouterObservationCapabilities",
         "type": "object"
       },
       "RouterRead_JsonValue_": {
@@ -5531,9 +5699,177 @@
       }
     },
     "/api/v1/router/requests": {
+      "options": {
+        "operationId": "router_observation_capabilities_api_v1_router_requests_options",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "home",
+            "required": true,
+            "schema": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "title": "Home",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exact configured origin required with session authentication.",
+            "in": "header",
+            "name": "Origin",
+            "required": false,
+            "schema": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required with session authentication.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 43,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouterObservationCapabilities"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Router Observation Capabilities"
+      },
       "post": {
         "operationId": "router_request_api_v1_router_requests_post",
         "parameters": [
+          {
+            "in": "header",
+            "name": "accept",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Accept"
+            }
+          },
           {
             "description": "Exact configured origin; required for browser mutations.",
             "in": "header",
@@ -5574,6 +5910,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/RouterCallObservation"
                 }
+              },
+              "application/vnd.millrace.router-call.v2+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouterCallObservationV2"
+                }
               }
             },
             "description": "Successful Response"
@@ -5583,6 +5924,11 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RouterCallObservation"
+                }
+              },
+              "application/vnd.millrace.router-call.v2+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouterCallObservationV2"
                 }
               }
             },
@@ -5617,6 +5963,16 @@
               }
             },
             "description": "Typed refusal"
+          },
+          "406": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unsupported observation version"
           },
           "409": {
             "content": {
@@ -5755,6 +6111,25 @@
               ],
               "title": "Run Id"
             }
+          },
+          {
+            "in": "header",
+            "name": "accept",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Accept"
+            }
           }
         ],
         "responses": {
@@ -5763,6 +6138,11 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RouterCallObservation"
+                }
+              },
+              "application/vnd.millrace.router-call.v2+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouterCallObservationV2"
                 }
               }
             },
@@ -5773,6 +6153,11 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RouterCallObservation"
+                }
+              },
+              "application/vnd.millrace.router-call.v2+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouterCallObservationV2"
                 }
               }
             },
@@ -5807,6 +6192,16 @@
               }
             },
             "description": "Typed refusal"
+          },
+          "406": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unsupported observation version"
           },
           "409": {
             "content": {

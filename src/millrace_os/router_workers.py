@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from .contracts import Error, RouterCallObservation
+from .contracts import Error, RouterCallObservation, RouterCallObservationV2
 from .router_client import RouterUnavailable, request_digest
 
 __all__ = ["RouterWorkers"]
@@ -272,13 +272,16 @@ class RouterWorkers:
             else:
                 call.done.wait(0.02)
 
-    def _observation(self, call):
+    def _observation(self, call, *, version=1):
         phase = (
             ("call_failed" if call.error else "call_returned")
             if call.done.is_set()
             else ("call_active" if call.started else "admission_pending")
         )
-        return RouterCallObservation(
+        model = RouterCallObservationV2 if version == 2 else RouterCallObservation
+        joined = {"holder_joined": call.joined} if version == 2 else {}
+        return model(
+            **joined,
             home=call.home,
             request_id=call.request["request_id"],
             request_digest=call.digest,
@@ -290,7 +293,9 @@ class RouterWorkers:
             observed_at=now(),
         )
 
-    def observe(self, home, request_id, *, instance_id=None, run_id=None):
+    def observe(
+        self, home, request_id, *, instance_id=None, run_id=None, version=1
+    ):
         with self._lock:
             self._retire()
             call = self._calls.get(self._key(home, request_id))
@@ -309,13 +314,19 @@ class RouterWorkers:
                 )
                 if receipt is not None:
                     self._accept_receipt(call, receipt)
-            return self._observation(call)
+            with self._lock:
+                if version == 2:
+                    self._retire()
+                return self._observation(call, version=version)
         receipt = self.client.receipt(
             home, request_id, instance_id=instance_id, run_id=run_id
         )
         if receipt is None:
             raise RouterUnavailable("observation_unavailable", 404)
-        return RouterCallObservation(
+        model = RouterCallObservationV2 if version == 2 else RouterCallObservation
+        joined = {"holder_joined": None} if version == 2 else {}
+        return model(
+            **joined,
             home=home,
             request_id=request_id,
             request_digest=receipt.get("request_digest"),
@@ -327,10 +338,12 @@ class RouterWorkers:
             observed_at=now(),
         )
 
-    def call_observation(self, call):
+    def call_observation(self, call, *, version=1):
         """Return the owned-call observation without starting another Core read."""
         with self._lock:
-            return self._observation(call)
+            if version == 2:
+                self._retire()
+            return self._observation(call, version=version)
 
     def wait_observation(self, call):
         call.done.wait(self.observation_timeout)

@@ -1341,3 +1341,172 @@ def test_optional_run_null_captures_round_trip_real_http_reader(router_harness):
     assert response.status_code == 200
     assert response.json()["source_provider"] == "core"
     assert response.json()["data"] == view
+
+
+CALL_V2_HEADERS = {"Accept": "application/vnd.millrace.router-call.v2+json"}
+
+
+def test_call_v2_waits_for_worker_and_watcher_physical_join(
+    router_factory, monkeypatch
+):
+    import threading
+
+    h = router_factory("v2-blocked-watcher")
+    workflow, project = h.flow()
+    workers = h.service.router_workers
+    entered, release = threading.Event(), threading.Event()
+
+    def blocked_watcher(call):
+        entered.set()
+        assert release.wait(10)
+
+    monkeypatch.setattr(workers, "_watch", blocked_watcher)
+    request = h.request("create_instance", version=0, payload={
+        "workflow_file": str(workflow / "workflow.json"),
+        "project_root": str(project), "path": [], "env_allowlist": [], "host_paths": {},
+    })
+    call = None
+    try:
+        response = h.http.post("/api/v1/router/requests", headers=CALL_V2_HEADERS,
+                               json={"home": "default", "request": request})
+        assert response.status_code in (200, 202), response.text
+        assert entered.wait(3)
+        call = workers.submit("default", request)
+        assert call.done.wait(3)
+        h.until(lambda: not call.thread.is_alive())
+        observed = h.http.get("/api/v1/router/requests/" + request["request_id"],
+                              params={"home": "default"}, headers=CALL_V2_HEADERS)
+        assert observed.json()["phase"] == "call_returned"
+        assert observed.json()["core_receipt"]["status"] == "applied"
+        assert observed.json()["holder_joined"] is False
+        assert not call.joined and call.watcher.is_alive()
+        release.set()
+
+        def joined():
+            value = h.http.get("/api/v1/router/requests/" + request["request_id"],
+                               params={"home": "default"},
+                               headers=CALL_V2_HEADERS).json()
+            return value if value["holder_joined"] else None
+
+        observed = h.until(joined)
+        assert observed["request_digest"] == call.digest
+        assert call.joined
+        assert not call.thread.is_alive() and not call.watcher.is_alive()
+        assert "holder_joined" not in h.observe(request["request_id"]).json()
+    finally:
+        release.set()
+        if call is not None:
+            for thread in (call.thread, call.watcher):
+                thread.join(5)
+                assert not thread.is_alive()
+
+
+def test_call_v2_post_retires_before_reporting_joined(router_factory, monkeypatch):
+    import time
+
+    h = router_factory("v2-post-join")
+    workflow, project = h.flow()
+    workers = h.service.router_workers
+    original = workers.call_observation
+    observed_calls = []
+
+    def after_physical_return(call, *, version=1):
+        # Do not call GET/snapshot/submit or join here. The POST's observation
+        # itself must run retirement and perform both joins before reporting.
+        deadline = time.monotonic() + 3
+        while any(t.is_alive() for t in (call.thread, call.watcher)):
+            assert time.monotonic() < deadline
+            time.sleep(0.001)
+        assert not call.joined
+        value = original(call, version=version)
+        observed_calls.append(call)
+        assert call.joined
+        return value
+
+    monkeypatch.setattr(workers, "call_observation", after_physical_return)
+    request = h.request("create_instance", version=0, payload={
+        "workflow_file": str(workflow / "workflow.json"),
+        "project_root": str(project), "path": [], "env_allowlist": [], "host_paths": {},
+    })
+    response = h.http.post("/api/v1/router/requests", headers=CALL_V2_HEADERS,
+                           json={"home": "default", "request": request})
+    assert response.status_code == 200, response.text
+    assert len(observed_calls) == 1
+    assert response.json()["holder_joined"] is True
+    assert response.json()["request_digest"] == observed_calls[0].digest
+    assert response.json()["contract"] == "millrace-os-router-call/v2"
+
+
+def test_call_v2_join_fact_is_exact_call_authority(router_factory):
+    from millrace_os.router_client import RouterUnavailable
+
+    h = router_factory("v2-exact-call")
+    workflow, project = h.flow(wait=True)
+    instance = h.create(workflow, project)
+    start = h.request("start_run", instance, version=1, payload={"edit_mode": "locked"})
+    v1 = h.send(start, wait=False)
+    assert "holder_joined" not in v1
+    workers = h.service.router_workers
+    call = workers.submit("default", start)
+    try:
+        h.until(lambda: (project / "started").exists())
+        h.until(lambda: call.run_id)
+        observed = workers.observe("default", start["request_id"], version=2)
+        assert observed.holder_joined is False
+        assert observed.request_digest == call.digest
+        assert observed.instance_id == instance and observed.run_id == call.run_id
+        for targets in ({"instance_id": "other"}, {"run_id": "other"}):
+            with pytest.raises(RouterUnavailable, match="observation_target_mismatch"):
+                workers.observe("default", start["request_id"], version=2, **targets)
+        changed = {**start, "payload": {"edit_mode": "live"}}
+        with pytest.raises(RouterUnavailable, match="request_id_reused"):
+            workers.submit("default", changed)
+        response = h.http.get("/api/v1/router/requests/" + start["request_id"],
+                              params={"home": "unknown"}, headers=CALL_V2_HEADERS)
+        assert response.status_code == 422
+        assert not call.joined
+    finally:
+        run = h.until(lambda: call.run_id)
+        h.send(h.request("cancel_run", instance, run))
+        (project / "release").write_text("v2 exact-call cleanup")
+        h.settled(instance, run, "cancelled")
+
+
+def test_call_v2_receipt_restart_and_expiry_never_recreate_join(router_factory):
+    from millrace_os.router_client import RouterUnavailable
+    from millrace_os.router_workers import RouterWorkers
+
+    h = router_factory("v2-expiry")
+    workflow, project = h.flow()
+    instance = h.create(workflow, project)
+    start = h.request("start_run", instance, version=1, payload={"edit_mode": "locked"})
+    receipt = h.send(start)
+    run = receipt["run_id"]
+    h.settled(instance, run, "succeeded")
+    workers = h.service.router_workers
+    joined = workers.observe("default", start["request_id"], instance_id=instance,
+                             run_id=run, version=2)
+    assert joined.holder_joined is True
+    fresh = RouterWorkers(h.service.router_client)
+    receipt_only = fresh.observe("default", start["request_id"], instance_id=instance,
+                                 run_id=run, version=2)
+    assert receipt_only.holder_joined is None and receipt_only.source == "core_receipt"
+    workers.observation_ttl = -1
+    expired = workers.observe("default", start["request_id"], instance_id=instance,
+                              run_id=run, version=2)
+    assert expired.holder_joined is None and expired.source == "core_receipt"
+    assert expired.request_digest == joined.request_digest
+    with pytest.raises(RouterUnavailable, match="observation_unavailable"):
+        fresh.observe(
+            "default", "unknown-call", instance_id=instance, run_id=run, version=2
+        )
+    h.stop()
+    h.start()
+    restarted = h.http.get("/api/v1/router/requests/" + start["request_id"],
+                           params={
+                               "home": "default", "instance_id": instance, "run_id": run
+                           },
+                           headers=CALL_V2_HEADERS)
+    assert restarted.status_code == 200, restarted.text
+    assert restarted.json()["holder_joined"] is None
+    assert restarted.json()["source"] == "core_receipt"

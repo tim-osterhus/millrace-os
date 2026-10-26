@@ -48,7 +48,9 @@ from .contracts import (
     Registry,
     Rotation,
     RouterCallObservation,
+    RouterCallObservationV2,
     RouterLocalRead,
+    RouterObservationCapabilities,
     RouterRead,
     RouterRequestInput,
     RouterValidateInput,
@@ -63,6 +65,7 @@ from .router_client import RouterUnavailable
 
 DEFAULT_BODY_LIMIT = 4096
 DRAFT_UPLOAD_LIMIT = 1048576
+CALL_V2_MEDIA_TYPE = "application/vnd.millrace.router-call.v2+json"
 
 
 def body_limit(path, method):
@@ -196,6 +199,12 @@ def configure_api(app: FastAPI, service):
                     allowed |= {"instance_id", "run_id"}
                 keys = [key for key, value in request.query_params.multi_items()]
                 if len(keys) != len(set(keys)) or set(keys) - allowed:
+                    raise TrustError("invalid_request", 422)
+            elif (
+                path == "/api/v1/router/requests" and request.method == "OPTIONS"
+            ):
+                keys = [key for key, value in request.query_params.multi_items()]
+                if keys != ["home"]:
                     raise TrustError("invalid_request", 422)
             elif request.query_params and path not in {
                 "/api/v1/providers",
@@ -434,12 +443,12 @@ def configure_router_api(app, service):
         async with read_slots:
             return await asyncio.to_thread(function, *args, **kwargs)
 
-    async def wait_owned(call):
+    async def wait_owned(call, *, version=1):
         loop = asyncio.get_running_loop()
         deadline = loop.time() + service.router_workers.observation_timeout
         while not call.done.is_set() and loop.time() < deadline:
             await asyncio.sleep(min(0.01, max(0, deadline - loop.time())))
-        return service.router_workers.call_observation(call)
+        return service.router_workers.call_observation(call, version=version)
 
     def core_read(home, data):
         return RouterRead(
@@ -523,29 +532,63 @@ def configure_router_api(app, service):
             await offload(service.router_client.inspect_run, home, instance_id, run_id),
         )
 
+    def observation_version(accept):
+        selected = ", ".join(accept or []).strip()
+        if selected == CALL_V2_MEDIA_TYPE:
+            return 2
+        if "application/vnd.millrace.router-call" in selected.lower():
+            if selected != "application/vnd.millrace.router-call.v1+json":
+                raise RouterUnavailable("unsupported_observation_version", 406)
+        return 1
+
+    def observation_response(observation, version):
+        return JSONResponse(
+            observation.model_dump(),
+            status_code=status(observation),
+            media_type=CALL_V2_MEDIA_TYPE if version == 2 else "application/json",
+        )
+
+    @app.options(
+        "/api/v1/router/requests", response_model=RouterObservationCapabilities
+    )
+    async def router_observation_capabilities(home: Identifier):
+        service.router_client.state_home(home)
+        return RouterObservationCapabilities(
+            home=home,
+            observation_contracts=[
+                "millrace-os-router-call/v1", "millrace-os-router-call/v2"
+            ],
+            holder_joined_supported=True,
+        )
+
     @app.post(
         "/api/v1/router/requests",
-        response_model=RouterCallObservation,
-        responses={202: {"model": RouterCallObservation}},
+        response_model=RouterCallObservation | RouterCallObservationV2,
+        responses={202: {"model": RouterCallObservation | RouterCallObservationV2}},
     )
-    async def router_request(body: RouterRequestInput):
+    async def router_request(
+        body: RouterRequestInput, accept: Annotated[list[str] | None, Header()] = None
+    ):
+        version = observation_version(accept)
         call = service.router_workers.submit(body.home, body.request)
-        observation = await wait_owned(call)
+        observation = await wait_owned(call, version=version)
         if call.error:
             return JSONResponse(call.error.model_dump(), status_code=call.error_status)
-        return JSONResponse(observation.model_dump(), status_code=status(observation))
+        return observation_response(observation, version)
 
     @app.get(
         "/api/v1/router/requests/{request_id}",
-        response_model=RouterCallObservation,
-        responses={202: {"model": RouterCallObservation}},
+        response_model=RouterCallObservation | RouterCallObservationV2,
+        responses={202: {"model": RouterCallObservation | RouterCallObservationV2}},
     )
     async def router_observe(
         request_id: Identifier,
         home: Identifier,
         instance_id: Identifier | None = None,
         run_id: Identifier | None = None,
+        accept: Annotated[list[str] | None, Header()] = None,
     ):
+        version = observation_version(accept)
         if run_id is not None and instance_id is None:
             raise RouterUnavailable("invalid_request", 422)
         observation = await offload(
@@ -554,8 +597,9 @@ def configure_router_api(app, service):
             request_id,
             instance_id=instance_id,
             run_id=run_id,
+            version=version,
         )
-        return JSONResponse(observation.model_dump(), status_code=status(observation))
+        return observation_response(observation, version)
 
     @app.post(
         "/api/v1/router/validate",
@@ -754,6 +798,46 @@ def export_artifacts(app):
                             },
                         }
                     )
+            if name == "/api/v1/router/requests" and method == "options":
+                operation.setdefault("parameters", []).extend(
+                    [
+                        {
+                            "name": "Origin", "in": "header", "required": False,
+                            "description": (
+                                "Exact configured origin required with session "
+                                "authentication."
+                            ),
+                            "schema": {"type": "string", "maxLength": 256},
+                        },
+                        {
+                            "name": "X-CSRF-Token", "in": "header", "required": False,
+                            "description": "Required with session authentication.",
+                            "schema": {
+                                "type": "string", "minLength": 43, "maxLength": 64
+                            },
+                        },
+                    ]
+                )
+            if name in {
+                "/api/v1/router/requests", "/api/v1/router/requests/{request_id}"
+            } and method in {"get", "post"}:
+                for code in ("200", "202"):
+                    content = operation["responses"][code].setdefault("content", {})
+                    for media, model in (
+                        ("application/json", "RouterCallObservation"),
+                        (CALL_V2_MEDIA_TYPE, "RouterCallObservationV2"),
+                    ):
+                        content[media] = {
+                            "schema": {"$ref": "#/components/schemas/" + model}
+                        }
+                operation["responses"]["406"] = {
+                    "description": "Unsupported observation version",
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/Error"}
+                        }
+                    },
+                }
             if name == "/api/v1/events":
                 operation["parameters"] = [
                     {

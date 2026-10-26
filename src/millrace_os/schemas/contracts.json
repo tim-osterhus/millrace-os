@@ -1878,6 +1878,139 @@
     "title": "RouterCallObservation",
     "type": "object"
   },
+  "RouterCallObservationV2": {
+    "$defs": {
+      "JsonValue": {}
+    },
+    "$id": "urn:millrace-os:RouterCallObservationV2:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "contract": {
+        "const": "millrace-os-router-call/v2",
+        "default": "millrace-os-router-call/v2",
+        "title": "Contract",
+        "type": "string"
+      },
+      "core_receipt": {
+        "anyOf": [
+          {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Core Receipt"
+      },
+      "holder_joined": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Holder Joined"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "instance_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Instance Id"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "phase": {
+        "enum": [
+          "admission_pending",
+          "call_active",
+          "call_returned",
+          "call_failed",
+          "receipt_observed"
+        ],
+        "title": "Phase",
+        "type": "string"
+      },
+      "request_digest": {
+        "anyOf": [
+          {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Request Digest"
+      },
+      "request_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Request Id",
+        "type": "string"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Run Id"
+      },
+      "source": {
+        "enum": [
+          "os_owned_call",
+          "core_receipt"
+        ],
+        "title": "Source",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "request_id",
+      "request_digest",
+      "instance_id",
+      "run_id",
+      "source",
+      "phase",
+      "core_receipt",
+      "observed_at",
+      "holder_joined"
+    ],
+    "title": "RouterCallObservationV2",
+    "type": "object"
+  },
   "RouterLocalRead": {
     "$defs": {
       "JsonValue": {}
@@ -1920,6 +2053,48 @@
       "data"
     ],
     "title": "RouterLocalRead",
+    "type": "object"
+  },
+  "RouterObservationCapabilities": {
+    "$id": "urn:millrace-os:RouterObservationCapabilities:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "contract": {
+        "const": "millrace-os-router-observation-capabilities/v1",
+        "default": "millrace-os-router-observation-capabilities/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "holder_joined_supported": {
+        "title": "Holder Joined Supported",
+        "type": "boolean"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "observation_contracts": {
+        "items": {
+          "enum": [
+            "millrace-os-router-call/v1",
+            "millrace-os-router-call/v2"
+          ],
+          "type": "string"
+        },
+        "title": "Observation Contracts",
+        "type": "array"
+      }
+    },
+    "required": [
+      "home",
+      "observation_contracts",
+      "holder_joined_supported"
+    ],
+    "title": "RouterObservationCapabilities",
     "type": "object"
   },
   "RouterRead-JsonValue": {

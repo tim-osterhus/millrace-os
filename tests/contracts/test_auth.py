@@ -229,3 +229,33 @@ def test_router_routes_preserve_host_origin_csrf_and_recovery_scope(tmp_path):
         blocked.status_code == 403 and blocked.json()["code"] == "recovery_session_only"
     )
     assert recovery.get("/api/v1/recovery/diagnostics").status_code == 200
+
+
+def test_router_capability_options_remains_authenticated(tmp_path):
+    service, client, bearer = setup(tmp_path)
+    service.router_client.homes = {"default": tmp_path / "core"}
+    route = "/api/v1/router/requests?home=default"
+    assert client.options(route).status_code == 401
+    response = client.options(route, headers={"Authorization": "Bearer wrong"})
+    assert response.status_code == 401
+    response = client.options(route, headers={**bearer, "Host": "evil.example"})
+    assert response.json()["code"] == "untrusted_host"
+    response = client.options(
+        route, headers={**bearer, "Origin": "https://evil.example"}
+    )
+    assert response.json()["code"] == "wrong_origin"
+    assert client.options(route, headers=bearer).status_code == 200
+    _, csrf = bootstrap(client, bearer)
+    assert client.options(route).json()["code"] == "wrong_origin"
+    origin = {"Origin": "http://127.0.0.1:8731"}
+    assert client.options(route, headers=origin).json()["code"] == "invalid_csrf"
+    response = client.options(route, headers={**origin, "X-CSRF-Token": csrf})
+    assert response.status_code == 200
+    _, recovery_csrf = bootstrap(client, bearer, recovery=True)
+    response = client.options(
+        route, headers={**origin, "X-CSRF-Token": recovery_csrf}
+    )
+    assert response.json()["code"] == "recovery_session_only"
+    client.cookies.clear()
+    service._state = None
+    assert client.options(route, headers=bearer).status_code == 503

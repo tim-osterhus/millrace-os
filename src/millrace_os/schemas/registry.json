@@ -157,8 +157,18 @@
       "version": 1
     },
     {
+      "contract_id": "RouterCallObservationV2",
+      "sha256": "2a978f0bad9095e9e5a8bf2f2f731bfcbd8c160ee857243fadde1fe2e0328611",
+      "version": 1
+    },
+    {
       "contract_id": "RouterLocalRead",
       "sha256": "b9b393e5d6d2b46d886cd8c543d6bdd8575977c86ac1e1bcfaebcb6bef94a116",
+      "version": 1
+    },
+    {
+      "contract_id": "RouterObservationCapabilities",
+      "sha256": "7c39e9cc4dfe1b352993245043db968796c3cacf99070a17429ef62f0eb32462",
       "version": 1
     },
     {
