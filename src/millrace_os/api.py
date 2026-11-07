@@ -38,6 +38,7 @@ from .contracts import (
     Event,
     ExchangeInput,
     Health,
+    HomesQuery,
     Identifier,
     Identity,
     Page,
@@ -49,14 +50,20 @@ from .contracts import (
     Rotation,
     RouterCallObservation,
     RouterCallObservationV2,
+    RouterHomeItem,
+    RouterHomes,
     RouterLocalRead,
     RouterObservationCapabilities,
     RouterRead,
     RouterRequestInput,
     RouterValidateInput,
     RouterValidation,
+    RouterView,
+    RouterViewValidateInput,
+    RunViewQuery,
     SessionOutput,
     Version,
+    ViewPageQuery,
     canonical,
     schema_artifacts,
 )
@@ -65,7 +72,11 @@ from .router_client import RouterUnavailable
 
 DEFAULT_BODY_LIMIT = 4096
 DRAFT_UPLOAD_LIMIT = 1048576
+# Compact UTF-8 bytes of every new bounded JSON response: the 1 MiB payload
+# policy plus the existing 1,024-byte wrapper reservation.
+RESPONSE_LIMIT = DRAFT_UPLOAD_LIMIT + 1024
 CALL_V2_MEDIA_TYPE = "application/vnd.millrace.router-call.v2+json"
+PAGE_QUERY_PATHS = frozenset({"/api/v1/providers", "/api/v1/actions"})
 
 
 def body_limit(path, method):
@@ -77,6 +88,55 @@ def body_limit(path, method):
         and parts[6] in {"file", "files"}
     )
     return DRAFT_UPLOAD_LIMIT if upload else DEFAULT_BODY_LIMIT
+
+
+def _view_query(parts):
+    """Bounded view keys by path shape; None when the path is not a view."""
+    if parts[4:] == ["homes"]:
+        return frozenset({"limit", "cursor"})
+    if parts[4] != "views":
+        return None
+    if parts[5:6] == ["requests"] and len(parts) == 7:
+        return frozenset({"home", "instance_id", "run_id"})
+    if parts[5:6] != ["instances"]:
+        return frozenset()
+    if len(parts) in {6, 7}:
+        return frozenset({"home", "limit", "cursor"})
+    if len(parts) == 9 and parts[7] == "runs":
+        return frozenset(
+            {"home", "section", "limit", "cursor", "request_id", "invocation_id"}
+        )
+    if len(parts) == 11 and parts[7] == "runs" and parts[9] == "revisions":
+        return frozenset({"home"})
+    return frozenset()
+
+
+def query_allowlist(path, method):
+    """Query keys admitted before routing; None defers to a `PageQuery` route.
+
+    Repeated or unlisted keys refuse `invalid_request` (422). Entries that
+    predate the bounded views reproduce the earlier ad hoc pattern exactly.
+    """
+    if path in PAGE_QUERY_PATHS:
+        return None
+    if path == "/api/v1/router/requests" and method == "OPTIONS":
+        return frozenset({"home"})  # and exactly once; see `trust_boundary`
+    if not path.startswith("/api/v1/router/") or method != "GET":
+        return frozenset()
+    parts = path.split("/")
+    view = _view_query(parts)
+    if view is not None:
+        return view
+    documented = (
+        path in {"/api/v1/router/instances", "/api/v1/router/catalog/templates"}
+        or (len(parts) == 6 and parts[4] in {"instances", "requests", "drafts"})
+        or (len(parts) == 8 and parts[4] == "instances" and parts[6] == "runs")
+    )
+    if not documented:
+        return frozenset()
+    if parts[4] == "requests":
+        return frozenset({"home", "instance_id", "run_id"})
+    return frozenset({"home"})
 
 
 def error_response(code: str, status: int) -> JSONResponse:
@@ -179,38 +239,17 @@ def configure_api(app: FastAPI, service):
                         raise TrustError("request_too_large", 413)
                     body.extend(chunk)
                 request._body = bytes(body)
-            if path.startswith("/api/v1/router/") and request.method == "GET":
-                parts = path.split("/")
-                documented = (
-                    path
-                    in {"/api/v1/router/instances", "/api/v1/router/catalog/templates"}
-                    or (
-                        len(parts) == 6
-                        and parts[4] in {"instances", "requests", "drafts"}
-                    )
-                    or (
-                        len(parts) == 8
-                        and parts[4] == "instances"
-                        and parts[6] == "runs"
-                    )
-                )
-                allowed = {"home"} if documented else set()
-                if documented and parts[4] == "requests":
-                    allowed |= {"instance_id", "run_id"}
+            allowed = query_allowlist(path, request.method)
+            if allowed is not None:
                 keys = [key for key, value in request.query_params.multi_items()]
                 if len(keys) != len(set(keys)) or set(keys) - allowed:
                     raise TrustError("invalid_request", 422)
-            elif (
-                path == "/api/v1/router/requests" and request.method == "OPTIONS"
-            ):
-                keys = [key for key, value in request.query_params.multi_items()]
-                if keys != ["home"]:
+                if (
+                    path == "/api/v1/router/requests"
+                    and request.method == "OPTIONS"
+                    and keys != ["home"]
+                ):
                     raise TrustError("invalid_request", 422)
-            elif request.query_params and path not in {
-                "/api/v1/providers",
-                "/api/v1/actions",
-            }:
-                raise TrustError("invalid_request", 422)
             response = await call_next(request)
         except TrustError as exc:
             response = error_response(exc.code, exc.status)
@@ -465,6 +504,20 @@ def configure_router_api(app, service):
             home=home, data=data, observed_at=datetime.now(UTC).isoformat()
         )
 
+    def bounded(model, *, status_code=200, media_type="application/json"):
+        # Starlette renders the API encoding (compact UTF-8) measured here.
+        response = JSONResponse(
+            model.model_dump(), status_code=status_code, media_type=media_type
+        )
+        if len(response.body) > RESPONSE_LIMIT:
+            raise RouterUnavailable("response_too_large", 409)
+        return response
+
+    def view(home, data):
+        return bounded(
+            RouterView(home=home, data=data, observed_at=datetime.now(UTC).isoformat())
+        )
+
     def status(observation):
         receipt = observation.core_receipt
         return (
@@ -531,6 +584,82 @@ def configure_router_api(app, service):
             home,
             await offload(service.router_client.inspect_run, home, instance_id, run_id),
         )
+
+    @app.get("/api/v1/router/homes", response_model=RouterHomes)
+    async def router_homes(query: Annotated[HomesQuery, Query()]):
+        page = service.router_client.list_homes(limit=query.limit, cursor=query.cursor)
+        return bounded(
+            RouterHomes(
+                items=[RouterHomeItem(name=name) for name in page["items"]],
+                next_cursor=page["next_cursor"],
+                observed_at=datetime.now(UTC).isoformat(),
+            )
+        )
+
+    @app.get("/api/v1/router/views/instances", response_model=RouterView)
+    async def view_instances(query: Annotated[ViewPageQuery, Query()]):
+        data = await offload(
+            service.router_client.view_instances,
+            query.home,
+            limit=query.limit,
+            cursor=query.cursor,
+        )
+        return view(query.home, data)
+
+    @app.get(
+        "/api/v1/router/views/instances/{instance_id}", response_model=RouterView
+    )
+    async def view_instance(
+        instance_id: Identifier, query: Annotated[ViewPageQuery, Query()]
+    ):
+        data = await offload(
+            service.router_client.view_instance,
+            query.home,
+            instance_id,
+            limit=query.limit,
+            cursor=query.cursor,
+        )
+        return view(query.home, data)
+
+    @app.get(
+        "/api/v1/router/views/instances/{instance_id}/runs/{run_id}",
+        response_model=RouterView,
+    )
+    async def view_run(
+        instance_id: Identifier,
+        run_id: Identifier,
+        query: Annotated[RunViewQuery, Query()],
+    ):
+        data = await offload(
+            service.router_client.view_run,
+            query.home,
+            instance_id,
+            run_id,
+            section=query.section,
+            limit=query.limit,
+            cursor=query.cursor,
+            request_id=query.request_id,
+            invocation_id=query.invocation_id,
+        )
+        return view(query.home, data)
+
+    @app.get(
+        "/api/v1/router/views/instances/{instance_id}/runs/{run_id}"
+        "/revisions/{revision_id}",
+        response_model=RouterView,
+    )
+    async def view_revision(
+        instance_id: Identifier,
+        run_id: Identifier,
+        revision_id: Annotated[
+            str, Path(pattern=r"^[0-9a-f]{64}$", min_length=64, max_length=64)
+        ],
+        home: Identifier,
+    ):
+        data = await offload(
+            service.router_client.view_revision, home, instance_id, run_id, revision_id
+        )
+        return view(home, data)
 
     def observation_version(accept):
         selected = ", ".join(accept or []).strip()
@@ -600,6 +729,45 @@ def configure_router_api(app, service):
             version=version,
         )
         return observation_response(observation, version)
+
+    @app.get(
+        "/api/v1/router/views/requests/{request_id}",
+        response_model=RouterCallObservation | RouterCallObservationV2,
+        responses={202: {"model": RouterCallObservation | RouterCallObservationV2}},
+    )
+    async def view_request(
+        request_id: Identifier,
+        home: Identifier,
+        instance_id: Identifier,
+        run_id: Identifier | None = None,
+        accept: Annotated[list[str] | None, Header()] = None,
+    ):
+        # Strict bounded observation only: no legacy full-inspection fallback.
+        version = observation_version(accept)
+        observation = await offload(
+            service.router_workers.observe,
+            home,
+            request_id,
+            instance_id=instance_id,
+            run_id=run_id,
+            version=version,
+            bounded=True,
+        )
+        return bounded(
+            observation,
+            status_code=status(observation),
+            media_type=CALL_V2_MEDIA_TYPE if version == 2 else "application/json",
+        )
+
+    @app.post("/api/v1/router/views/validate", response_model=RouterView)
+    async def view_validate(body: RouterViewValidateInput):
+        data = await offload(
+            service.router_client.view_validate,
+            body.home,
+            body.instance_id,
+            run_id=body.run_id,
+        )
+        return view(body.home, data)
 
     @app.post(
         "/api/v1/router/validate",
@@ -819,7 +987,9 @@ def export_artifacts(app):
                     ]
                 )
             if name in {
-                "/api/v1/router/requests", "/api/v1/router/requests/{request_id}"
+                "/api/v1/router/requests",
+                "/api/v1/router/requests/{request_id}",
+                "/api/v1/router/views/requests/{request_id}",
             } and method in {"get", "post"}:
                 for code in ("200", "202"):
                     content = operation["responses"][code].setdefault("content", {})

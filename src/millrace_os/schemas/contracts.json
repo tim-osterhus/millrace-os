@@ -2011,6 +2011,78 @@
     "title": "RouterCallObservationV2",
     "type": "object"
   },
+  "RouterHomes": {
+    "$defs": {
+      "RouterHomeItem": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "RouterHomeItem",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:RouterHomes:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authority": {
+        "const": "os-local",
+        "default": "os-local",
+        "title": "Authority",
+        "type": "string"
+      },
+      "contract": {
+        "const": "millrace-os-router-homes/v1",
+        "default": "millrace-os-router-homes/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "items": {
+        "items": {
+          "$ref": "#/$defs/RouterHomeItem"
+        },
+        "maxItems": 50,
+        "title": "Items",
+        "type": "array"
+      },
+      "next_cursor": {
+        "anyOf": [
+          {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Next Cursor"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      }
+    },
+    "required": [
+      "observed_at",
+      "items",
+      "next_cursor"
+    ],
+    "title": "RouterHomes",
+    "type": "object"
+  },
   "RouterLocalRead": {
     "$defs": {
       "JsonValue": {}
@@ -2633,6 +2705,102 @@
       "settings_version"
     ],
     "title": "RouterValidationContext",
+    "type": "object"
+  },
+  "RouterView": {
+    "$defs": {
+      "JsonValue": {}
+    },
+    "$id": "urn:millrace-os:RouterView:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "authority": {
+        "const": "core-state-home",
+        "default": "core-state-home",
+        "title": "Authority",
+        "type": "string"
+      },
+      "contract": {
+        "const": "millrace-os-router-view/v1",
+        "default": "millrace-os-router-view/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "data": {
+        "additionalProperties": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "title": "Data",
+        "type": "object"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "source_provider": {
+        "const": "core",
+        "default": "core",
+        "title": "Source Provider",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "data",
+      "observed_at"
+    ],
+    "title": "RouterView",
+    "type": "object"
+  },
+  "RouterViewValidateInput": {
+    "$id": "urn:millrace-os:RouterViewValidateInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "instance_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Instance Id",
+        "type": "string"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Run Id"
+      }
+    },
+    "required": [
+      "home",
+      "instance_id"
+    ],
+    "title": "RouterViewValidateInput",
     "type": "object"
   },
   "SessionOutput": {

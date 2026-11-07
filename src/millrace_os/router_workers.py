@@ -28,6 +28,9 @@ FOREGROUND = {
 }
 
 
+_CACHED = object()
+
+
 def now():
     return datetime.now(UTC).isoformat()
 
@@ -272,7 +275,7 @@ class RouterWorkers:
             else:
                 call.done.wait(0.02)
 
-    def _observation(self, call, *, version=1):
+    def _observation(self, call, *, version=1, receipt=_CACHED):
         phase = (
             ("call_failed" if call.error else "call_returned")
             if call.done.is_set()
@@ -289,13 +292,24 @@ class RouterWorkers:
             run_id=call.run_id,
             source="os_owned_call",
             phase=phase,
-            core_receipt=copy.deepcopy(call.receipt),
+            core_receipt=copy.deepcopy(
+                call.receipt if receipt is _CACHED else receipt
+            ),
             observed_at=now(),
         )
 
     def observe(
-        self, home, request_id, *, instance_id=None, run_id=None, version=1
+        self,
+        home,
+        request_id,
+        *,
+        instance_id=None,
+        run_id=None,
+        version=1,
+        bounded=False,
     ):
+        if bounded:
+            return self._strict_observe(home, request_id, instance_id, run_id, version)
         with self._lock:
             self._retire()
             call = self._calls.get(self._key(home, request_id))
@@ -321,6 +335,55 @@ class RouterWorkers:
         receipt = self.client.receipt(
             home, request_id, instance_id=instance_id, run_id=run_id
         )
+        if receipt is None:
+            raise RouterUnavailable("observation_unavailable", 404)
+        model = RouterCallObservationV2 if version == 2 else RouterCallObservation
+        joined = {"holder_joined": None} if version == 2 else {}
+        return model(
+            **joined,
+            home=home,
+            request_id=request_id,
+            request_digest=receipt.get("request_digest"),
+            instance_id=receipt.get("instance_id"),
+            run_id=receipt.get("run_id"),
+            source="core_receipt",
+            phase="receipt_observed",
+            core_receipt=receipt,
+            observed_at=now(),
+        )
+
+    def _strict_observe(self, home, request_id, instance_id, run_id, version):
+        """Strict view observation: the budgeted Core lookup precedes any cache.
+
+        Core's typed refusal propagates before an owned or retired observation is
+        returned. Only the exact target's own receipt is reported; the owned call
+        is never updated, released or refreshed here, and nothing falls back to
+        the legacy full inspection.
+        """
+        receipt = self.client.receipt(
+            home, request_id, instance_id=instance_id, run_id=run_id, bounded=True
+        )
+        with self._lock:
+            self._retire()
+            call = self._calls.get(self._key(home, request_id))
+            if call is not None:
+                # A Core receipt with this call's digest confirms an identity
+                # the call has not learned yet, such as a queued Start's run.
+                confirmed = (
+                    receipt is not None and receipt.get("request_digest") == call.digest
+                )
+                if not (
+                    call.instance_id == instance_id
+                    or (call.instance_id is None and confirmed)
+                ) or not (
+                    run_id is None
+                    or call.run_id == run_id
+                    or (call.run_id is None and confirmed)
+                ):
+                    raise RouterUnavailable("observation_target_mismatch", 409)
+                return self._observation(
+                    call, version=version, receipt=receipt if confirmed else None
+                )
         if receipt is None:
             raise RouterUnavailable("observation_unavailable", 404)
         model = RouterCallObservationV2 if version == 2 else RouterCallObservation

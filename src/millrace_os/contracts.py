@@ -360,6 +360,57 @@ class RouterLocalRead(Contract):
     data: JsonValue
 
 
+# Bounded router views (UI1). Query models bind route parameters only and are
+# not registered contracts, like `PageQuery`.
+Cursor = Annotated[
+    str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+]
+
+
+class HomesQuery(Contract):
+    limit: QueryInteger = Field(default=50, ge=1, le=50)
+    cursor: Cursor | None = None
+
+
+class ViewPageQuery(Contract):
+    home: Identifier
+    limit: QueryInteger = Field(default=50, ge=1, le=50)
+    cursor: Cursor | None = None
+
+
+class RunViewQuery(ViewPageQuery):
+    section: Literal["summary", "invocations", "transitions", "controls"] = "summary"
+    request_id: Identifier | None = None
+    invocation_id: Identifier | None = None
+
+
+class RouterHomeItem(Contract):
+    name: Identifier
+
+
+class RouterHomes(Contract):
+    contract: Literal["millrace-os-router-homes/v1"] = "millrace-os-router-homes/v1"
+    authority: Literal["os-local"] = "os-local"
+    observed_at: Annotated[str, Field(max_length=40)]
+    items: Annotated[list[RouterHomeItem], Field(max_length=50)]
+    next_cursor: Cursor | None
+
+
+class RouterView(Contract):
+    contract: Literal["millrace-os-router-view/v1"] = "millrace-os-router-view/v1"
+    home: Identifier
+    data: dict[str, JsonValue]
+    source_provider: Literal["core"] = "core"
+    authority: Literal["core-state-home"] = "core-state-home"
+    observed_at: Annotated[str, Field(max_length=40)]
+
+
+class RouterViewValidateInput(Contract):
+    home: Identifier
+    instance_id: Identifier
+    run_id: Identifier | None = None
+
+
 MODELS = [
     RouterRead[JsonValue],
     RouterRead[RouterValidation],
@@ -380,6 +431,9 @@ MODELS = [
     CatalogInitInput,
     CatalogCopyInput,
     RouterLocalRead,
+    RouterHomes,
+    RouterView,
+    RouterViewValidateInput,
     Health,
     Error,
     Version,

@@ -107,10 +107,30 @@ def _parser() -> argparse.ArgumentParser:
             choice.add_argument("--request-id")
             command.add_argument("--instance")
             command.add_argument("--run")
+            command.add_argument(
+                "--bounded",
+                action="store_true",
+                help="strict bounded observation; requires --instance",
+            )
         elif name == "validate":
             command.add_argument("--instance", required=True)
             command.add_argument("--run")
             command.add_argument("--draft")
+            command.add_argument(
+                "--summary", action="store_true", help="bounded validation summary"
+            )
+    homes = commands.add_parser("homes", help="list configured state-home names")
+    _add_config_options(homes)
+    views = commands.add_parser("views", help="bounded Core inspection views")
+    _add_config_options(views)
+    views.add_argument("--home", required=True)
+    for option in ("--instance", "--run", "--revision", "--section"):
+        views.add_argument(option)
+    views.add_argument("--request-id")
+    views.add_argument("--invocation-id")
+    for command in (homes, views):
+        command.add_argument("--limit", type=int)
+        command.add_argument("--cursor")
     catalog = commands.add_parser("catalog").add_subparsers(
         dest="catalog_command", required=True
     )
@@ -286,15 +306,48 @@ def _router(args):
     route = "/api/v1/router"
     method = "GET"
     body = None
-    query = {"home": args.home}
     command = args.router_command
-    if command == "instances":
+    query = {} if command == "homes" else {"home": args.home}
+    if command in {"homes", "views"}:
+        # The service query allowlist refuses options a view does not accept.
+        if command == "homes":
+            route += "/homes"
+        else:
+            if args.run and not args.instance:
+                raise ConfigurationError("--run requires --instance")
+            if args.revision and not args.run:
+                raise ConfigurationError("--revision requires --run")
+            route += "/views/instances"
+            for prefix, value in (
+                ("/", args.instance),
+                ("/runs/", args.run),
+                ("/revisions/", args.revision),
+            ):
+                if value:
+                    route += prefix + urllib.parse.quote(value, safe="")
+            query.update(
+                (key, value)
+                for key, value in (
+                    ("section", args.section),
+                    ("request_id", args.request_id),
+                    ("invocation_id", args.invocation_id),
+                )
+                if value is not None
+            )
+        query.update(
+            (key, value)
+            for key, value in (("limit", args.limit), ("cursor", args.cursor))
+            if value is not None
+        )
+    elif command == "instances":
         route += "/instances"
     elif command == "inspect":
         route += "/instances/" + urllib.parse.quote(args.instance, safe="")
         if args.run:
             route += "/runs/" + urllib.parse.quote(args.run, safe="")
     elif command == "request":
+        if args.bounded and args.file:
+            raise ConfigurationError("--bounded observes an existing --request-id")
         if args.file:
             request = json.loads(Path(args.file).read_bytes())
             if not isinstance(request, dict):
@@ -304,19 +357,24 @@ def _router(args):
             method, body = "POST", {"home": args.home, "request": request}
             route += "/requests"
         else:
-            route += "/requests/" + urllib.parse.quote(args.request_id, safe="")
+            route += ("/views" if args.bounded else "") + "/requests/"
+            route += urllib.parse.quote(args.request_id, safe="")
             if args.instance:
                 query["instance_id"] = args.instance
             if args.run:
                 query["run_id"] = args.run
     elif command == "validate":
-        method, route = "POST", route + "/validate"
+        if args.summary and args.draft:
+            raise ConfigurationError("--summary validates the configured revision")
+        method = "POST"
+        route += "/views/validate" if args.summary else "/validate"
         body = {
             "home": args.home,
             "instance_id": args.instance,
             "run_id": args.run,
-            "draft_id": args.draft,
         }
+        if not args.summary:
+            body["draft_id"] = args.draft
     elif command == "catalog":
         action = args.catalog_command
         if action == "list":
@@ -365,7 +423,7 @@ def _router(args):
                         base_state_version=args.base_state_version,
                         request_id=args.request_id,
                     )
-    if method == "GET":
+    if method == "GET" and query:
         route += "?" + urllib.parse.urlencode(query)
     token = CredentialStore(config.credential_path).ensure()
     endpoint = f"http://{_endpoint_host(config.host)}:{config.port}"

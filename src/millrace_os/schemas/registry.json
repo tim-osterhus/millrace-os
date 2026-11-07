@@ -162,6 +162,11 @@
       "version": 1
     },
     {
+      "contract_id": "RouterHomes",
+      "sha256": "ac436fda733b791f170e9ac10e176e7900e6ad243b97af16881d9c02f6f23963",
+      "version": 1
+    },
+    {
       "contract_id": "RouterLocalRead",
       "sha256": "b9b393e5d6d2b46d886cd8c543d6bdd8575977c86ac1e1bcfaebcb6bef94a116",
       "version": 1
@@ -199,6 +204,16 @@
     {
       "contract_id": "RouterValidationContext",
       "sha256": "07d11721f9f65b8858a1afb5cb601862b79011e377c7d633e9df24337986652a",
+      "version": 1
+    },
+    {
+      "contract_id": "RouterView",
+      "sha256": "5ee820eb05e6e5bf49f846896b3d6962d77ba6a863855f2eaecfc474071bc390",
+      "version": 1
+    },
+    {
+      "contract_id": "RouterViewValidateInput",
+      "sha256": "38dcfbe2c57aea077a3b788d064ec76bec65b44f046ac29a39974bc76bd24faa",
       "version": 1
     },
     {
