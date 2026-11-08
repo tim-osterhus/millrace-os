@@ -44,6 +44,8 @@ from .contracts import (
     OutputReadQuery,
     Page,
     PageQuery,
+    PresentationState,
+    PresentationWrite,
     ProviderInfo,
     PublicationRepairInput,
     Read,
@@ -74,6 +76,7 @@ from .contracts import (
     strict_json,
 )
 from .paths import UnsafePathError
+from .presentation import PresentationError, read_state, write_state
 from .router_client import RouterUnavailable
 
 DEFAULT_BODY_LIMIT = 4096
@@ -85,7 +88,12 @@ CALL_V2_MEDIA_TYPE = "application/vnd.millrace.router-call.v2+json"
 PAGE_QUERY_PATHS = frozenset({"/api/v1/providers", "/api/v1/actions"})
 # Large-body routes whose raw body is strictly parsed before model validation:
 # ordinary JSON parsing would silently keep the last of duplicate keys.
-STRICT_BODY_ROUTES = frozenset({("POST", "/api/v1/router/outputs")})
+STRICT_BODY_ROUTES = frozenset(
+    {("POST", "/api/v1/router/outputs"), ("PUT", "/api/v1/client/presentation")}
+)
+RETRYABLE_CODES = frozenset(
+    {"router_busy", "router_read_busy", "publication_busy", "presentation_busy"}
+)
 
 
 def body_limit(path, method):
@@ -170,7 +178,7 @@ def error_response(code: str, status: int) -> JSONResponse:
         code=code,
         category=category,
         summary=code.replace("_", " "),
-        retryable=code in {"router_busy", "router_read_busy", "publication_busy"},
+        retryable=code in RETRYABLE_CODES,
     )
     headers = {"WWW-Authenticate": "Bearer"} if status == 401 else {}
     return JSONResponse(payload.model_dump(), status_code=status, headers=headers)
@@ -301,6 +309,10 @@ def configure_api(app: FastAPI, service):
     @app.exception_handler(UnsafePathError)
     async def path_error(request, exc):
         return error_response("unsafe_path", 422)
+
+    @app.exception_handler(PresentationError)
+    async def presentation_error(request, exc):
+        return error_response(exc.code, exc.status)
 
     @app.exception_handler(TrustError)
     async def trust_error(request, exc):
@@ -747,6 +759,23 @@ def configure_router_api(app, service):
             )
         )
 
+    # Shared presentation preferences (P1): one config-dir store of display data
+    # for every client of this service. Nothing reads it at startup or recovery,
+    # and nothing writes it implicitly; `presentation.py` owns every store rule.
+    @app.get("/api/v1/client/presentation", response_model=PresentationState)
+    async def presentation_get():
+        state = await asyncio.to_thread(read_state, service.config.config_dir)
+        return bounded(PresentationState.model_validate(state))
+
+    @app.put("/api/v1/client/presentation", response_model=PresentationState)
+    async def presentation_put(body: PresentationWrite):
+        # The trust boundary already refused duplicate keys and NaN/Infinity;
+        # every field is required, so the dump is the exact admitted body.
+        state = await asyncio.to_thread(
+            write_state, service.config.config_dir, body.model_dump()
+        )
+        return bounded(PresentationState.model_validate(state))
+
     def observation_version(accept):
         selected = ", ".join(accept or []).strip()
         if selected == CALL_V2_MEDIA_TYPE:
@@ -1038,7 +1067,9 @@ def export_artifacts(app):
                         "schema": {"type": "string", "maxLength": 256},
                     }
                 )
-                if name.startswith(("/api/v1/actions/", "/api/v1/router/")):
+                if name.startswith(
+                    ("/api/v1/actions/", "/api/v1/router/", "/api/v1/client/")
+                ):
                     operation["parameters"].append(
                         {
                             "name": "X-CSRF-Token",

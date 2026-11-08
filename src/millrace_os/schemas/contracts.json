@@ -801,6 +801,649 @@
     "title": "Identity",
     "type": "object"
   },
+  "PresentationConfig": {
+    "$defs": {
+      "JsonValue": {}
+    },
+    "$id": "urn:millrace-os:PresentationConfig:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "The portable `millrace-os-presentation-config/v2` export/import document.",
+    "properties": {
+      "format": {
+        "const": "millrace-os-presentation-config/v2",
+        "title": "Format",
+        "type": "string"
+      },
+      "frontend_id": {
+        "maxLength": 64,
+        "minLength": 1,
+        "pattern": "^[a-z0-9][a-z0-9._-]*$",
+        "title": "Frontend Id",
+        "type": "string"
+      },
+      "name": {
+        "maxLength": 256,
+        "minLength": 1,
+        "title": "Name",
+        "type": "string"
+      },
+      "payload": {
+        "additionalProperties": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "title": "Payload",
+        "type": "object"
+      },
+      "presentation_format": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+        "title": "Presentation Format",
+        "type": "string"
+      }
+    },
+    "required": [
+      "format",
+      "frontend_id",
+      "presentation_format",
+      "name",
+      "payload"
+    ],
+    "title": "PresentationConfig",
+    "type": "object"
+  },
+  "PresentationState": {
+    "$defs": {
+      "JsonValue": {},
+      "PresentationBundledConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "bundle_sha256": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Sha256"
+          },
+          "frontend_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Frontend Id",
+            "type": "string"
+          },
+          "id": {
+            "enum": [
+              "precision",
+              "command",
+              "studio",
+              "default"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Payload",
+            "type": "object"
+          },
+          "payload_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Payload Sha256",
+            "type": "string"
+          },
+          "presentation_format": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "title": "Presentation Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "frontend_id",
+          "presentation_format",
+          "id",
+          "name",
+          "payload",
+          "payload_sha256",
+          "bundle_sha256"
+        ],
+        "title": "PresentationBundledConfig",
+        "type": "object"
+      },
+      "PresentationBundledRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "enum": [
+              "precision",
+              "command",
+              "studio",
+              "default"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "bundled",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "PresentationBundledRef",
+        "type": "object"
+      },
+      "PresentationEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Payload",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "payload"
+        ],
+        "title": "PresentationEntry",
+        "type": "object"
+      },
+      "PresentationNamespace": {
+        "additionalProperties": false,
+        "properties": {
+          "configs": {
+            "items": {
+              "$ref": "#/$defs/PresentationEntry"
+            },
+            "title": "Configs",
+            "type": "array"
+          },
+          "default_ref": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bundled": "#/$defs/PresentationBundledRef",
+                    "user": "#/$defs/PresentationUserRef"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/PresentationUserRef"
+                  },
+                  {
+                    "$ref": "#/$defs/PresentationBundledRef"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Ref"
+          },
+          "frontend_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Frontend Id",
+            "type": "string"
+          },
+          "presentation_format": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "title": "Presentation Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "frontend_id",
+          "presentation_format",
+          "default_ref",
+          "configs"
+        ],
+        "title": "PresentationNamespace",
+        "type": "object"
+      },
+      "PresentationStore": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "const": "millrace-os-presentation-store/v2",
+            "title": "Format",
+            "type": "string"
+          },
+          "namespaces": {
+            "items": {
+              "$ref": "#/$defs/PresentationNamespace"
+            },
+            "title": "Namespaces",
+            "type": "array"
+          },
+          "version": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "format",
+          "namespaces",
+          "version"
+        ],
+        "title": "PresentationStore",
+        "type": "object"
+      },
+      "PresentationUserRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "user",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "PresentationUserRef",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:PresentationState:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "bundled_configs": {
+        "items": {
+          "$ref": "#/$defs/PresentationBundledConfig"
+        },
+        "title": "Bundled Configs",
+        "type": "array"
+      },
+      "contract": {
+        "const": "millrace-os-presentation-state/v1",
+        "default": "millrace-os-presentation-state/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "file_sha256": {
+        "anyOf": [
+          {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "File Sha256"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "status": {
+        "enum": [
+          "absent",
+          "ready",
+          "incompatible",
+          "invalid"
+        ],
+        "title": "Status",
+        "type": "string"
+      },
+      "store": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/PresentationStore"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "version": {
+        "anyOf": [
+          {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Version"
+      }
+    },
+    "required": [
+      "status",
+      "version",
+      "file_sha256",
+      "store",
+      "bundled_configs",
+      "observed_at"
+    ],
+    "title": "PresentationState",
+    "type": "object"
+  },
+  "PresentationWrite": {
+    "$defs": {
+      "JsonValue": {},
+      "PresentationBundledRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "enum": [
+              "precision",
+              "command",
+              "studio",
+              "default"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "bundled",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "PresentationBundledRef",
+        "type": "object"
+      },
+      "PresentationCompare": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 32,
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          },
+          "format": {
+            "const": "millrace-os-presentation-write/v1",
+            "title": "Format",
+            "type": "string"
+          },
+          "mode": {
+            "const": "compare",
+            "title": "Mode",
+            "type": "string"
+          },
+          "store": {
+            "$ref": "#/$defs/PresentationWriteStore"
+          }
+        },
+        "required": [
+          "format",
+          "mode",
+          "expected_version",
+          "store"
+        ],
+        "title": "PresentationCompare",
+        "type": "object"
+      },
+      "PresentationEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Payload",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "payload"
+        ],
+        "title": "PresentationEntry",
+        "type": "object"
+      },
+      "PresentationNamespace": {
+        "additionalProperties": false,
+        "properties": {
+          "configs": {
+            "items": {
+              "$ref": "#/$defs/PresentationEntry"
+            },
+            "title": "Configs",
+            "type": "array"
+          },
+          "default_ref": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bundled": "#/$defs/PresentationBundledRef",
+                    "user": "#/$defs/PresentationUserRef"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/PresentationUserRef"
+                  },
+                  {
+                    "$ref": "#/$defs/PresentationBundledRef"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Ref"
+          },
+          "frontend_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Frontend Id",
+            "type": "string"
+          },
+          "presentation_format": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "title": "Presentation Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "frontend_id",
+          "presentation_format",
+          "default_ref",
+          "configs"
+        ],
+        "title": "PresentationNamespace",
+        "type": "object"
+      },
+      "PresentationReplaceUnreadable": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "const": "millrace-os-presentation-write/v1",
+            "title": "Format",
+            "type": "string"
+          },
+          "mode": {
+            "const": "replace_unreadable",
+            "title": "Mode",
+            "type": "string"
+          },
+          "observed_file_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Observed File Sha256",
+            "type": "string"
+          },
+          "store": {
+            "$ref": "#/$defs/PresentationWriteStore"
+          }
+        },
+        "required": [
+          "format",
+          "mode",
+          "observed_file_sha256",
+          "store"
+        ],
+        "title": "PresentationReplaceUnreadable",
+        "type": "object"
+      },
+      "PresentationUserRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "user",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "PresentationUserRef",
+        "type": "object"
+      },
+      "PresentationWriteStore": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "const": "millrace-os-presentation-store/v2",
+            "title": "Format",
+            "type": "string"
+          },
+          "namespaces": {
+            "items": {
+              "$ref": "#/$defs/PresentationNamespace"
+            },
+            "title": "Namespaces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "format",
+          "namespaces"
+        ],
+        "title": "PresentationWriteStore",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:PresentationWrite:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "`millrace-os-presentation-write/v1`: compare a token or replace by digest.",
+    "discriminator": {
+      "mapping": {
+        "compare": "#/$defs/PresentationCompare",
+        "replace_unreadable": "#/$defs/PresentationReplaceUnreadable"
+      },
+      "propertyName": "mode"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/PresentationCompare"
+      },
+      {
+        "$ref": "#/$defs/PresentationReplaceUnreadable"
+      }
+    ],
+    "title": "PresentationWrite"
+  },
   "ProviderInfo": {
     "$id": "urn:millrace-os:ProviderInfo:1",
     "$schema": "https://json-schema.org/draft/2020-12/schema",

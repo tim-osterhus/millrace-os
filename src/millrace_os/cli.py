@@ -27,6 +27,38 @@ from .process import (
 )
 from .service import BindError, PortCollisionError, Service
 
+# `millrace-os presentation` mirrors the fifteen OS-G0 7.4.1 alternatives.
+PRESENTATION_COMMANDS = (
+    "get",
+    "put",
+    "replace-unreadable",
+    "list",
+    "read",
+    "default",
+    "export",
+    "create",
+    "update",
+    "rename",
+    "duplicate",
+    "delete",
+    "set-default",
+    "reset",
+    "import",
+)
+PRESENTATION_MUTATIONS = frozenset(
+    {
+        "create",
+        "update",
+        "rename",
+        "duplicate",
+        "delete",
+        "set-default",
+        "reset",
+        "import",
+    }
+)
+PRESENTATION_ROUTE = "/api/v1/client/presentation"
+
 
 class _PidFile:
     """Owner-only identity record for the local service process."""
@@ -186,6 +218,40 @@ def _parser() -> argparse.ArgumentParser:
         if name == "apply":
             command.add_argument("--base-state-version", type=int, required=True)
             command.add_argument("--request-id", required=True)
+    presentation = subparsers.add_parser(
+        "presentation", help="shared presentation preferences (display data only)"
+    ).add_subparsers(dest="presentation_command", required=True)
+    for name in PRESENTATION_COMMANDS:
+        # No abbreviations: `--config` must never be read as `--config-dir`.
+        command = presentation.add_parser(name, allow_abbrev=False)
+        _add_config_options(command)
+        if name in {"put", "import"}:
+            command.add_argument("--file", required=True)
+        if name == "replace-unreadable":
+            command.add_argument("--observed-sha256", required=True)
+            command.add_argument("--store-file", required=True)
+        if name not in {"get", "put", "replace-unreadable", "import"}:
+            # NS: the explicit pair, optional only for `list`.
+            command.add_argument("--frontend", required=name != "list")
+            command.add_argument("--format", required=name != "list")
+        if name in {"read", "export", "duplicate", "set-default"}:
+            reference = command.add_mutually_exclusive_group(required=True)
+            reference.add_argument("--config", metavar="ID")
+            reference.add_argument("--bundled", metavar="ID")
+            if name == "set-default":
+                reference.add_argument("--none", action="store_true")
+        elif name in {"update", "rename", "delete", "reset"}:
+            command.add_argument("--config", metavar="ID", required=True)
+        if name in {"create", "rename", "duplicate", "import"}:
+            command.add_argument("--name", required=name != "import")
+        if name in {"create", "update"}:
+            command.add_argument("--payload-file", required=True)
+        if name in PRESENTATION_MUTATIONS:
+            command.add_argument(
+                "--expected-version",
+                metavar="TOKEN|null",
+                help="require this GET token; null requires an absent store",
+            )
     return parser
 
 
@@ -510,6 +576,125 @@ def _router(args):
         return 1
 
 
+def _local_call(config, token, method, route, raw=None):
+    """One bearer-authenticated local request; returns (HTTP status, body)."""
+    endpoint = f"http://{_endpoint_host(config.host)}:{config.port}"
+    headers = {"Authorization": "Bearer " + token}
+    if raw is not None:
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(
+        endpoint + route, data=raw, headers=headers, method=method
+    )
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *_args, **_kwargs):
+            return None
+
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    try:
+        with opener.open(request, timeout=5) as response:
+            return response.status, response.read(4 * 1048576)
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read(4096)
+
+
+def _compact(value) -> bytes:
+    return json.dumps(
+        value, ensure_ascii=False, allow_nan=False, separators=(",", ":")
+    ).encode()
+
+
+def _presentation(args):
+    """GET, PUT, or one GET -> shared helper -> PUT `compare` with the GET token.
+
+    Helpers validate before any PUT. A refusal or conflict is printed and
+    returned, never retried; nothing is written implicitly.
+    """
+    from .presentation import HELPERS, PresentationError, strict_loads
+
+    config = _config(args)
+    command = args.presentation_command
+    operation = {"default": "read_default"}.get(command, command.replace("-", "_"))
+
+    def document(path):
+        try:
+            return strict_loads(Path(path).read_bytes())
+        except ValueError as exc:
+            raise ConfigurationError(
+                f"{path} must be strict UTF-8 JSON with unique keys and finite "
+                "numbers"
+            ) from exc
+
+    arguments = {}
+    frontend = getattr(args, "frontend", None)
+    presentation_format = getattr(args, "format", None)
+    if (frontend is None) != (presentation_format is None):
+        raise ConfigurationError("--frontend and --format name one namespace")
+    if frontend is not None:
+        arguments["namespace"] = {
+            "frontend_id": frontend,
+            "presentation_format": presentation_format,
+        }
+    reference = None
+    if getattr(args, "bundled", None) is not None:
+        reference = {"kind": "bundled", "id": args.bundled}
+    elif getattr(args, "config", None) is not None:
+        reference = {"kind": "user", "id": args.config}
+    if operation == "put":
+        arguments["write"] = document(args.file)
+    elif operation == "replace_unreadable":
+        arguments["observed_file_sha256"] = args.observed_sha256
+        arguments["store"] = document(args.store_file)
+    elif operation == "import":
+        arguments["config"] = document(args.file)
+    elif operation in {"read", "export"}:
+        arguments["ref"] = reference
+    elif operation == "duplicate":
+        arguments["source"] = reference
+    elif operation == "set_default":
+        arguments["default"] = reference  # None for --none
+    elif operation in {"update", "rename", "delete", "reset"}:
+        arguments["config_id"] = args.config
+    if getattr(args, "name", None) is not None:
+        arguments["name"] = args.name
+    if operation in {"create", "update"}:
+        arguments["payload"] = document(args.payload_file)
+    if command in PRESENTATION_MUTATIONS and args.expected_version is not None:
+        # Omitted means no caller precondition; the literal `null` is a value.
+        version = args.expected_version
+        arguments["expected_version"] = None if version == "null" else version
+    token = CredentialStore(config.credential_path).ensure()
+    try:
+        if operation in {"put", "replace_unreadable"}:
+            write = HELPERS[operation](None, **arguments)
+        else:
+            status, body = _local_call(config, token, "GET", PRESENTATION_ROUTE)
+            if status != 200 or operation == "get":
+                print(body.decode())
+                return 0 if status == 200 else 1
+            result = HELPERS[operation](strict_loads(body), **arguments)
+            if command not in PRESENTATION_MUTATIONS:
+                print(_compact(result).decode())
+                return 0
+            write = result
+    except PresentationError as exc:
+        print(json.dumps({"error": exc.code}))
+        return 1
+    except (OSError, ValueError):
+        print(json.dumps({"error": "daemon_unavailable"}))
+        return 1
+    try:
+        status, body = _local_call(
+            config, token, "PUT", PRESENTATION_ROUTE, _compact(write)
+        )
+    except OSError:
+        # The PUT may have been applied: GET and compare before any retry.
+        print(json.dumps({"error": "presentation_write_unknown"}))
+        return 1
+    print(body.decode())
+    return 0 if status == 200 else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -530,6 +715,8 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
         if args.command == "router":
             return _router(args)
+        if args.command == "presentation":
+            return _presentation(args)
         if args.command == "serve":
             return _serve(args)
         if args.command in {"open", "rotate-credential"}:

@@ -12,6 +12,7 @@ from pydantic import (
     ConfigDict,
     Field,
     JsonValue,
+    RootModel,
     model_validator,
 )
 
@@ -552,6 +553,110 @@ class WorkflowOutput(Contract):
     representation: OutputRepresentation
 
 
+# Shared presentation preferences (P1): display data in the OS configuration
+# directory, never execution authority. `presentation.py` owns the store rules
+# (ordering, uniqueness, references, stock payloads); these strict shapes
+# document the wire forms and refuse malformed bodies first.
+FrontendId = Annotated[
+    str, Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9._-]*$")
+]
+BundledId = Literal["precision", "command", "studio", "default"]
+
+
+class PresentationUserRef(Contract):
+    kind: Literal["user"]
+    id: CoreId
+
+
+class PresentationBundledRef(Contract):
+    kind: Literal["bundled"]
+    id: BundledId
+
+
+PresentationRef = Annotated[
+    PresentationUserRef | PresentationBundledRef, Field(discriminator="kind")
+]
+
+
+class PresentationEntry(Contract):
+    id: CoreId
+    name: Label
+    payload: dict[str, JsonValue]
+
+
+class PresentationNamespace(Contract):
+    frontend_id: FrontendId
+    presentation_format: FormatId
+    default_ref: PresentationRef | None
+    configs: list[PresentationEntry]
+
+
+class PresentationWriteStore(Contract):
+    format: Literal["millrace-os-presentation-store/v2"]
+    namespaces: list[PresentationNamespace]
+
+
+class PresentationStore(PresentationWriteStore):
+    version: CoreId
+
+
+class PresentationBundledConfig(Contract):
+    frontend_id: FrontendId
+    presentation_format: FormatId
+    id: BundledId
+    name: Label
+    payload: dict[str, JsonValue]
+    payload_sha256: Sha256
+    bundle_sha256: Sha256 | None
+
+
+class PresentationState(Contract):
+    contract: Literal["millrace-os-presentation-state/v1"] = (
+        "millrace-os-presentation-state/v1"
+    )
+    status: Literal["absent", "ready", "incompatible", "invalid"]
+    version: CoreId | None
+    file_sha256: Sha256 | None
+    store: PresentationStore | None
+    bundled_configs: list[PresentationBundledConfig]
+    observed_at: Timestamp
+
+
+class PresentationCompare(Contract):
+    format: Literal["millrace-os-presentation-write/v1"]
+    mode: Literal["compare"]
+    expected_version: CoreId | None
+    store: PresentationWriteStore
+
+
+class PresentationReplaceUnreadable(Contract):
+    format: Literal["millrace-os-presentation-write/v1"]
+    mode: Literal["replace_unreadable"]
+    observed_file_sha256: Sha256
+    store: PresentationWriteStore
+
+
+class PresentationWrite(
+    RootModel[
+        Annotated[
+            PresentationCompare | PresentationReplaceUnreadable,
+            Field(discriminator="mode"),
+        ]
+    ]
+):
+    """`millrace-os-presentation-write/v1`: compare a token or replace by digest."""
+
+
+class PresentationConfig(Contract):
+    """The portable `millrace-os-presentation-config/v2` export/import document."""
+
+    format: Literal["millrace-os-presentation-config/v2"]
+    frontend_id: FrontendId
+    presentation_format: FormatId
+    name: Label
+    payload: dict[str, JsonValue]
+
+
 MODELS = [
     RouterRead[JsonValue],
     RouterRead[RouterValidation],
@@ -579,6 +684,9 @@ MODELS = [
     WorkflowOutputPublication,
     WorkflowOutputs,
     WorkflowOutput,
+    PresentationState,
+    PresentationWrite,
+    PresentationConfig,
     Health,
     Error,
     Version,

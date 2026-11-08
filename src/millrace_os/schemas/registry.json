@@ -97,6 +97,21 @@
       "version": 1
     },
     {
+      "contract_id": "PresentationConfig",
+      "sha256": "675faf98e9567a1ab7f342c71ae7d2080ef23037bb2e4e35280c2149418cef8a",
+      "version": 1
+    },
+    {
+      "contract_id": "PresentationState",
+      "sha256": "bbb1c278bab0a0e025e96fcb6583faadeb55294b517007f3eb25169fb918b174",
+      "version": 1
+    },
+    {
+      "contract_id": "PresentationWrite",
+      "sha256": "893208d95ccc7a1f709c00938bd5512b5176fec8d9d2cc0efb0be5aa3efc1b43",
+      "version": 1
+    },
+    {
       "contract_id": "ProviderInfo",
       "sha256": "68d38b3a1e596951295e7445590d17725da03561bfb8954e67402b929cd4e6c6",
       "version": 1

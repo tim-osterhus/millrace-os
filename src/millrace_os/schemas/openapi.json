@@ -885,6 +885,506 @@
         "title": "Page[ProviderInfo]",
         "type": "object"
       },
+      "PresentationBundledConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "bundle_sha256": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Sha256"
+          },
+          "frontend_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Frontend Id",
+            "type": "string"
+          },
+          "id": {
+            "enum": [
+              "precision",
+              "command",
+              "studio",
+              "default"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Payload",
+            "type": "object"
+          },
+          "payload_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Payload Sha256",
+            "type": "string"
+          },
+          "presentation_format": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "title": "Presentation Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "frontend_id",
+          "presentation_format",
+          "id",
+          "name",
+          "payload",
+          "payload_sha256",
+          "bundle_sha256"
+        ],
+        "title": "PresentationBundledConfig",
+        "type": "object"
+      },
+      "PresentationBundledRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "enum": [
+              "precision",
+              "command",
+              "studio",
+              "default"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "bundled",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "PresentationBundledRef",
+        "type": "object"
+      },
+      "PresentationCompare": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 32,
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          },
+          "format": {
+            "const": "millrace-os-presentation-write/v1",
+            "title": "Format",
+            "type": "string"
+          },
+          "mode": {
+            "const": "compare",
+            "title": "Mode",
+            "type": "string"
+          },
+          "store": {
+            "$ref": "#/components/schemas/PresentationWriteStore"
+          }
+        },
+        "required": [
+          "format",
+          "mode",
+          "expected_version",
+          "store"
+        ],
+        "title": "PresentationCompare",
+        "type": "object"
+      },
+      "PresentationEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Payload",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "payload"
+        ],
+        "title": "PresentationEntry",
+        "type": "object"
+      },
+      "PresentationNamespace-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "configs": {
+            "items": {
+              "$ref": "#/components/schemas/PresentationEntry"
+            },
+            "title": "Configs",
+            "type": "array"
+          },
+          "default_ref": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bundled": "#/components/schemas/PresentationBundledRef",
+                    "user": "#/components/schemas/PresentationUserRef"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PresentationUserRef"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PresentationBundledRef"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Ref"
+          },
+          "frontend_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Frontend Id",
+            "type": "string"
+          },
+          "presentation_format": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "title": "Presentation Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "frontend_id",
+          "presentation_format",
+          "default_ref",
+          "configs"
+        ],
+        "title": "PresentationNamespace",
+        "type": "object"
+      },
+      "PresentationNamespace-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "configs": {
+            "items": {
+              "$ref": "#/components/schemas/PresentationEntry"
+            },
+            "title": "Configs",
+            "type": "array"
+          },
+          "default_ref": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bundled": "#/components/schemas/PresentationBundledRef",
+                    "user": "#/components/schemas/PresentationUserRef"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PresentationUserRef"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PresentationBundledRef"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Ref"
+          },
+          "frontend_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Frontend Id",
+            "type": "string"
+          },
+          "presentation_format": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "title": "Presentation Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "frontend_id",
+          "presentation_format",
+          "default_ref",
+          "configs"
+        ],
+        "title": "PresentationNamespace",
+        "type": "object"
+      },
+      "PresentationReplaceUnreadable": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "const": "millrace-os-presentation-write/v1",
+            "title": "Format",
+            "type": "string"
+          },
+          "mode": {
+            "const": "replace_unreadable",
+            "title": "Mode",
+            "type": "string"
+          },
+          "observed_file_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Observed File Sha256",
+            "type": "string"
+          },
+          "store": {
+            "$ref": "#/components/schemas/PresentationWriteStore"
+          }
+        },
+        "required": [
+          "format",
+          "mode",
+          "observed_file_sha256",
+          "store"
+        ],
+        "title": "PresentationReplaceUnreadable",
+        "type": "object"
+      },
+      "PresentationState": {
+        "additionalProperties": false,
+        "properties": {
+          "bundled_configs": {
+            "items": {
+              "$ref": "#/components/schemas/PresentationBundledConfig"
+            },
+            "title": "Bundled Configs",
+            "type": "array"
+          },
+          "contract": {
+            "const": "millrace-os-presentation-state/v1",
+            "default": "millrace-os-presentation-state/v1",
+            "title": "Contract",
+            "type": "string"
+          },
+          "file_sha256": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Sha256"
+          },
+          "observed_at": {
+            "maxLength": 40,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "absent",
+              "ready",
+              "incompatible",
+              "invalid"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "store": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresentationStore"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 32,
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "file_sha256",
+          "store",
+          "bundled_configs",
+          "observed_at"
+        ],
+        "title": "PresentationState",
+        "type": "object"
+      },
+      "PresentationStore": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "const": "millrace-os-presentation-store/v2",
+            "title": "Format",
+            "type": "string"
+          },
+          "namespaces": {
+            "items": {
+              "$ref": "#/components/schemas/PresentationNamespace-Output"
+            },
+            "title": "Namespaces",
+            "type": "array"
+          },
+          "version": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "format",
+          "namespaces",
+          "version"
+        ],
+        "title": "PresentationStore",
+        "type": "object"
+      },
+      "PresentationUserRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "user",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "PresentationUserRef",
+        "type": "object"
+      },
+      "PresentationWrite": {
+        "description": "`millrace-os-presentation-write/v1`: compare a token or replace by digest.",
+        "discriminator": {
+          "mapping": {
+            "compare": "#/components/schemas/PresentationCompare",
+            "replace_unreadable": "#/components/schemas/PresentationReplaceUnreadable"
+          },
+          "propertyName": "mode"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PresentationCompare"
+          },
+          {
+            "$ref": "#/components/schemas/PresentationReplaceUnreadable"
+          }
+        ],
+        "title": "PresentationWrite"
+      },
+      "PresentationWriteStore": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "const": "millrace-os-presentation-store/v2",
+            "title": "Format",
+            "type": "string"
+          },
+          "namespaces": {
+            "items": {
+              "$ref": "#/components/schemas/PresentationNamespace-Input"
+            },
+            "title": "Namespaces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "format",
+          "namespaces"
+        ],
+        "title": "PresentationWriteStore",
+        "type": "object"
+      },
       "ProviderInfo": {
         "additionalProperties": false,
         "properties": {
@@ -3424,6 +3924,270 @@
           }
         ],
         "summary": "Rotate"
+      }
+    },
+    "/api/v1/client/presentation": {
+      "get": {
+        "operationId": "presentation_get_api_v1_client_presentation_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresentationState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Presentation Get"
+      },
+      "put": {
+        "operationId": "presentation_put_api_v1_client_presentation_put",
+        "parameters": [
+          {
+            "description": "Exact configured origin; required for browser mutations.",
+            "in": "header",
+            "name": "Origin",
+            "required": false,
+            "schema": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required with session authentication.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 43,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresentationWrite"
+              }
+            }
+          },
+          "required": true,
+          "x-max-body-bytes": 1048576
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresentationState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Presentation Put"
       }
     },
     "/api/v1/contracts": {
