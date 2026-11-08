@@ -230,6 +230,26 @@
       "contract_id": "Version",
       "sha256": "f521e06e6164d4f22326c454044a27bffe09c47b2034dcf337124ff82ac5a481",
       "version": 1
+    },
+    {
+      "contract_id": "WorkflowOutput",
+      "sha256": "7b7787658cc82f1f24267882cae34ce9674de172553f0e860323547dff0e633f",
+      "version": 1
+    },
+    {
+      "contract_id": "WorkflowOutputPublication",
+      "sha256": "4a4c22fe76d240fab34de32d96a4eea3434500711f1af9df8b70ef0756461982",
+      "version": 1
+    },
+    {
+      "contract_id": "WorkflowOutputPublishInput",
+      "sha256": "b16eec5c44584ef0a506ee915eaa780e7f0d4c117871102e6f2304618d630539",
+      "version": 1
+    },
+    {
+      "contract_id": "WorkflowOutputs",
+      "sha256": "43ee74433d5e4af4c875802e51ebfa2b7e0780a88b504a586cbd0c3640fd5dd0",
+      "version": 1
     }
   ]
 }

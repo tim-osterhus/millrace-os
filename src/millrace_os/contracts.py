@@ -411,6 +411,147 @@ class RouterViewValidateInput(Contract):
     run_id: Identifier | None = None
 
 
+# Generic workflow outputs (V1): OS envelopes over the public Plus helper's
+# results. The helper owns record validation; reports stay workflow data.
+CoreId = Annotated[str, Field(min_length=32, max_length=32, pattern=r"^[0-9a-f]{32}$")]
+Sha256 = Annotated[str, Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")]
+OutputId = Annotated[
+    str, Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_-]*$")
+]
+NodeId = Annotated[
+    str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$")
+]
+FormatId = Annotated[
+    str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$")
+]
+VersionText = Annotated[
+    str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+]
+Label = Annotated[str, Field(min_length=1, max_length=256)]
+Timestamp = Annotated[str, Field(max_length=40)]
+Evidence = Literal["workflow-produced-evidence"]
+
+
+class OutputReadQuery(Contract):
+    home: Identifier
+    record_sha256: Sha256
+    representation: Literal["report", "json"]
+
+
+class WorkflowOutputPublishInput(Contract):
+    home: Identifier
+    record: dict[str, JsonValue]
+
+
+class OutputReference(Contract):
+    instance_id: CoreId
+    run_id: CoreId
+    output_id: OutputId
+    record_sha256: Sha256
+
+
+class OutputProducer(Contract):
+    id: FormatId
+    version: VersionText
+
+
+class OutputInvocation(Contract):
+    plane_id: NodeId
+    node_id: NodeId
+    invocation_id: CoreId
+    producing_revision_id: Sha256
+
+
+class OutputRepresentationInfo(Contract):
+    format: FormatId
+    media_type: Literal["application/json"]
+    sha256: Sha256
+
+
+class OutputRepresentations(Contract):
+    # `json` would shadow a BaseModel attribute; the alias is the wire name
+    # (bounded responses serialize by alias).
+    report: OutputRepresentationInfo
+    json_: OutputRepresentationInfo | None = Field(alias="json")
+
+
+class WorkflowOutputItem(Contract):
+    output_id: OutputId
+    availability: Literal["available", "unavailable"]
+    reason: Literal["output_integrity_error"] | None
+    record_sha256: Sha256 | None
+    producer: OutputProducer | None
+    label: Label | None
+    published_at: Timestamp | None
+    invocation: OutputInvocation | None
+    representations: OutputRepresentations | None
+
+    @model_validator(mode="after")
+    def identity_only_when_unavailable(self):
+        known = (
+            self.record_sha256,
+            self.producer,
+            self.label,
+            self.published_at,
+            self.invocation,
+            self.representations,
+        )
+        available = self.availability == "available"
+        if (self.reason is None) != available or any(
+            (value is None) == available for value in known
+        ):
+            raise ValueError("an unavailable item carries only its output ID")
+        return self
+
+
+class WorkflowOutputs(Contract):
+    contract: Literal["millrace-os-workflow-outputs/v1"] = (
+        "millrace-os-workflow-outputs/v1"
+    )
+    home: Identifier
+    instance_id: CoreId
+    run_id: CoreId
+    observed_at: Annotated[str, Field(max_length=40)]
+    items: Annotated[list[WorkflowOutputItem], Field(max_length=50)]
+    next_cursor: Cursor | None
+
+
+class WorkflowOutputPublication(Contract):
+    contract: Literal["millrace-os-workflow-output-publication/v1"] = (
+        "millrace-os-workflow-output-publication/v1"
+    )
+    home: Identifier
+    authority: Evidence = "workflow-produced-evidence"
+    observed_at: Annotated[str, Field(max_length=40)]
+    reference: OutputReference
+    report_sha256: Sha256
+    json_sha256: Sha256 | None
+    status: Literal["published", "already_published"]
+
+
+class OutputRepresentation(Contract):
+    name: Literal["report", "json"]
+    format: FormatId
+    media_type: Literal["application/json"]
+    sha256: Sha256
+    data: JsonValue
+
+
+class WorkflowOutput(Contract):
+    contract: Literal["millrace-os-workflow-output/v1"] = (
+        "millrace-os-workflow-output/v1"
+    )
+    home: Identifier
+    authority: Evidence = "workflow-produced-evidence"
+    observed_at: Annotated[str, Field(max_length=40)]
+    reference: OutputReference
+    producer: OutputProducer
+    label: Label
+    published_at: Timestamp
+    invocation: OutputInvocation
+    representation: OutputRepresentation
+
+
 MODELS = [
     RouterRead[JsonValue],
     RouterRead[RouterValidation],
@@ -434,6 +575,10 @@ MODELS = [
     RouterHomes,
     RouterView,
     RouterViewValidateInput,
+    WorkflowOutputPublishInput,
+    WorkflowOutputPublication,
+    WorkflowOutputs,
+    WorkflowOutput,
     Health,
     Error,
     Version,
@@ -459,6 +604,28 @@ MODELS = [
     Read[Page[ActionInfo]],
     Read[Registry],
 ]
+
+
+def strict_json(raw: bytes) -> object:
+    """Parse UTF-8 JSON, refusing duplicate keys and NaN/Infinity (ValueError)."""
+
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError("duplicate key")
+            result[key] = value
+        return result
+
+    def constant(name):
+        raise ValueError("nonfinite number")
+
+    try:
+        return json.loads(
+            raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=constant
+        )
+    except RecursionError as exc:
+        raise ValueError("JSON nests too deeply") from exc
 
 
 def canonical(value) -> bytes:

@@ -12,7 +12,17 @@ from pathlib import Path
 __all__ = ["RouterClient", "RouterUnavailable", "request_digest"]
 
 INSPECTION_CONTRACT = "millrace-router-inspection/v1"
+WORKFLOW_VIEWS_CONTRACT = "millrace-workflow-views/v1"
 HOMES_PAGE = 50
+# Statuses of the Plus output helper's typed refusals; any other code is 409.
+OUTPUT_STATUS = {
+    "invalid_output_record": 422,
+    "invalid_request": 422,
+    "output_not_found": 404,
+    "output_representation_unavailable": 404,
+    "output_too_large": 413,
+    "output_publication_uncertain": 503,
+}
 
 
 class RouterUnavailable(RuntimeError):
@@ -184,6 +194,64 @@ class RouterClient:
     def view_validate(self, home, instance_id, *, run_id=None):
         return self._view(
             home, "validate_revision_summary", instance_id, run_id=run_id
+        )
+
+    def _views(self):
+        """The public Plus output helper, only with its exact version marker."""
+        try:
+            module = importlib.import_module("millrace_plus.workflow_views")
+        except ImportError as exc:
+            raise RouterUnavailable("workflow_views_unavailable") from exc
+        if getattr(module, "WORKFLOW_VIEWS_CONTRACT", None) != WORKFLOW_VIEWS_CONTRACT:
+            raise RouterUnavailable("workflow_views_unavailable")
+        return module
+
+    def _output(self, home, operation, *args, **kwargs):
+        state_home = self.state_home(home)
+        module = self._views()
+        try:
+            return getattr(module, operation)(*args, state_home=state_home, **kwargs)
+        except module.WorkflowViewsError as exc:
+            raise RouterUnavailable(exc.code, OUTPUT_STATUS.get(exc.code, 409)) from exc
+
+    def publish_output(self, home, record):
+        """Publish through the helper; its exact identity lookup needs Core."""
+        self.state_home(home)
+        self._views()
+        self._inspection()
+        try:
+            return self._output(home, "publish_output", record)
+        except RouterUnavailable:
+            raise
+        except ImportError as exc:
+            raise RouterUnavailable("router_inspection_unavailable") from exc
+        except OSError as exc:
+            # The helper cannot say whether a record became visible.
+            raise RouterUnavailable("output_publication_uncertain") from exc
+        except Exception as exc:
+            execution = importlib.import_module("millrace.router.execution")
+            if isinstance(exc, execution.RouterError):
+                raise RouterUnavailable("core_" + exc.code, 409) from exc
+            raise
+
+    def list_outputs(self, home, instance_id, run_id, *, limit=50, cursor=None):
+        """Stored records only: no Core read."""
+        return self._output(
+            home, "list_outputs", instance_id, run_id, limit=limit, cursor=cursor
+        )
+
+    def read_output(
+        self, home, instance_id, run_id, output_id, record_sha256, representation
+    ):
+        """Stored records only: no Core read."""
+        return self._output(
+            home,
+            "read_output",
+            instance_id,
+            run_id,
+            output_id,
+            record_sha256,
+            representation,
         )
 
     def _catalog(self):

@@ -131,6 +131,27 @@ def _parser() -> argparse.ArgumentParser:
     for command in (homes, views):
         command.add_argument("--limit", type=int)
         command.add_argument("--cursor")
+    outputs = commands.add_parser(
+        "outputs", help="generic workflow output records"
+    ).add_subparsers(dest="outputs_command", required=True)
+    for name in ("publish", "list", "read"):
+        command = outputs.add_parser(name)
+        _add_config_options(command)
+        command.add_argument("--home", required=True)
+        if name == "publish":
+            command.add_argument("--file", required=True)
+            continue
+        command.add_argument("--instance", required=True)
+        command.add_argument("--run", required=True)
+        if name == "list":
+            command.add_argument("--limit", type=int)
+            command.add_argument("--cursor")
+        else:
+            command.add_argument("--output", required=True)
+            command.add_argument("--record-sha256", required=True)
+            command.add_argument(
+                "--representation", required=True, choices=("report", "json")
+            )
     catalog = commands.add_parser("catalog").add_subparsers(
         dest="catalog_command", required=True
     )
@@ -305,7 +326,7 @@ def _router(args):
     config = _config(args)
     route = "/api/v1/router"
     method = "GET"
-    body = None
+    body = raw = None
     command = args.router_command
     query = {} if command == "homes" else {"home": args.home}
     if command in {"homes", "views"}:
@@ -375,6 +396,42 @@ def _router(args):
         }
         if not args.summary:
             body["draft_id"] = args.draft
+    elif command == "outputs":
+        action = args.outputs_command
+        route += "/outputs"
+        if action == "publish":
+            from .contracts import strict_json
+
+            # The saved record is sent exactly, as compact UTF-8, never retried.
+            try:
+                record = strict_json(Path(args.file).read_bytes())
+                raw = json.dumps(
+                    {"home": args.home, "record": record},
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    separators=(",", ":"),
+                ).encode()
+            except ValueError as exc:
+                raise ConfigurationError(
+                    "record file must be strict UTF-8 JSON with unique keys and "
+                    "finite numbers"
+                ) from exc
+            method = "POST"
+        else:
+            route += "/instances/" + urllib.parse.quote(args.instance, safe="")
+            route += "/runs/" + urllib.parse.quote(args.run, safe="")
+            if action == "read":
+                route += "/" + urllib.parse.quote(args.output, safe="")
+                query.update(
+                    record_sha256=args.record_sha256,
+                    representation=args.representation,
+                )
+            else:
+                query.update(
+                    (key, value)
+                    for key, value in (("limit", args.limit), ("cursor", args.cursor))
+                    if value is not None
+                )
     elif command == "catalog":
         action = args.catalog_command
         if action == "list":
@@ -428,9 +485,9 @@ def _router(args):
     token = CredentialStore(config.credential_path).ensure()
     endpoint = f"http://{_endpoint_host(config.host)}:{config.port}"
     headers = {"Authorization": "Bearer " + token}
-    raw = None
     if body is not None:
         raw = json.dumps(body, allow_nan=False).encode()
+    if raw is not None:
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(
         endpoint + route, data=raw, headers=headers, method=method

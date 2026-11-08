@@ -141,6 +141,69 @@ default. Only the strict route passes `bounded=True`. Callers that override
 these methods with the earlier signatures continue to work for the default
 path.
 
+## Workflow outputs
+
+A trusted operator-side publisher can attach small immutable output records
+(`millrace-workflow-output/v1`) to an exact run. A record holds a fixed
+plain-text report and, optionally, opaque producer JSON. OS serves these
+records through Plus's public helper, `millrace_plus.workflow_views`
+(`millrace-workflow-views/v1`). OS does not read the files itself or duplicate
+the helper's validation, and it has no workflow-specific schema or code.
+
+The helper is imported only when one of these routes is used. A missing helper,
+or one with another version marker, refuses `workflow_views_unavailable` (503).
+Listing and reading use stored bytes only. Publishing checks the record's exact
+invocation through Core's bounded inspection, so it also needs that
+capability (`router_inspection_unavailable` otherwise).
+
+| Route | Query or body | Response |
+| --- | --- | --- |
+| `POST /api/v1/router/outputs` | JSON `{home, record}`, at most 1,048,576 bytes | `millrace-os-workflow-output-publication/v1` |
+| `GET /api/v1/router/outputs/instances/{instance_id}/runs/{run_id}` | `home`, `limit`, `cursor` | `millrace-os-workflow-outputs/v1` |
+| `GET /api/v1/router/outputs/instances/{instance_id}/runs/{run_id}/{output_id}` | `home`, `record_sha256` (64 lowercase hex), `representation` (`report` or `json`) | `millrace-os-workflow-output/v1` |
+
+The publication body is parsed strictly before validation. A duplicate key,
+`NaN` or `Infinity`, invalid UTF-8 or trailing data refuses `invalid_request`
+(422). Publication is refused with `router_closing` while the service shuts
+down; listing and reading continue. All three routes use the existing eight
+read slots (`router_read_busy`, 429), and every response is measured against
+`RESPONSE_LIMIT` like the views.
+
+The responses are:
+
+- **Publication:** `{contract, home, authority: "workflow-produced-evidence",
+  observed_at, reference: {instance_id, run_id, output_id, record_sha256},
+  report_sha256, json_sha256, status}`. `status` is `published` or
+  `already_published`.
+- **Listing:** `{contract, home, instance_id, run_id, observed_at, items,
+  next_cursor}`. Items are sorted by output ID. An item that fails
+  verification has `availability: "unavailable"`, `reason:
+  "output_integrity_error"`, and null for every field except `output_id`.
+- **Read:** `{contract, home, authority: "workflow-produced-evidence",
+  observed_at, reference, producer, label, published_at, invocation,
+  representation: {name, format, media_type, sha256, data}}`.
+
+`workflow-produced-evidence` labels display evidence from a local publisher. It
+proves neither task success, ownership, writer closure nor producer provenance.
+
+Refusals:
+
+| Code | Status |
+| --- | --- |
+| `invalid_output_record`, `invalid_request` | 422 |
+| `output_not_found`, `output_representation_unavailable` | 404 |
+| `output_too_large` (canonical record over 1,047,552 bytes) | 413 |
+| `request_too_large` (body over 1,048,576 bytes) | 413 |
+| `output_conflict`, `output_identity_mismatch`, `output_integrity_error`, `outputs_changed` | 409 |
+| `output_publication_uncertain` | 503 |
+| `core_*` (a Core refusal during the identity lookup) | 409 |
+
+After `output_publication_uncertain`, read and compare first, then retry with
+the same saved record. A retry returns `already_published` when the earlier
+attempt became durable. The service never retries on its own. The helper's
+guide in Plus, `docs/workflow-views.md`, gives the record schema, the
+canonical JSON rule and the storage rules.
+
 ## CLI
 
 ```text
@@ -149,7 +212,15 @@ millrace-os router views --home NAME [--instance I [--run R [--revision REV]]]
     [--section S] [--request-id X] [--invocation-id Y] [--limit N] [--cursor C]
 millrace-os router request --home NAME --request-id X --bounded --instance I [--run R]
 millrace-os router validate --home NAME --instance I [--run R] --summary
+millrace-os router outputs publish --home NAME --file RECORD
+millrace-os router outputs list --home NAME --instance I --run R [--limit N] [--cursor C]
+millrace-os router outputs read --home NAME --instance I --run R --output O
+    --record-sha256 S --representation report|json
 ```
+
+`router outputs publish` parses the saved record file strictly. A duplicate
+key, `NaN`/`Infinity` or invalid UTF-8 refuses locally before any request. The
+command sends the record unchanged as compact UTF-8 JSON and never retries.
 
 The CLI passes the options you give it. The service query allowlist refuses
 any option a view does not accept, for example `--section` without `--run`.

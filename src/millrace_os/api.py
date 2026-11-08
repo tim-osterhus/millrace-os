@@ -41,6 +41,7 @@ from .contracts import (
     HomesQuery,
     Identifier,
     Identity,
+    OutputReadQuery,
     Page,
     PageQuery,
     ProviderInfo,
@@ -64,8 +65,13 @@ from .contracts import (
     SessionOutput,
     Version,
     ViewPageQuery,
+    WorkflowOutput,
+    WorkflowOutputPublication,
+    WorkflowOutputPublishInput,
+    WorkflowOutputs,
     canonical,
     schema_artifacts,
+    strict_json,
 )
 from .paths import UnsafePathError
 from .router_client import RouterUnavailable
@@ -77,6 +83,9 @@ DRAFT_UPLOAD_LIMIT = 1048576
 RESPONSE_LIMIT = DRAFT_UPLOAD_LIMIT + 1024
 CALL_V2_MEDIA_TYPE = "application/vnd.millrace.router-call.v2+json"
 PAGE_QUERY_PATHS = frozenset({"/api/v1/providers", "/api/v1/actions"})
+# Large-body routes whose raw body is strictly parsed before model validation:
+# ordinary JSON parsing would silently keep the last of duplicate keys.
+STRICT_BODY_ROUTES = frozenset({("POST", "/api/v1/router/outputs")})
 
 
 def body_limit(path, method):
@@ -87,13 +96,21 @@ def body_limit(path, method):
         and parts[:5] == ["", "api", "v1", "router", "drafts"]
         and parts[6] in {"file", "files"}
     )
-    return DRAFT_UPLOAD_LIMIT if upload else DEFAULT_BODY_LIMIT
+    large = upload or (method.upper(), path) in STRICT_BODY_ROUTES
+    return DRAFT_UPLOAD_LIMIT if large else DEFAULT_BODY_LIMIT
 
 
 def _view_query(parts):
-    """Bounded view keys by path shape; None when the path is not a view."""
+    """Bounded view and output keys by path shape; None for any other path."""
     if parts[4:] == ["homes"]:
         return frozenset({"limit", "cursor"})
+    if parts[4] == "outputs":
+        run = len(parts) in {9, 10} and parts[5] == "instances" and parts[7] == "runs"
+        if run and len(parts) == 9:
+            return frozenset({"home", "limit", "cursor"})
+        if run:
+            return frozenset({"home", "record_sha256", "representation"})
+        return frozenset()
     if parts[4] != "views":
         return None
     if parts[5:6] == ["requests"] and len(parts) == 7:
@@ -239,6 +256,11 @@ def configure_api(app: FastAPI, service):
                         raise TrustError("request_too_large", 413)
                     body.extend(chunk)
                 request._body = bytes(body)
+                if (request.method, path) in STRICT_BODY_ROUTES:
+                    try:
+                        strict_json(request._body)
+                    except ValueError as exc:
+                        raise TrustError("invalid_request", 422) from exc
             allowed = query_allowlist(path, request.method)
             if allowed is not None:
                 keys = [key for key, value in request.query_params.multi_items()]
@@ -507,7 +529,9 @@ def configure_router_api(app, service):
     def bounded(model, *, status_code=200, media_type="application/json"):
         # Starlette renders the API encoding (compact UTF-8) measured here.
         response = JSONResponse(
-            model.model_dump(), status_code=status_code, media_type=media_type
+            model.model_dump(by_alias=True),
+            status_code=status_code,
+            media_type=media_type,
         )
         if len(response.body) > RESPONSE_LIMIT:
             raise RouterUnavailable("response_too_large", 409)
@@ -660,6 +684,68 @@ def configure_router_api(app, service):
             service.router_client.view_revision, home, instance_id, run_id, revision_id
         )
         return view(home, data)
+
+    @app.post("/api/v1/router/outputs", response_model=WorkflowOutputPublication)
+    async def output_publish(body: WorkflowOutputPublishInput):
+        # The trust boundary already refused duplicate keys and NaN/Infinity.
+        if service.router_workers._closing:
+            raise RouterUnavailable("router_closing", 503)
+        result = await offload(
+            service.router_client.publish_output, body.home, body.record
+        )
+        return bounded(
+            WorkflowOutputPublication(
+                home=body.home, observed_at=datetime.now(UTC).isoformat(), **result
+            )
+        )
+
+    @app.get(
+        "/api/v1/router/outputs/instances/{instance_id}/runs/{run_id}",
+        response_model=WorkflowOutputs,
+    )
+    async def output_list(
+        instance_id: Identifier,
+        run_id: Identifier,
+        query: Annotated[ViewPageQuery, Query()],
+    ):
+        page = await offload(
+            service.router_client.list_outputs,
+            query.home,
+            instance_id,
+            run_id,
+            limit=query.limit,
+            cursor=query.cursor,
+        )
+        return bounded(
+            WorkflowOutputs(
+                home=query.home, observed_at=datetime.now(UTC).isoformat(), **page
+            )
+        )
+
+    @app.get(
+        "/api/v1/router/outputs/instances/{instance_id}/runs/{run_id}/{output_id}",
+        response_model=WorkflowOutput,
+    )
+    async def output_read(
+        instance_id: Identifier,
+        run_id: Identifier,
+        output_id: Identifier,
+        query: Annotated[OutputReadQuery, Query()],
+    ):
+        result = await offload(
+            service.router_client.read_output,
+            query.home,
+            instance_id,
+            run_id,
+            output_id,
+            query.record_sha256,
+            query.representation,
+        )
+        return bounded(
+            WorkflowOutput(
+                home=query.home, observed_at=datetime.now(UTC).isoformat(), **result
+            )
+        )
 
     def observation_version(accept):
         selected = ", ".join(accept or []).strip()

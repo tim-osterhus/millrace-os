@@ -102,6 +102,12 @@ VIEW_GRANTS = {
     },
     VIEWS + "/x/runs/x/revisions/x": {"home"},
     STRICT + "x": {"home", "instance_id", "run_id"},
+    "/api/v1/router/outputs/instances/x/runs/x": {"home", "limit", "cursor"},
+    "/api/v1/router/outputs/instances/x/runs/x/x": {
+        "home",
+        "record_sha256",
+        "representation",
+    },
 }
 KEY_SAMPLES = (
     [],
@@ -145,11 +151,26 @@ def test_query_allowlist_reproduces_every_preexisting_route_and_adds_views(tmp_p
         "/api/v1/router/views/instances/x/runs/x/revisions/x/extra",
         "/api/v1/router/homes/x",
         "/api/v1/router/viewsx/instances",
+        "/api/v1/router/outputs/instances",
+        "/api/v1/router/outputs/instances/x",
+        "/api/v1/router/outputs/instances/x/runs",
+        "/api/v1/router/outputs/instances/x/runs/x//",
+        "/api/v1/router/outputs/instances/x/runs/x/x/",
+        "/api/v1/router/outputs/instances/x/runs/x/x/extra",
+        "/api/v1/router/outputs/instances/x/runs/x/x//",
+        "/api/v1/router/outputsx/instances/x/runs/x",
         "/api/v1/routerx/instances",
         "/api/v1/providers/x",
     }
+    # View and output shapes get explicit edges above: appending a segment to
+    # an output list path names a read path (output ID "extra"), not legacy.
+    shaped = (
+        "/api/v1/router/views",
+        "/api/v1/router/homes",
+        "/api/v1/router/outputs/instances",
+    )
     for path in sorted(routes):
-        if not path.startswith(("/api/v1/router/views", "/api/v1/router/homes")):
+        if not path.startswith(shaped):
             edges |= {path + "/", path + "/extra", path + "//"}
     corpus = sorted(routes | edges)
     preexisting = {p for p in routes if p.startswith("/api/v1/router/")} - set(
@@ -171,6 +192,10 @@ def test_query_allowlist_reproduces_every_preexisting_route_and_adds_views(tmp_p
                 ), (path, method, keys)
     for path in ("/api/v1/providers", "/api/v1/actions"):
         assert api.query_allowlist(path, "GET") is None  # PageQuery validates
+    read = "/api/v1/router/outputs/instances/x/runs/x/"
+    assert api.query_allowlist(read + "extra", "GET") == frozenset(
+        VIEW_GRANTS[read + "x"]
+    )
 
 
 def test_middleware_applies_the_table_before_any_view_handler(tmp_path, monkeypatch):

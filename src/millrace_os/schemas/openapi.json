@@ -635,6 +635,212 @@
         "type": "object"
       },
       "JsonValue": {},
+      "OutputInvocation": {
+        "additionalProperties": false,
+        "properties": {
+          "invocation_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Invocation Id",
+            "type": "string"
+          },
+          "node_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+            "title": "Node Id",
+            "type": "string"
+          },
+          "plane_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+            "title": "Plane Id",
+            "type": "string"
+          },
+          "producing_revision_id": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Producing Revision Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plane_id",
+          "node_id",
+          "invocation_id",
+          "producing_revision_id"
+        ],
+        "title": "OutputInvocation",
+        "type": "object"
+      },
+      "OutputProducer": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "title": "OutputProducer",
+        "type": "object"
+      },
+      "OutputReference": {
+        "additionalProperties": false,
+        "properties": {
+          "instance_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "output_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$",
+            "title": "Output Id",
+            "type": "string"
+          },
+          "record_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Record Sha256",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id",
+          "run_id",
+          "output_id",
+          "record_sha256"
+        ],
+        "title": "OutputReference",
+        "type": "object"
+      },
+      "OutputRepresentation": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "format": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "title": "Format",
+            "type": "string"
+          },
+          "media_type": {
+            "const": "application/json",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "name": {
+            "enum": [
+              "report",
+              "json"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "format",
+          "media_type",
+          "sha256",
+          "data"
+        ],
+        "title": "OutputRepresentation",
+        "type": "object"
+      },
+      "OutputRepresentationInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "title": "Format",
+            "type": "string"
+          },
+          "media_type": {
+            "const": "application/json",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "format",
+          "media_type",
+          "sha256"
+        ],
+        "title": "OutputRepresentationInfo",
+        "type": "object"
+      },
+      "OutputRepresentations": {
+        "additionalProperties": false,
+        "properties": {
+          "json": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutputRepresentationInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "report": {
+            "$ref": "#/components/schemas/OutputRepresentationInfo"
+          }
+        },
+        "required": [
+          "report",
+          "json"
+        ],
+        "title": "OutputRepresentations",
+        "type": "object"
+      },
       "Page_ActionInfo_": {
         "additionalProperties": false,
         "properties": {
@@ -2127,6 +2333,349 @@
           }
         },
         "title": "Version",
+        "type": "object"
+      },
+      "WorkflowOutput": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "const": "workflow-produced-evidence",
+            "default": "workflow-produced-evidence",
+            "title": "Authority",
+            "type": "string"
+          },
+          "contract": {
+            "const": "millrace-os-workflow-output/v1",
+            "default": "millrace-os-workflow-output/v1",
+            "title": "Contract",
+            "type": "string"
+          },
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "invocation": {
+            "$ref": "#/components/schemas/OutputInvocation"
+          },
+          "label": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "observed_at": {
+            "maxLength": 40,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "producer": {
+            "$ref": "#/components/schemas/OutputProducer"
+          },
+          "published_at": {
+            "maxLength": 40,
+            "title": "Published At",
+            "type": "string"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/OutputReference"
+          },
+          "representation": {
+            "$ref": "#/components/schemas/OutputRepresentation"
+          }
+        },
+        "required": [
+          "home",
+          "observed_at",
+          "reference",
+          "producer",
+          "label",
+          "published_at",
+          "invocation",
+          "representation"
+        ],
+        "title": "WorkflowOutput",
+        "type": "object"
+      },
+      "WorkflowOutputItem": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "enum": [
+              "available",
+              "unavailable"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
+          "invocation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutputInvocation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "output_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$",
+            "title": "Output Id",
+            "type": "string"
+          },
+          "producer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutputProducer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "const": "output_integrity_error",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "record_sha256": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Sha256"
+          },
+          "representations": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutputRepresentations"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "output_id",
+          "availability",
+          "reason",
+          "record_sha256",
+          "producer",
+          "label",
+          "published_at",
+          "invocation",
+          "representations"
+        ],
+        "title": "WorkflowOutputItem",
+        "type": "object"
+      },
+      "WorkflowOutputPublication": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "const": "workflow-produced-evidence",
+            "default": "workflow-produced-evidence",
+            "title": "Authority",
+            "type": "string"
+          },
+          "contract": {
+            "const": "millrace-os-workflow-output-publication/v1",
+            "default": "millrace-os-workflow-output-publication/v1",
+            "title": "Contract",
+            "type": "string"
+          },
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "json_sha256": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Json Sha256"
+          },
+          "observed_at": {
+            "maxLength": 40,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/OutputReference"
+          },
+          "report_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Report Sha256",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "published",
+              "already_published"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "home",
+          "observed_at",
+          "reference",
+          "report_sha256",
+          "json_sha256",
+          "status"
+        ],
+        "title": "WorkflowOutputPublication",
+        "type": "object"
+      },
+      "WorkflowOutputPublishInput": {
+        "additionalProperties": false,
+        "properties": {
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "record": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Record",
+            "type": "object"
+          }
+        },
+        "required": [
+          "home",
+          "record"
+        ],
+        "title": "WorkflowOutputPublishInput",
+        "type": "object"
+      },
+      "WorkflowOutputs": {
+        "additionalProperties": false,
+        "properties": {
+          "contract": {
+            "const": "millrace-os-workflow-outputs/v1",
+            "default": "millrace-os-workflow-outputs/v1",
+            "title": "Contract",
+            "type": "string"
+          },
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "instance_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowOutputItem"
+            },
+            "maxItems": 50,
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "observed_at": {
+            "maxLength": 40,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "home",
+          "instance_id",
+          "run_id",
+          "observed_at",
+          "items",
+          "next_cursor"
+        ],
+        "title": "WorkflowOutputs",
         "type": "object"
       }
     },
@@ -5841,6 +6390,532 @@
           }
         ],
         "summary": "Router Run"
+      }
+    },
+    "/api/v1/router/outputs": {
+      "post": {
+        "operationId": "output_publish_api_v1_router_outputs_post",
+        "parameters": [
+          {
+            "description": "Exact configured origin; required for browser mutations.",
+            "in": "header",
+            "name": "Origin",
+            "required": false,
+            "schema": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required with session authentication.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 43,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowOutputPublishInput"
+              }
+            }
+          },
+          "required": true,
+          "x-max-body-bytes": 1048576
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowOutputPublication"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Output Publish"
+      }
+    },
+    "/api/v1/router/outputs/instances/{instance_id}/runs/{run_id}": {
+      "get": {
+        "operationId": "output_list_api_v1_router_outputs_instances__instance_id__runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "home",
+            "required": true,
+            "schema": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "title": "Home",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowOutputs"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Output List"
+      }
+    },
+    "/api/v1/router/outputs/instances/{instance_id}/runs/{run_id}/{output_id}": {
+      "get": {
+        "operationId": "output_read_api_v1_router_outputs_instances__instance_id__runs__run_id___output_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "output_id",
+            "required": true,
+            "schema": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "title": "Output Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "home",
+            "required": true,
+            "schema": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "title": "Home",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "record_sha256",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Record Sha256",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "representation",
+            "required": true,
+            "schema": {
+              "enum": [
+                "report",
+                "json"
+              ],
+              "title": "Representation",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowOutput"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Output Read"
       }
     },
     "/api/v1/router/repair-publication": {
