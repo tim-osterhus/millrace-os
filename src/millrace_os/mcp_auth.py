@@ -12,7 +12,7 @@ import httpx
 import jwt
 from mcp.server.auth.provider import AccessToken
 
-from .mcp_contracts import MAX_INPUT, MAX_OUTPUT, PROTOCOL, MCPConfig
+from .mcp_contracts import PROTOCOL, V1, MCPConfig
 
 __all__ = ["ResourceVerifier", "HTTPGuard"]
 
@@ -139,10 +139,15 @@ class ResourceVerifier:
 
 
 class HTTPGuard:
-    """Bound all routes before SDK parsing, with exact Host/Origin and CORS."""
+    """Bound all routes before SDK parsing, with exact Host/Origin and CORS.
 
-    def __init__(self, app, config: MCPConfig) -> None:
+    The selected tool profile supplies the ingress and egress bounds; the v1
+    default keeps the existing 64 KiB / 1 MiB values.
+    """
+
+    def __init__(self, app, config: MCPConfig, *, profile=V1) -> None:
         self.app, self.config = app, config
+        self.max_input, self.max_output = profile.max_input, profile.max_output
         self.path = urlsplit(config.resource_url).path or "/mcp"
 
     async def __call__(self, scope, receive, send) -> None:
@@ -208,7 +213,7 @@ class HTTPGuard:
             if message["type"] == "http.disconnect":
                 return
             body.extend(message.get("body", b""))
-            if len(body) > MAX_INPUT:
+            if len(body) > self.max_input:
                 await self._error(send, 413, "request_too_large", allowed_origin)
                 return
             if not message.get("more_body", False):
@@ -259,11 +264,11 @@ class HTTPGuard:
                 message["headers"] += self._cors(allowed_origin)
             if message["type"] == "http.response.body":
                 size += len(message.get("body", b""))
-            if size <= MAX_OUTPUT:
+            if size <= self.max_output:
                 messages.append(message)
 
         await self.app(scope, bounded_receive, bounded_send)
-        if size > MAX_OUTPUT:
+        if size > self.max_output:
             await self._error(send, 502, "response_too_large", allowed_origin)
         else:
             raw = b"".join(m.get("body", b"") for m in messages)

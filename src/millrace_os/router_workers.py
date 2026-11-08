@@ -16,6 +16,7 @@ from .router_client import RouterUnavailable, request_digest
 
 __all__ = ["RouterWorkers"]
 
+LOCAL_REQUEST = "millrace-os-local-request/v1"
 STOPS = {"pause_run", "cancel_run", "pause_plane", "cancel_plane"}
 FOREGROUND = {
     "start_run",
@@ -407,6 +408,43 @@ class RouterWorkers:
             if version == 2:
                 self._retire()
             return self._observation(call, version=version)
+
+    def local_call(self, home, request_id):
+        """Snapshot one OS-local call (catalog, Apply, repair) under the lock.
+
+        A call that is absent, retired (300 s after finishing, or beyond the
+        latest 128 joined) or that carries a Core request is unknown:
+        `local_call_unavailable`. There is no Core fallback, replay or join.
+        """
+        with self._lock:
+            self._retire()
+            call = self._calls.get(self._key(home, request_id))
+            if call is None or call.request.get("format") != LOCAL_REQUEST:
+                raise RouterUnavailable("local_call_unavailable", 404)
+            phase = (
+                ("call_failed" if call.error else "call_returned")
+                if call.done.is_set()
+                else ("call_active" if call.started else "admission_pending")
+            )
+            result = None
+            if phase == "call_returned":
+                result = (
+                    call.result.model_dump()
+                    if hasattr(call.result, "model_dump")
+                    else call.result
+                )
+            return {
+                "home": call.home,
+                "request_id": call.request["request_id"],
+                "request_digest": call.digest,
+                "operation": call.request["operation"],
+                "instance_id": call.instance_id,
+                "run_id": call.run_id,
+                "phase": phase,
+                "holder_joined": call.joined,
+                "error": call.error,
+                "result": copy.deepcopy(result),
+            }
 
     def wait_observation(self, call):
         call.done.wait(self.observation_timeout)

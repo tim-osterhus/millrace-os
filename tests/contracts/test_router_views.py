@@ -108,6 +108,11 @@ VIEW_GRANTS = {
         "record_sha256",
         "representation",
     },
+    # Headless parity reads (M1).
+    "/api/v1/router/local-calls/x": {"home"},
+    "/api/v1/router/publications/x": {"home", "request_id"},
+    "/api/v1/router/drafts/x/manifest": {"home", "limit", "cursor"},
+    "/api/v1/router/drafts/x/file": {"home", "path"},
 }
 KEY_SAMPLES = (
     [],
@@ -159,6 +164,13 @@ def test_query_allowlist_reproduces_every_preexisting_route_and_adds_views(tmp_p
         "/api/v1/router/outputs/instances/x/runs/x/x/extra",
         "/api/v1/router/outputs/instances/x/runs/x/x//",
         "/api/v1/router/outputsx/instances/x/runs/x",
+        "/api/v1/router/local-calls",
+        "/api/v1/router/local-callsx/x",
+        "/api/v1/router/publications",
+        "/api/v1/router/publicationsx/x",
+        "/api/v1/router/drafts/x/manifestx",
+        "/api/v1/router/drafts/x/filex",
+        "/api/v1/router/drafts/manifest",
         "/api/v1/routerx/instances",
         "/api/v1/providers/x",
     }

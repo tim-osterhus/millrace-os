@@ -211,6 +211,130 @@
     "title": "CatalogInitInput",
     "type": "object"
   },
+  "ClientCapabilities": {
+    "$defs": {
+      "ClientOperation": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "method": {
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "OPTIONS"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "operation_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z_]*(\\.[a-z][a-z_]*)+$",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "request_contract": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Contract"
+          },
+          "response_contract": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Contract"
+          }
+        },
+        "required": [
+          "operation_id",
+          "method",
+          "path",
+          "request_contract",
+          "response_contract",
+          "available",
+          "reason"
+        ],
+        "title": "ClientOperation",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:ClientCapabilities:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "api_version": {
+        "const": "v1",
+        "default": "v1",
+        "title": "Api Version",
+        "type": "string"
+      },
+      "contract": {
+        "const": "millrace-os-client-capabilities/v1",
+        "default": "millrace-os-client-capabilities/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "operations": {
+        "items": {
+          "$ref": "#/$defs/ClientOperation"
+        },
+        "title": "Operations",
+        "type": "array"
+      }
+    },
+    "required": [
+      "operations",
+      "observed_at"
+    ],
+    "title": "ClientCapabilities",
+    "type": "object"
+  },
   "Diagnostics": {
     "$id": "urn:millrace-os:Diagnostics:1",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -396,6 +520,71 @@
     "title": "DraftFileInput",
     "type": "object"
   },
+  "DraftFileRead": {
+    "$id": "urn:millrace-os:DraftFileRead:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "content_base64": {
+        "maxLength": 1048576,
+        "title": "Content Base64",
+        "type": "string"
+      },
+      "contract": {
+        "const": "millrace-os-draft-file/v1",
+        "default": "millrace-os-draft-file/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "draft_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Draft Id",
+        "type": "string"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "path": {
+        "minLength": 1,
+        "title": "Path",
+        "type": "string"
+      },
+      "sha256": {
+        "maxLength": 64,
+        "minLength": 64,
+        "pattern": "^[0-9a-f]{64}$",
+        "title": "Sha256",
+        "type": "string"
+      },
+      "size": {
+        "minimum": 0,
+        "title": "Size",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "home",
+      "draft_id",
+      "path",
+      "sha256",
+      "size",
+      "content_base64",
+      "observed_at"
+    ],
+    "title": "DraftFileRead",
+    "type": "object"
+  },
   "DraftFilesInput": {
     "$defs": {
       "DraftFile": {
@@ -446,6 +635,108 @@
       "files"
     ],
     "title": "DraftFilesInput",
+    "type": "object"
+  },
+  "DraftManifest": {
+    "$defs": {
+      "DraftManifestItem": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size": {
+            "minimum": 0,
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "sha256",
+          "size"
+        ],
+        "title": "DraftManifestItem",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:DraftManifest:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "contract": {
+        "const": "millrace-os-draft-manifest/v1",
+        "default": "millrace-os-draft-manifest/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "draft_id": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Draft Id",
+        "type": "string"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "items": {
+        "items": {
+          "$ref": "#/$defs/DraftManifestItem"
+        },
+        "maxItems": 50,
+        "title": "Items",
+        "type": "array"
+      },
+      "next_cursor": {
+        "anyOf": [
+          {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Next Cursor"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "sha256": {
+        "maxLength": 64,
+        "minLength": 64,
+        "pattern": "^[0-9a-f]{64}$",
+        "title": "Sha256",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "draft_id",
+      "sha256",
+      "items",
+      "next_cursor",
+      "observed_at"
+    ],
+    "title": "DraftManifest",
     "type": "object"
   },
   "DraftRead": {
@@ -2726,6 +3017,249 @@
     "title": "RouterHomes",
     "type": "object"
   },
+  "RouterLocalCall": {
+    "$defs": {
+      "Error": {
+        "additionalProperties": false,
+        "properties": {
+          "actionable": {
+            "default": false,
+            "title": "Actionable",
+            "type": "boolean"
+          },
+          "category": {
+            "enum": [
+              "trust",
+              "validation",
+              "availability",
+              "request"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "causation": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Causation"
+          },
+          "code": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Code",
+            "type": "string"
+          },
+          "contract": {
+            "const": "os.error.v1",
+            "default": "os.error.v1",
+            "title": "Contract",
+            "type": "string"
+          },
+          "correlation": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation"
+          },
+          "detail": {
+            "default": "",
+            "maxLength": 256,
+            "title": "Detail",
+            "type": "string"
+          },
+          "diagnostic_reference": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Diagnostic Reference"
+          },
+          "partial_result": {
+            "default": false,
+            "title": "Partial Result",
+            "type": "boolean"
+          },
+          "provider": {
+            "const": "os",
+            "default": "os",
+            "title": "Provider",
+            "type": "string"
+          },
+          "retryable": {
+            "default": false,
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "suggested_actions": {
+            "default": [],
+            "items": {
+              "maxLength": 96,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Suggested Actions",
+            "type": "array"
+          },
+          "summary": {
+            "maxLength": 256,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "category",
+          "summary"
+        ],
+        "title": "Error",
+        "type": "object"
+      },
+      "JsonValue": {}
+    },
+    "$id": "urn:millrace-os:RouterLocalCall:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "contract": {
+        "const": "millrace-os-router-local-call/v1",
+        "default": "millrace-os-router-local-call/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "error": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Error"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "holder_joined": {
+        "title": "Holder Joined",
+        "type": "boolean"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "instance_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Instance Id"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "operation": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Operation",
+        "type": "string"
+      },
+      "phase": {
+        "enum": [
+          "admission_pending",
+          "call_active",
+          "call_returned",
+          "call_failed"
+        ],
+        "title": "Phase",
+        "type": "string"
+      },
+      "request_digest": {
+        "maxLength": 64,
+        "minLength": 64,
+        "pattern": "^[0-9a-f]{64}$",
+        "title": "Request Digest",
+        "type": "string"
+      },
+      "request_id": {
+        "maxLength": 32,
+        "minLength": 32,
+        "pattern": "^[0-9a-f]{32}$",
+        "title": "Request Id",
+        "type": "string"
+      },
+      "result": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Run Id"
+      }
+    },
+    "required": [
+      "home",
+      "request_id",
+      "request_digest",
+      "operation",
+      "instance_id",
+      "run_id",
+      "phase",
+      "holder_joined",
+      "error",
+      "result",
+      "observed_at"
+    ],
+    "title": "RouterLocalCall",
+    "type": "object"
+  },
   "RouterLocalRead": {
     "$defs": {
       "JsonValue": {}
@@ -2810,6 +3344,86 @@
       "holder_joined_supported"
     ],
     "title": "RouterObservationCapabilities",
+    "type": "object"
+  },
+  "RouterPublication": {
+    "$defs": {
+      "JsonValue": {}
+    },
+    "$id": "urn:millrace-os:RouterPublication:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "completed": {
+        "anyOf": [
+          {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Completed"
+      },
+      "contract": {
+        "const": "millrace-os-router-publication/v1",
+        "default": "millrace-os-router-publication/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "home": {
+        "maxLength": 96,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "title": "Home",
+        "type": "string"
+      },
+      "in_progress": {
+        "anyOf": [
+          {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "In Progress"
+      },
+      "instance_id": {
+        "maxLength": 32,
+        "minLength": 32,
+        "pattern": "^[0-9a-f]{32}$",
+        "title": "Instance Id",
+        "type": "string"
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "request_id": {
+        "maxLength": 32,
+        "minLength": 32,
+        "pattern": "^[0-9a-f]{32}$",
+        "title": "Request Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "home",
+      "instance_id",
+      "request_id",
+      "in_progress",
+      "completed",
+      "observed_at"
+    ],
+    "title": "RouterPublication",
     "type": "object"
   },
   "RouterRead-JsonValue": {

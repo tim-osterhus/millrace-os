@@ -657,6 +657,99 @@ class PresentationConfig(Contract):
     payload: dict[str, JsonValue]
 
 
+# Headless parity reads (M1): generic OS facts only, no workflow-specific schema.
+OperationId = Annotated[
+    str,
+    Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z_]*(\.[a-z][a-z_]*)+$"),
+]
+DraftPath = Annotated[str, Field(min_length=1, max_length=512)]
+
+
+class ClientOperation(Contract):
+    operation_id: OperationId
+    method: Literal["GET", "POST", "PUT", "OPTIONS"]
+    path: Annotated[str, Field(min_length=1, max_length=256)]
+    request_contract: Identifier | None
+    response_contract: Identifier | None
+    available: bool
+    reason: Identifier | None
+
+
+class ClientCapabilities(Contract):
+    contract: Literal["millrace-os-client-capabilities/v1"] = (
+        "millrace-os-client-capabilities/v1"
+    )
+    api_version: Literal["v1"] = "v1"
+    operations: list[ClientOperation]
+    observed_at: Timestamp
+
+
+class RouterLocalCall(Contract):
+    contract: Literal["millrace-os-router-local-call/v1"] = (
+        "millrace-os-router-local-call/v1"
+    )
+    home: Identifier
+    request_id: CoreId
+    request_digest: Sha256
+    operation: Identifier
+    instance_id: Identifier | None
+    run_id: Identifier | None
+    phase: Literal["admission_pending", "call_active", "call_returned", "call_failed"]
+    holder_joined: bool
+    error: Error | None
+    result: JsonValue
+    observed_at: Timestamp
+
+
+class PublicationQuery(Contract):
+    home: Identifier
+    request_id: CoreId
+
+
+class RouterPublication(Contract):
+    contract: Literal["millrace-os-router-publication/v1"] = (
+        "millrace-os-router-publication/v1"
+    )
+    home: Identifier
+    instance_id: CoreId
+    request_id: CoreId
+    in_progress: dict[str, JsonValue] | None
+    completed: dict[str, JsonValue] | None
+    observed_at: Timestamp
+
+
+class DraftManifestItem(Contract):
+    path: Annotated[str, Field(min_length=1)]
+    sha256: Sha256
+    size: Annotated[int, Field(ge=0)]
+
+
+class DraftManifest(Contract):
+    contract: Literal["millrace-os-draft-manifest/v1"] = "millrace-os-draft-manifest/v1"
+    home: Identifier
+    draft_id: Identifier
+    sha256: Sha256
+    items: Annotated[list[DraftManifestItem], Field(max_length=50)]
+    next_cursor: Cursor | None
+    observed_at: Timestamp
+
+
+class DraftFileQuery(Contract):
+    home: Identifier
+    path: DraftPath
+
+
+class DraftFileRead(Contract):
+    contract: Literal["millrace-os-draft-file/v1"] = "millrace-os-draft-file/v1"
+    home: Identifier
+    draft_id: Identifier
+    path: Annotated[str, Field(min_length=1)]
+    sha256: Sha256
+    size: Annotated[int, Field(ge=0)]
+    content_base64: Annotated[str, Field(max_length=1048576)]
+    observed_at: Timestamp
+
+
 MODELS = [
     RouterRead[JsonValue],
     RouterRead[RouterValidation],
@@ -687,6 +780,11 @@ MODELS = [
     PresentationState,
     PresentationWrite,
     PresentationConfig,
+    ClientCapabilities,
+    RouterLocalCall,
+    RouterPublication,
+    DraftManifest,
+    DraftFileRead,
     Health,
     Error,
     Version,

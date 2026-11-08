@@ -27,6 +27,7 @@ async def run(job):
                     "serve",
                     "--config",
                     job["config"],
+                    *job.get("serve", []),
                 ],
                 env=dict(os.environ),
             )

@@ -1,0 +1,2366 @@
+{
+  "contract": "millrace-os-mcp-tools/v2",
+  "sha256": "86c321d46f8ebc793d498ea745db728211678c6f400487cf5024bc608a705252",
+  "tools": [
+    {
+      "inputSchema": {
+        "$defs": {
+          "DiscoverActions": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "actions",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "DiscoverActions",
+            "type": "object"
+          },
+          "DiscoverAvailability": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "availability",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "DiscoverAvailability",
+            "type": "object"
+          },
+          "DiscoverBridge": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "bridge",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "DiscoverBridge",
+            "type": "object"
+          },
+          "DiscoverCapabilities": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "capabilities",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "DiscoverCapabilities",
+            "type": "object"
+          },
+          "DiscoverContracts": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "contracts",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "DiscoverContracts",
+            "type": "object"
+          },
+          "DiscoverDiagnostics": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "diagnostics",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "DiscoverDiagnostics",
+            "type": "object"
+          },
+          "DiscoverHealth": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "health",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "DiscoverHealth",
+            "type": "object"
+          },
+          "DiscoverIdentity": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "identity",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "DiscoverIdentity",
+            "type": "object"
+          },
+          "DiscoverObservation": {
+            "additionalProperties": false,
+            "properties": {
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "kind": {
+                "const": "observation",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "home"
+            ],
+            "title": "DiscoverObservation",
+            "type": "object"
+          },
+          "DiscoverProviders": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "providers",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "DiscoverProviders",
+            "type": "object"
+          },
+          "DiscoverSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "contract_id": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Contract Id",
+                "type": "string"
+              },
+              "digest": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Digest",
+                "type": "string"
+              },
+              "kind": {
+                "const": "schema",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "contract_id",
+              "digest"
+            ],
+            "title": "DiscoverSchema",
+            "type": "object"
+          },
+          "DiscoverVersion": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "version",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "DiscoverVersion",
+            "type": "object"
+          }
+        },
+        "discriminator": {
+          "mapping": {
+            "actions": "#/$defs/DiscoverActions",
+            "availability": "#/$defs/DiscoverAvailability",
+            "bridge": "#/$defs/DiscoverBridge",
+            "capabilities": "#/$defs/DiscoverCapabilities",
+            "contracts": "#/$defs/DiscoverContracts",
+            "diagnostics": "#/$defs/DiscoverDiagnostics",
+            "health": "#/$defs/DiscoverHealth",
+            "identity": "#/$defs/DiscoverIdentity",
+            "observation": "#/$defs/DiscoverObservation",
+            "providers": "#/$defs/DiscoverProviders",
+            "schema": "#/$defs/DiscoverSchema",
+            "version": "#/$defs/DiscoverVersion"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/DiscoverBridge"
+          },
+          {
+            "$ref": "#/$defs/DiscoverHealth"
+          },
+          {
+            "$ref": "#/$defs/DiscoverIdentity"
+          },
+          {
+            "$ref": "#/$defs/DiscoverVersion"
+          },
+          {
+            "$ref": "#/$defs/DiscoverContracts"
+          },
+          {
+            "$ref": "#/$defs/DiscoverSchema"
+          },
+          {
+            "$ref": "#/$defs/DiscoverDiagnostics"
+          },
+          {
+            "$ref": "#/$defs/DiscoverProviders"
+          },
+          {
+            "$ref": "#/$defs/DiscoverActions"
+          },
+          {
+            "$ref": "#/$defs/DiscoverAvailability"
+          },
+          {
+            "$ref": "#/$defs/DiscoverCapabilities"
+          },
+          {
+            "$ref": "#/$defs/DiscoverObservation"
+          }
+        ],
+        "type": "object"
+      },
+      "name": "millrace_v2_discover"
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "InspectHomes": {
+            "additionalProperties": false,
+            "properties": {
+              "cursor": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "Cursor",
+                "type": "string"
+              },
+              "limit": {
+                "maximum": 50,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "target": {
+                "const": "homes",
+                "title": "Target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "target"
+            ],
+            "title": "InspectHomes",
+            "type": "object"
+          },
+          "InspectInstance": {
+            "additionalProperties": false,
+            "properties": {
+              "cursor": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "Cursor",
+                "type": "string"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "limit": {
+                "maximum": 50,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "target": {
+                "const": "instance",
+                "title": "Target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "target",
+              "home",
+              "instance_id"
+            ],
+            "title": "InspectInstance",
+            "type": "object"
+          },
+          "InspectInstances": {
+            "additionalProperties": false,
+            "properties": {
+              "cursor": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "Cursor",
+                "type": "string"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "limit": {
+                "maximum": 50,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "target": {
+                "const": "instances",
+                "title": "Target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "target",
+              "home"
+            ],
+            "title": "InspectInstances",
+            "type": "object"
+          },
+          "InspectRevision": {
+            "additionalProperties": false,
+            "properties": {
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "revision_id": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Revision Id",
+                "type": "string"
+              },
+              "run_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Run Id",
+                "type": "string"
+              },
+              "target": {
+                "const": "revision",
+                "title": "Target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "target",
+              "home",
+              "instance_id",
+              "run_id",
+              "revision_id"
+            ],
+            "title": "InspectRevision",
+            "type": "object"
+          },
+          "InspectRun": {
+            "additionalProperties": false,
+            "properties": {
+              "cursor": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "Cursor",
+                "type": "string"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "invocation_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Invocation Id",
+                "type": "string"
+              },
+              "limit": {
+                "maximum": 50,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "request_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Request Id",
+                "type": "string"
+              },
+              "run_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Run Id",
+                "type": "string"
+              },
+              "section": {
+                "enum": [
+                  "summary",
+                  "invocations",
+                  "transitions",
+                  "controls"
+                ],
+                "title": "Section",
+                "type": "string"
+              },
+              "target": {
+                "const": "run",
+                "title": "Target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "target",
+              "home",
+              "instance_id",
+              "run_id",
+              "section"
+            ],
+            "title": "InspectRun",
+            "type": "object"
+          }
+        },
+        "discriminator": {
+          "mapping": {
+            "homes": "#/$defs/InspectHomes",
+            "instance": "#/$defs/InspectInstance",
+            "instances": "#/$defs/InspectInstances",
+            "revision": "#/$defs/InspectRevision",
+            "run": "#/$defs/InspectRun"
+          },
+          "propertyName": "target"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/InspectHomes"
+          },
+          {
+            "$ref": "#/$defs/InspectInstances"
+          },
+          {
+            "$ref": "#/$defs/InspectInstance"
+          },
+          {
+            "$ref": "#/$defs/InspectRun"
+          },
+          {
+            "$ref": "#/$defs/InspectRevision"
+          }
+        ],
+        "type": "object"
+      },
+      "name": "millrace_v2_inspect"
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "JsonValue": {}
+        },
+        "additionalProperties": false,
+        "properties": {
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "observation_contract": {
+            "enum": [
+              "millrace-os-router-call/v1",
+              "millrace-os-router-call/v2"
+            ],
+            "title": "Observation Contract",
+            "type": "string"
+          },
+          "request": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Request",
+            "type": "object"
+          }
+        },
+        "required": [
+          "home",
+          "request",
+          "observation_contract"
+        ],
+        "title": "Request",
+        "type": "object"
+      },
+      "name": "millrace_v2_request"
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "ReceiptBounded": {
+            "additionalProperties": false,
+            "properties": {
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "mode": {
+                "const": "bounded",
+                "title": "Mode",
+                "type": "string"
+              },
+              "observation_contract": {
+                "enum": [
+                  "millrace-os-router-call/v1",
+                  "millrace-os-router-call/v2"
+                ],
+                "title": "Observation Contract",
+                "type": "string"
+              },
+              "request_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Request Id",
+                "type": "string"
+              },
+              "run_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Run Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode",
+              "home",
+              "request_id",
+              "instance_id",
+              "observation_contract"
+            ],
+            "title": "ReceiptBounded",
+            "type": "object"
+          },
+          "ReceiptLifecycle": {
+            "additionalProperties": false,
+            "properties": {
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "mode": {
+                "const": "lifecycle",
+                "title": "Mode",
+                "type": "string"
+              },
+              "observation_contract": {
+                "enum": [
+                  "millrace-os-router-call/v1",
+                  "millrace-os-router-call/v2"
+                ],
+                "title": "Observation Contract",
+                "type": "string"
+              },
+              "request_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Request Id",
+                "type": "string"
+              },
+              "run_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Run Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode",
+              "home",
+              "request_id",
+              "observation_contract"
+            ],
+            "title": "ReceiptLifecycle",
+            "type": "object"
+          }
+        },
+        "discriminator": {
+          "mapping": {
+            "bounded": "#/$defs/ReceiptBounded",
+            "lifecycle": "#/$defs/ReceiptLifecycle"
+          },
+          "propertyName": "mode"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ReceiptLifecycle"
+          },
+          {
+            "$ref": "#/$defs/ReceiptBounded"
+          }
+        ],
+        "type": "object"
+      },
+      "name": "millrace_v2_receipt"
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "ValidateConfigured": {
+            "additionalProperties": false,
+            "properties": {
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "kind": {
+                "const": "configured",
+                "title": "Kind",
+                "type": "string"
+              },
+              "run_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Run Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "home",
+              "instance_id"
+            ],
+            "title": "ValidateConfigured",
+            "type": "object"
+          },
+          "ValidateDraft": {
+            "additionalProperties": false,
+            "properties": {
+              "draft_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Draft Id",
+                "type": "string"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "kind": {
+                "const": "draft",
+                "title": "Kind",
+                "type": "string"
+              },
+              "run_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Run Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "home",
+              "draft_id",
+              "instance_id"
+            ],
+            "title": "ValidateDraft",
+            "type": "object"
+          },
+          "ValidateSummary": {
+            "additionalProperties": false,
+            "properties": {
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "kind": {
+                "const": "summary",
+                "title": "Kind",
+                "type": "string"
+              },
+              "run_id": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Run Id"
+              }
+            },
+            "required": [
+              "kind",
+              "home",
+              "instance_id",
+              "run_id"
+            ],
+            "title": "ValidateSummary",
+            "type": "object"
+          }
+        },
+        "discriminator": {
+          "mapping": {
+            "configured": "#/$defs/ValidateConfigured",
+            "draft": "#/$defs/ValidateDraft",
+            "summary": "#/$defs/ValidateSummary"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ValidateConfigured"
+          },
+          {
+            "$ref": "#/$defs/ValidateDraft"
+          },
+          {
+            "$ref": "#/$defs/ValidateSummary"
+          }
+        ],
+        "type": "object"
+      },
+      "name": "millrace_v2_validate"
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "CatalogCopy": {
+            "additionalProperties": false,
+            "properties": {
+              "destination": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "title": "Destination",
+                "type": "string"
+              },
+              "draft_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Draft Id",
+                "type": "string"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "operation": {
+                "const": "copy",
+                "title": "Operation",
+                "type": "string"
+              },
+              "source": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "title": "Source",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "destination"
+            ],
+            "title": "CatalogCopy",
+            "type": "object"
+          },
+          "CatalogInit": {
+            "additionalProperties": false,
+            "properties": {
+              "destination": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "title": "Destination",
+                "type": "string"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "operation": {
+                "const": "init",
+                "title": "Operation",
+                "type": "string"
+              },
+              "selector": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Selector",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "selector",
+              "destination"
+            ],
+            "title": "CatalogInit",
+            "type": "object"
+          },
+          "CatalogList": {
+            "additionalProperties": false,
+            "properties": {
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "operation": {
+                "const": "list",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home"
+            ],
+            "title": "CatalogList",
+            "type": "object"
+          }
+        },
+        "discriminator": {
+          "mapping": {
+            "copy": "#/$defs/CatalogCopy",
+            "init": "#/$defs/CatalogInit",
+            "list": "#/$defs/CatalogList"
+          },
+          "propertyName": "operation"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/CatalogList"
+          },
+          {
+            "$ref": "#/$defs/CatalogInit"
+          },
+          {
+            "$ref": "#/$defs/CatalogCopy"
+          }
+        ],
+        "type": "object"
+      },
+      "name": "millrace_v2_catalog"
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "DraftApply": {
+            "additionalProperties": false,
+            "properties": {
+              "base_state_version": {
+                "minimum": 1,
+                "title": "Base State Version",
+                "type": "integer"
+              },
+              "draft_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Draft Id",
+                "type": "string"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "operation": {
+                "const": "apply",
+                "title": "Operation",
+                "type": "string"
+              },
+              "request_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Request Id",
+                "type": "string"
+              },
+              "run_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Run Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "draft_id",
+              "instance_id",
+              "run_id",
+              "base_state_version",
+              "request_id"
+            ],
+            "title": "DraftApply",
+            "type": "object"
+          },
+          "DraftCreate": {
+            "additionalProperties": false,
+            "properties": {
+              "files": {
+                "items": {
+                  "$ref": "#/$defs/DraftFile"
+                },
+                "maxItems": 256,
+                "title": "Files",
+                "type": "array"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "operation": {
+                "const": "create",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "files"
+            ],
+            "title": "DraftCreate",
+            "type": "object"
+          },
+          "DraftFile": {
+            "additionalProperties": false,
+            "properties": {
+              "content_base64": {
+                "maxLength": 1048576,
+                "title": "Content Base64",
+                "type": "string"
+              },
+              "path": {
+                "maxLength": 512,
+                "minLength": 1,
+                "title": "Path",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "content_base64"
+            ],
+            "title": "DraftFile",
+            "type": "object"
+          },
+          "DraftManifest": {
+            "additionalProperties": false,
+            "properties": {
+              "cursor": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "Cursor",
+                "type": "string"
+              },
+              "draft_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Draft Id",
+                "type": "string"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "limit": {
+                "maximum": 50,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "operation": {
+                "const": "manifest",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "draft_id"
+            ],
+            "title": "DraftManifest",
+            "type": "object"
+          },
+          "DraftPublicationStatus": {
+            "additionalProperties": false,
+            "properties": {
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "operation": {
+                "const": "publication_status",
+                "title": "Operation",
+                "type": "string"
+              },
+              "request_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Request Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "instance_id",
+              "request_id"
+            ],
+            "title": "DraftPublicationStatus",
+            "type": "object"
+          },
+          "DraftPutFile": {
+            "additionalProperties": false,
+            "properties": {
+              "content_base64": {
+                "maxLength": 1048576,
+                "title": "Content Base64",
+                "type": "string"
+              },
+              "draft_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Draft Id",
+                "type": "string"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "operation": {
+                "const": "put_file",
+                "title": "Operation",
+                "type": "string"
+              },
+              "path": {
+                "maxLength": 512,
+                "minLength": 1,
+                "title": "Path",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "draft_id",
+              "path",
+              "content_base64"
+            ],
+            "title": "DraftPutFile",
+            "type": "object"
+          },
+          "DraftRead": {
+            "additionalProperties": false,
+            "properties": {
+              "draft_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Draft Id",
+                "type": "string"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "operation": {
+                "const": "read",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "draft_id"
+            ],
+            "title": "DraftRead",
+            "type": "object"
+          },
+          "DraftReadFile": {
+            "additionalProperties": false,
+            "properties": {
+              "draft_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Draft Id",
+                "type": "string"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "operation": {
+                "const": "read_file",
+                "title": "Operation",
+                "type": "string"
+              },
+              "path": {
+                "maxLength": 512,
+                "minLength": 1,
+                "title": "Path",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "draft_id",
+              "path"
+            ],
+            "title": "DraftReadFile",
+            "type": "object"
+          },
+          "DraftRepairPublication": {
+            "additionalProperties": false,
+            "properties": {
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "operation": {
+                "const": "repair_publication",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "instance_id"
+            ],
+            "title": "DraftRepairPublication",
+            "type": "object"
+          },
+          "DraftReplaceFiles": {
+            "additionalProperties": false,
+            "properties": {
+              "draft_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Draft Id",
+                "type": "string"
+              },
+              "files": {
+                "items": {
+                  "$ref": "#/$defs/DraftFile"
+                },
+                "maxItems": 256,
+                "title": "Files",
+                "type": "array"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "operation": {
+                "const": "replace_files",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "draft_id",
+              "files"
+            ],
+            "title": "DraftReplaceFiles",
+            "type": "object"
+          }
+        },
+        "discriminator": {
+          "mapping": {
+            "apply": "#/$defs/DraftApply",
+            "create": "#/$defs/DraftCreate",
+            "manifest": "#/$defs/DraftManifest",
+            "publication_status": "#/$defs/DraftPublicationStatus",
+            "put_file": "#/$defs/DraftPutFile",
+            "read": "#/$defs/DraftRead",
+            "read_file": "#/$defs/DraftReadFile",
+            "repair_publication": "#/$defs/DraftRepairPublication",
+            "replace_files": "#/$defs/DraftReplaceFiles"
+          },
+          "propertyName": "operation"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/DraftCreate"
+          },
+          {
+            "$ref": "#/$defs/DraftRead"
+          },
+          {
+            "$ref": "#/$defs/DraftReplaceFiles"
+          },
+          {
+            "$ref": "#/$defs/DraftPutFile"
+          },
+          {
+            "$ref": "#/$defs/DraftManifest"
+          },
+          {
+            "$ref": "#/$defs/DraftReadFile"
+          },
+          {
+            "$ref": "#/$defs/DraftApply"
+          },
+          {
+            "$ref": "#/$defs/DraftRepairPublication"
+          },
+          {
+            "$ref": "#/$defs/DraftPublicationStatus"
+          }
+        ],
+        "type": "object"
+      },
+      "name": "millrace_v2_draft"
+    },
+    {
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "home": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Home",
+            "type": "string"
+          },
+          "request_id": {
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "home",
+          "request_id"
+        ],
+        "title": "LocalCall",
+        "type": "object"
+      },
+      "name": "millrace_v2_local_call"
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "JsonValue": {},
+          "OutputsList": {
+            "additionalProperties": false,
+            "properties": {
+              "cursor": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "Cursor",
+                "type": "string"
+              },
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "limit": {
+                "maximum": 50,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "operation": {
+                "const": "list",
+                "title": "Operation",
+                "type": "string"
+              },
+              "run_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Run Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "instance_id",
+              "run_id"
+            ],
+            "title": "OutputsList",
+            "type": "object"
+          },
+          "OutputsPublish": {
+            "additionalProperties": false,
+            "properties": {
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "operation": {
+                "const": "publish",
+                "title": "Operation",
+                "type": "string"
+              },
+              "record": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "title": "Record",
+                "type": "object"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "record"
+            ],
+            "title": "OutputsPublish",
+            "type": "object"
+          },
+          "OutputsRead": {
+            "additionalProperties": false,
+            "properties": {
+              "home": {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "title": "Home",
+                "type": "string"
+              },
+              "instance_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Instance Id",
+                "type": "string"
+              },
+              "operation": {
+                "const": "read",
+                "title": "Operation",
+                "type": "string"
+              },
+              "output_id": {
+                "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+                "title": "Output Id",
+                "type": "string"
+              },
+              "record_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Record Sha256",
+                "type": "string"
+              },
+              "representation": {
+                "enum": [
+                  "report",
+                  "json"
+                ],
+                "title": "Representation",
+                "type": "string"
+              },
+              "run_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Run Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "home",
+              "instance_id",
+              "run_id",
+              "output_id",
+              "record_sha256",
+              "representation"
+            ],
+            "title": "OutputsRead",
+            "type": "object"
+          }
+        },
+        "discriminator": {
+          "mapping": {
+            "list": "#/$defs/OutputsList",
+            "publish": "#/$defs/OutputsPublish",
+            "read": "#/$defs/OutputsRead"
+          },
+          "propertyName": "operation"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/OutputsPublish"
+          },
+          {
+            "$ref": "#/$defs/OutputsList"
+          },
+          {
+            "$ref": "#/$defs/OutputsRead"
+          }
+        ],
+        "type": "object"
+      },
+      "name": "millrace_v2_outputs"
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "BundledRef": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "enum": [
+                  "precision",
+                  "command",
+                  "studio",
+                  "default"
+                ],
+                "title": "Id",
+                "type": "string"
+              },
+              "kind": {
+                "const": "bundled",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "title": "BundledRef",
+            "type": "object"
+          },
+          "JsonValue": {},
+          "Namespace": {
+            "additionalProperties": false,
+            "properties": {
+              "frontend_id": {
+                "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+                "title": "Frontend Id",
+                "type": "string"
+              },
+              "presentation_format": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$",
+                "title": "Presentation Format",
+                "type": "string"
+              }
+            },
+            "required": [
+              "frontend_id",
+              "presentation_format"
+            ],
+            "title": "Namespace",
+            "type": "object"
+          },
+          "PortableConfig": {
+            "additionalProperties": false,
+            "description": "`millrace-os-presentation-config/v2` (OS-G0 6.6).",
+            "properties": {
+              "format": {
+                "const": "millrace-os-presentation-config/v2",
+                "title": "Format",
+                "type": "string"
+              },
+              "frontend_id": {
+                "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+                "title": "Frontend Id",
+                "type": "string"
+              },
+              "name": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Name",
+                "type": "string"
+              },
+              "payload": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "title": "Payload",
+                "type": "object"
+              },
+              "presentation_format": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$",
+                "title": "Presentation Format",
+                "type": "string"
+              }
+            },
+            "required": [
+              "format",
+              "frontend_id",
+              "presentation_format",
+              "name",
+              "payload"
+            ],
+            "title": "PortableConfig",
+            "type": "object"
+          },
+          "PresentationCreate": {
+            "additionalProperties": false,
+            "properties": {
+              "expected_version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Expected Version"
+              },
+              "name": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Name",
+                "type": "string"
+              },
+              "namespace": {
+                "$ref": "#/$defs/Namespace"
+              },
+              "operation": {
+                "const": "create",
+                "title": "Operation",
+                "type": "string"
+              },
+              "payload": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "title": "Payload",
+                "type": "object"
+              }
+            },
+            "required": [
+              "operation",
+              "namespace",
+              "name",
+              "payload"
+            ],
+            "title": "PresentationCreate",
+            "type": "object"
+          },
+          "PresentationDelete": {
+            "additionalProperties": false,
+            "properties": {
+              "config_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Config Id",
+                "type": "string"
+              },
+              "expected_version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Expected Version"
+              },
+              "namespace": {
+                "$ref": "#/$defs/Namespace"
+              },
+              "operation": {
+                "const": "delete",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "namespace",
+              "config_id"
+            ],
+            "title": "PresentationDelete",
+            "type": "object"
+          },
+          "PresentationDuplicate": {
+            "additionalProperties": false,
+            "properties": {
+              "expected_version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Expected Version"
+              },
+              "name": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Name",
+                "type": "string"
+              },
+              "namespace": {
+                "$ref": "#/$defs/Namespace"
+              },
+              "operation": {
+                "const": "duplicate",
+                "title": "Operation",
+                "type": "string"
+              },
+              "source": {
+                "discriminator": {
+                  "mapping": {
+                    "bundled": "#/$defs/BundledRef",
+                    "user": "#/$defs/UserRef"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/UserRef"
+                  },
+                  {
+                    "$ref": "#/$defs/BundledRef"
+                  }
+                ],
+                "title": "Source"
+              }
+            },
+            "required": [
+              "operation",
+              "namespace",
+              "source",
+              "name"
+            ],
+            "title": "PresentationDuplicate",
+            "type": "object"
+          },
+          "PresentationExport": {
+            "additionalProperties": false,
+            "properties": {
+              "namespace": {
+                "$ref": "#/$defs/Namespace"
+              },
+              "operation": {
+                "const": "export",
+                "title": "Operation",
+                "type": "string"
+              },
+              "ref": {
+                "discriminator": {
+                  "mapping": {
+                    "bundled": "#/$defs/BundledRef",
+                    "user": "#/$defs/UserRef"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/UserRef"
+                  },
+                  {
+                    "$ref": "#/$defs/BundledRef"
+                  }
+                ],
+                "title": "Ref"
+              }
+            },
+            "required": [
+              "operation",
+              "namespace",
+              "ref"
+            ],
+            "title": "PresentationExport",
+            "type": "object"
+          },
+          "PresentationGet": {
+            "additionalProperties": false,
+            "properties": {
+              "operation": {
+                "const": "get",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation"
+            ],
+            "title": "PresentationGet",
+            "type": "object"
+          },
+          "PresentationImport": {
+            "additionalProperties": false,
+            "properties": {
+              "config": {
+                "$ref": "#/$defs/PortableConfig"
+              },
+              "expected_version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Expected Version"
+              },
+              "name": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Name",
+                "type": "string"
+              },
+              "operation": {
+                "const": "import",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "config"
+            ],
+            "title": "PresentationImport",
+            "type": "object"
+          },
+          "PresentationList": {
+            "additionalProperties": false,
+            "properties": {
+              "namespace": {
+                "$ref": "#/$defs/Namespace"
+              },
+              "operation": {
+                "const": "list",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation"
+            ],
+            "title": "PresentationList",
+            "type": "object"
+          },
+          "PresentationPut": {
+            "additionalProperties": false,
+            "properties": {
+              "operation": {
+                "const": "put",
+                "title": "Operation",
+                "type": "string"
+              },
+              "write": {
+                "discriminator": {
+                  "mapping": {
+                    "compare": "#/$defs/WriteCompare",
+                    "replace_unreadable": "#/$defs/WriteReplace"
+                  },
+                  "propertyName": "mode"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/WriteCompare"
+                  },
+                  {
+                    "$ref": "#/$defs/WriteReplace"
+                  }
+                ],
+                "title": "Write"
+              }
+            },
+            "required": [
+              "operation",
+              "write"
+            ],
+            "title": "PresentationPut",
+            "type": "object"
+          },
+          "PresentationRead": {
+            "additionalProperties": false,
+            "properties": {
+              "namespace": {
+                "$ref": "#/$defs/Namespace"
+              },
+              "operation": {
+                "const": "read",
+                "title": "Operation",
+                "type": "string"
+              },
+              "ref": {
+                "discriminator": {
+                  "mapping": {
+                    "bundled": "#/$defs/BundledRef",
+                    "user": "#/$defs/UserRef"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/UserRef"
+                  },
+                  {
+                    "$ref": "#/$defs/BundledRef"
+                  }
+                ],
+                "title": "Ref"
+              }
+            },
+            "required": [
+              "operation",
+              "namespace",
+              "ref"
+            ],
+            "title": "PresentationRead",
+            "type": "object"
+          },
+          "PresentationReadDefault": {
+            "additionalProperties": false,
+            "properties": {
+              "namespace": {
+                "$ref": "#/$defs/Namespace"
+              },
+              "operation": {
+                "const": "read_default",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "namespace"
+            ],
+            "title": "PresentationReadDefault",
+            "type": "object"
+          },
+          "PresentationRename": {
+            "additionalProperties": false,
+            "properties": {
+              "config_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Config Id",
+                "type": "string"
+              },
+              "expected_version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Expected Version"
+              },
+              "name": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Name",
+                "type": "string"
+              },
+              "namespace": {
+                "$ref": "#/$defs/Namespace"
+              },
+              "operation": {
+                "const": "rename",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "namespace",
+              "config_id",
+              "name"
+            ],
+            "title": "PresentationRename",
+            "type": "object"
+          },
+          "PresentationReplaceUnreadable": {
+            "additionalProperties": false,
+            "properties": {
+              "observed_file_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Observed File Sha256",
+                "type": "string"
+              },
+              "operation": {
+                "const": "replace_unreadable",
+                "title": "Operation",
+                "type": "string"
+              },
+              "store": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "title": "Store",
+                "type": "object"
+              }
+            },
+            "required": [
+              "operation",
+              "observed_file_sha256",
+              "store"
+            ],
+            "title": "PresentationReplaceUnreadable",
+            "type": "object"
+          },
+          "PresentationReset": {
+            "additionalProperties": false,
+            "properties": {
+              "config_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Config Id",
+                "type": "string"
+              },
+              "expected_version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Expected Version"
+              },
+              "namespace": {
+                "$ref": "#/$defs/Namespace"
+              },
+              "operation": {
+                "const": "reset",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "namespace",
+              "config_id"
+            ],
+            "title": "PresentationReset",
+            "type": "object"
+          },
+          "PresentationSetDefault": {
+            "additionalProperties": false,
+            "properties": {
+              "default": {
+                "anyOf": [
+                  {
+                    "discriminator": {
+                      "mapping": {
+                        "bundled": "#/$defs/BundledRef",
+                        "user": "#/$defs/UserRef"
+                      },
+                      "propertyName": "kind"
+                    },
+                    "oneOf": [
+                      {
+                        "$ref": "#/$defs/UserRef"
+                      },
+                      {
+                        "$ref": "#/$defs/BundledRef"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Default"
+              },
+              "expected_version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Expected Version"
+              },
+              "namespace": {
+                "$ref": "#/$defs/Namespace"
+              },
+              "operation": {
+                "const": "set_default",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "namespace",
+              "default"
+            ],
+            "title": "PresentationSetDefault",
+            "type": "object"
+          },
+          "PresentationUpdate": {
+            "additionalProperties": false,
+            "properties": {
+              "config_id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Config Id",
+                "type": "string"
+              },
+              "expected_version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Expected Version"
+              },
+              "namespace": {
+                "$ref": "#/$defs/Namespace"
+              },
+              "operation": {
+                "const": "update",
+                "title": "Operation",
+                "type": "string"
+              },
+              "payload": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "title": "Payload",
+                "type": "object"
+              }
+            },
+            "required": [
+              "operation",
+              "namespace",
+              "config_id",
+              "payload"
+            ],
+            "title": "PresentationUpdate",
+            "type": "object"
+          },
+          "UserRef": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "pattern": "^[0-9a-f]{32}$",
+                "title": "Id",
+                "type": "string"
+              },
+              "kind": {
+                "const": "user",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "title": "UserRef",
+            "type": "object"
+          },
+          "WriteCompare": {
+            "additionalProperties": false,
+            "properties": {
+              "expected_version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Expected Version"
+              },
+              "format": {
+                "const": "millrace-os-presentation-write/v1",
+                "title": "Format",
+                "type": "string"
+              },
+              "mode": {
+                "const": "compare",
+                "title": "Mode",
+                "type": "string"
+              },
+              "store": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "title": "Store",
+                "type": "object"
+              }
+            },
+            "required": [
+              "format",
+              "mode",
+              "expected_version",
+              "store"
+            ],
+            "title": "WriteCompare",
+            "type": "object"
+          },
+          "WriteReplace": {
+            "additionalProperties": false,
+            "properties": {
+              "format": {
+                "const": "millrace-os-presentation-write/v1",
+                "title": "Format",
+                "type": "string"
+              },
+              "mode": {
+                "const": "replace_unreadable",
+                "title": "Mode",
+                "type": "string"
+              },
+              "observed_file_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Observed File Sha256",
+                "type": "string"
+              },
+              "store": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "title": "Store",
+                "type": "object"
+              }
+            },
+            "required": [
+              "format",
+              "mode",
+              "observed_file_sha256",
+              "store"
+            ],
+            "title": "WriteReplace",
+            "type": "object"
+          }
+        },
+        "discriminator": {
+          "mapping": {
+            "create": "#/$defs/PresentationCreate",
+            "delete": "#/$defs/PresentationDelete",
+            "duplicate": "#/$defs/PresentationDuplicate",
+            "export": "#/$defs/PresentationExport",
+            "get": "#/$defs/PresentationGet",
+            "import": "#/$defs/PresentationImport",
+            "list": "#/$defs/PresentationList",
+            "put": "#/$defs/PresentationPut",
+            "read": "#/$defs/PresentationRead",
+            "read_default": "#/$defs/PresentationReadDefault",
+            "rename": "#/$defs/PresentationRename",
+            "replace_unreadable": "#/$defs/PresentationReplaceUnreadable",
+            "reset": "#/$defs/PresentationReset",
+            "set_default": "#/$defs/PresentationSetDefault",
+            "update": "#/$defs/PresentationUpdate"
+          },
+          "propertyName": "operation"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/PresentationGet"
+          },
+          {
+            "$ref": "#/$defs/PresentationPut"
+          },
+          {
+            "$ref": "#/$defs/PresentationReplaceUnreadable"
+          },
+          {
+            "$ref": "#/$defs/PresentationList"
+          },
+          {
+            "$ref": "#/$defs/PresentationRead"
+          },
+          {
+            "$ref": "#/$defs/PresentationReadDefault"
+          },
+          {
+            "$ref": "#/$defs/PresentationExport"
+          },
+          {
+            "$ref": "#/$defs/PresentationCreate"
+          },
+          {
+            "$ref": "#/$defs/PresentationUpdate"
+          },
+          {
+            "$ref": "#/$defs/PresentationRename"
+          },
+          {
+            "$ref": "#/$defs/PresentationDuplicate"
+          },
+          {
+            "$ref": "#/$defs/PresentationDelete"
+          },
+          {
+            "$ref": "#/$defs/PresentationSetDefault"
+          },
+          {
+            "$ref": "#/$defs/PresentationReset"
+          },
+          {
+            "$ref": "#/$defs/PresentationImport"
+          }
+        ],
+        "type": "object"
+      },
+      "name": "millrace_v2_presentation"
+    }
+  ]
+}

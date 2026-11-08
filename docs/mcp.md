@@ -12,6 +12,22 @@ python -m pip install 'millrace-os[mcp]==0.23.1'
 millrace-os mcp serve --config /absolute/path/to/mcp.json
 ```
 
+## Tool profiles
+
+One configuration file serves either of two fixed tool profiles:
+
+- **`--tools v1`** (the default) serves the seven `millrace_v1_*` tools exactly
+  as described below. Its schemas, digest, limits and results are unchanged.
+- **`--tools v2`** serves the separate headless profile: ten `millrace_v2_*`
+  tools with their own limits (see [The v2 profile](#the-v2-profile)).
+
+```bash
+millrace-os mcp serve --config /absolute/path/to/mcp.json --tools v2
+```
+
+The two profiles share the configuration format, trust, transports and OS
+backend. One bridge process serves one profile.
+
 The selected profile uses official MCP Python SDK 1.30.0, protocol `2025-11-25`,
 JSON responses and stateless Streamable HTTP. Other Python/SDK profiles refuse
 before serving. Base OS retains Python >=3.12 without MCP, Core or Plus imports.
@@ -158,6 +174,10 @@ immediate retryable busy result. OS's ordinary 4096-byte mutation limit and
 can return 413 or unknown timeout while OS retains ownership. Callers may back
 off and repeat a read or the identical saved mutation. Graph limits stay intact.
 
+A v1 result over its 982,016-byte ceiling is reported as `response_too_large`
+with `retryable: false`, although the sentence above suggests repeating a read.
+This mismatch is recorded here; v1 behavior is unchanged.
+
 Direct LAD starts require existing server-local project `request.md` bytes.
 Missing input yields workflow-owned `INTAKE_MISSING`; no upload tool is added.
 Edits retain manual Apply, explicit acceptance and state-dependent continuation;
@@ -177,3 +197,151 @@ repeated the external issuer/proxy deployment, so exact-artifact native proof
 does not carry forward from the predecessor.
 Native provider, named GUI-client and general cross-platform claims need separate
 evidence. Live Paperclip task/account/server proof remains deferred.
+
+## The v2 profile
+
+The v2 profile serves a fixed, selected set of headless OS operations through
+ten tools. It adds no execution authority beyond the OS API: each call maps to
+the documented routes in [router views](router-views.md),
+[router operation](router-operation.md) and
+[presentation](presentation.md).
+
+| Tool | Discriminator and alternatives |
+| --- | --- |
+| `millrace_v2_discover` | `kind`: `bridge`, `health`, `identity`, `version`, `contracts`, `schema`, `diagnostics`, `providers`, `actions`, `availability`, `capabilities`, `observation` |
+| `millrace_v2_inspect` | `target`: `homes`, `instances`, `instance`, `run`, `revision` (bounded views) |
+| `millrace_v2_request` | none: one Core request/v2 body and its observation contract |
+| `millrace_v2_receipt` | `mode`: `lifecycle`, `bounded` |
+| `millrace_v2_validate` | `kind`: `configured`, `draft`, `summary` |
+| `millrace_v2_catalog` | `operation`: `list`, `init`, `copy` |
+| `millrace_v2_draft` | `operation`: `create`, `read`, `replace_files`, `put_file`, `manifest`, `read_file`, `apply`, `repair_publication`, `publication_status` |
+| `millrace_v2_local_call` | none: one retained OS-local call result |
+| `millrace_v2_outputs` | `operation`: `publish`, `list`, `read` |
+| `millrace_v2_presentation` | `operation`: the fifteen presentation operations |
+
+- **Arguments:** every tool takes a strict discriminated union. Unknown fields,
+  coercion and undeclared alternatives refuse before any HTTP. `home` must be
+  a configured home, and IDs are 32 lowercase hex characters.
+- **Request operations:** create_instance, start_run, recover_run, pause_run,
+  cancel_run, resume_run, submit_revision, accept_revision, retry_invocation,
+  pause_plane, resume_plane, cancel_plane, redirect_plane,
+  reconcile_invocation, update_instance_config and release_project_hold. The
+  request body is otherwise sent unchanged; Core validates it.
+- **Schemas:** the packaged `schemas/mcp-tools-v2.json` holds the full fixed
+  bundle and its digest. `discover`/`bridge` reports the same digest.
+- **Not covered:**
+  - The three legacy full reads (the instance inventory, one instance and one
+    run) remain available through the v1 tools (`millrace_v1_instances`,
+    `millrace_v1_instance`, `millrace_v1_run`) and the CLI (`router
+    instances`, `router inspect`).
+  - The local trust and service exceptions stay outside MCP: browser
+    bootstrap, exchange and opening, credential rotation, recovery-only
+    sessions, listener start/stop and the always-refusing action shell.
+  - There are no frontend or demo tools.
+
+### Advertisement
+
+At startup the bridge reads the OS version, contracts and client capabilities
+(`GET /api/v1/client/capabilities`) and refuses to start without them. A tool
+is listed only when every OS operation its alternatives map to is available.
+`discover`/`bridge` returns the full alternative-to-route mapping and the
+listed tools. A call to a tool that is not listed refuses `tool_unavailable`
+before any HTTP. If an operation becomes unavailable later, the call returns
+the backend's own refusal.
+
+### Results
+
+Every result is compact JSON text plus the same structured value:
+
+| Outcome | Structured value | `isError` |
+| --- | --- | --- |
+| 2xx | `{contract, http_status, os}` with the unchanged API JSON | false |
+| non-2xx | `{contract, http_status, os}` with the OS `os.error.v1` | true |
+| transport refusal | `{contract, access_error: {code, status, retryable, delivery, correlation}}` | true |
+
+- **`delivery: "not_sent"`** means no HTTP byte was sent: argument
+  validation, the body-size pre-check, an unlisted tool, `busy`, an
+  unreadable local credential or a refused connection.
+- **`delivery: "unknown"`** follows a timeout, a lost connection or an
+  oversized response after sending. Inspect the exact target or replay the
+  saved request; never treat it as success or refusal.
+- **Correlation** carries the known home, instance, run, request, draft and
+  output IDs. IDs inside a forwarded request body are copied only when they
+  have the 32-hex ID form.
+- **202** is returned at once with no waiting. Follow it with `receipt` or
+  `local_call`.
+
+Presentation conveniences (`list`, `read`, `read_default`, `export` and the
+eight mutations) make one GET, apply the shared helper, then send at most one
+PUT in `compare` mode with the GET token, all in one call. A helper refusal of
+the observed state is that state's OS refusal (for example
+`presentation_config_not_found`) and sends no PUT. A conflict is returned,
+never retried. Because the GET was already sent, a transport refusal of the
+PUT reports `delivery: "unknown"`. Derived reads return `{contract, http_status: 200,
+presentation: {status, version, file_sha256, result}}`.
+
+### Limits and the N11 framing fit
+
+| Bound | Value |
+| --- | --- |
+| Input message `I2 = 2B + A` | 2,162,688 bytes |
+| API body `B` (route limits 4,096 or 1,048,576) | 1,048,576 bytes |
+| Backend response `R` | 1,049,600 bytes |
+| Tool result ceiling `3R + 1,024` | 3,149,824 bytes |
+| Output message `O2 = I2 + 1,024 + (3R + 1,024)` | 5,313,536 bytes |
+| Backend and tool timeout | 5 seconds |
+| Tool concurrency | 8 |
+
+`A` (65,536) is the allowance for everything except the embedded API body:
+the JSON-RPC envelope and ID, `_meta`, the tool name and selector fields. It
+counts wire bytes, including the stdio LF.
+
+The bridge measures each API body in the API encoding (compact UTF-8) before
+HTTP and refuses an oversized one with `request_too_large` and `delivery:
+"not_sent"`. A larger transport input grants no larger API body, record or
+store.
+
+The input bound is twice the API body because the pinned SDK can spell an
+admitted body longer than Python does. It writes the finite float `1e-05` as
+`0.00001`. A finite float token of Python length p takes at most 2p bytes,
+and string, punctuation and integer tokens are no longer. A dense near-1 MiB
+body therefore needs up to about 2B on the wire; one measured sample of
+1,048,572 bytes became a 1,398,260-byte request. The earlier `B + A` input
+bound was too small for such bodies.
+
+Results keep the 3R + 1,024 ceiling through a joint bound, not by assuming the
+structured copy is shorter than the text. For every JSON token, the escaped
+text copy and the structured copy together take at most three times its
+Python length:
+
+- strings and punctuation can double in the text but not in the structured
+  copy;
+- numbers can lengthen in the structured copy but are not escaped in the
+  text.
+
+Every response reserves the entire possible incoming message, `I2 + 1,024`,
+as v1 does. The bridge's measured SDK wire check remains authoritative, and
+the stdio and HTTP guards apply `I2` and `O2`.
+
+This reasoning holds for the pinned SDK 1.30.0 encoder profile; a different
+encoder needs it revisited. Encodings that ASCII-escape or pretty-print
+consume the `A` allowance and can refuse with a typed error. The framing
+arithmetic for eight concurrent calls is about 8 × (I2 + O2) ≈ 57 MiB. This is
+not a measured memory figure.
+
+### Expanded trusted-operator powers
+
+The selected v2 operations include these trusted-operator powers:
+
+- catalog `init`/`copy` write workflow folders;
+- drafts and Apply publish files into an instance's workflow folder and
+  submit a revision;
+- publication repair, output publication and presentation writes;
+- all sixteen request operations, including `recover_run`,
+  `reconcile_invocation` and `release_project_hold`.
+
+Over HTTP, every admitted JWT subject (a configured `trusted_subjects` entry
+with the `millrace:operator` scope) holds all of these powers. They are the
+same local operator authority; there is no per-agent, per-tool or other
+fine-grained permission. Select v2 only for clients you trust as the local
+operator.

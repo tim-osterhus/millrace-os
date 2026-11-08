@@ -37,6 +37,11 @@
       "version": 1
     },
     {
+      "contract_id": "ClientCapabilities",
+      "sha256": "7760e03df3b1c86279d8996ea6be701c66288ac9c67470539b87786f26efe501",
+      "version": 1
+    },
+    {
       "contract_id": "Diagnostics",
       "sha256": "b61d56d2ddc0f1701b5f3ba4f55e706a9498a6e3ef60551765a1c45d6d86dcf8",
       "version": 1
@@ -57,8 +62,18 @@
       "version": 1
     },
     {
+      "contract_id": "DraftFileRead",
+      "sha256": "f119545b17538144ec4336e9e243e1473f13b3aa6510c0e70d4a1116df8711a0",
+      "version": 1
+    },
+    {
       "contract_id": "DraftFilesInput",
       "sha256": "77b2c8d7bd05c70d73c6061de6aa8f638afb5a843be3135a33e0378cfb23ea7d",
+      "version": 1
+    },
+    {
+      "contract_id": "DraftManifest",
+      "sha256": "ec885a34cdf5b752a6d2aad9fadb9c9c5a3e0a34931415defb418b7146d18d45",
       "version": 1
     },
     {
@@ -182,6 +197,11 @@
       "version": 1
     },
     {
+      "contract_id": "RouterLocalCall",
+      "sha256": "341663b247a1c1f8c13d1dcab0af98cb2477404a2d08fd34e9b692aa06128195",
+      "version": 1
+    },
+    {
       "contract_id": "RouterLocalRead",
       "sha256": "b9b393e5d6d2b46d886cd8c543d6bdd8575977c86ac1e1bcfaebcb6bef94a116",
       "version": 1
@@ -189,6 +209,11 @@
     {
       "contract_id": "RouterObservationCapabilities",
       "sha256": "7c39e9cc4dfe1b352993245043db968796c3cacf99070a17429ef62f0eb32462",
+      "version": 1
+    },
+    {
+      "contract_id": "RouterPublication",
+      "sha256": "3d8accb164355d7acb2debd8c4e71f93afcc6405f5a420808a38033e74a93ac8",
       "version": 1
     },
     {

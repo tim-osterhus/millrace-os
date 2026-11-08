@@ -8,18 +8,45 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import threading
 import time
 import uuid
 from pathlib import Path, PurePosixPath
 
-from .contracts import DraftFile, DraftRead
+from .contracts import DraftFile, DraftRead, strict_json
 from .paths import ensure_directory, open_new_file, validate_file_target
 from .router_client import RouterUnavailable
 
 __all__ = ["WorkflowDrafts"]
 
 TERMINAL = {"succeeded", "cancelled", "failed"}
+# Publication marker keys (repair's admitted set) and the shapes each file takes.
+MARKER = frozenset(
+    {
+        "format",
+        "home",
+        "instance_id",
+        "run_id",
+        "base_state_version",
+        "draft_id",
+        "frozen_token",
+        "files_sha256",
+        "request_id",
+        "receipts",
+        "candidate_id",
+        "run_state_version",
+        "pause_request",
+        "submit_request",
+    }
+)
+IN_PROGRESS = (MARKER, MARKER | {"terminal_candidate_id"})
+COMPLETED = (
+    MARKER | {"status"},
+    MARKER | {"status", "terminal_candidate_id", "terminal_evidence"},
+)
+FILE_READ_LIMIT = 1048576  # base64 characters of one draft-file read
+FILE_READ_BYTES = 3 * (FILE_READ_LIMIT // 4)  # the raw bytes that encode within it
 
 
 def _name(raw):
@@ -98,6 +125,18 @@ def _write(path, raw):
         os.replace(temporary, target)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _read_at_most(path, limit):
+    """Read no more than `limit` bytes of one already validated file."""
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        raw = bytearray()
+        while len(raw) < limit and (chunk := os.read(fd, limit - len(raw))):
+            raw.extend(chunk)
+        return bytes(raw)
+    finally:
+        os.close(fd)
 
 
 def _json(path, value):
@@ -204,6 +243,66 @@ class WorkflowDrafts:
                     target, _ = validate_file_target(root / name)
                     target.unlink()
         return self.read(home, draft_id)
+
+    def manifest(self, home, draft_id, *, limit=50, cursor=None):
+        """A page of file digests. The cursor binds the whole-draft digest."""
+        with self._lock:
+            self._metadata(home, draft_id)
+            files = self._files(self._folder(draft_id) / "files")
+        digest = _hash(files)
+        names = sorted(files)
+        prefix = "d" + digest[:40] + "_"
+        offset = 0
+        if cursor is not None:
+            match = re.fullmatch(r"d([0-9a-f]{40})_([1-9][0-9]*)", cursor)
+            if match is None:
+                raise RouterUnavailable("invalid_request", 422)
+            if match.group(1) != digest[:40]:
+                raise RouterUnavailable("draft_changed", 409)
+            offset = int(match.group(2))
+            if offset >= len(names):
+                raise RouterUnavailable("invalid_request", 422)
+        end = offset + limit
+        return {
+            "home": home,
+            "draft_id": draft_id,
+            "sha256": digest,
+            "items": [
+                {
+                    "path": name,
+                    "sha256": hashlib.sha256(files[name]).hexdigest(),
+                    "size": len(files[name]),
+                }
+                for name in names[offset:end]
+            ],
+            "next_cursor": prefix + str(end) if end < len(names) else None,
+        }
+
+    def read_file(self, home, draft_id, path):
+        """One draft file under the existing path and owner guards; nothing runs."""
+        name = _name(path)
+        with self._lock:
+            self._metadata(home, draft_id)
+            target, exists = validate_file_target(
+                self._folder(draft_id) / "files" / name
+            )
+            if not exists:
+                raise RouterUnavailable("draft_file_not_found", 404)
+            if 4 * ((target.stat().st_size + 2) // 3) > FILE_READ_LIMIT:
+                raise RouterUnavailable("draft_file_too_large", 409)  # early
+            # The bytes actually read stay bounded even if the file grew.
+            raw = _read_at_most(target, FILE_READ_BYTES + 1)
+        content = base64.b64encode(raw).decode()
+        if len(content) > FILE_READ_LIMIT:
+            raise RouterUnavailable("draft_file_too_large", 409)
+        return {
+            "home": home,
+            "draft_id": draft_id,
+            "path": name,
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "size": len(raw),
+            "content_base64": content,
+        }
 
     def workflow_file(self, home, draft_id):
         self._metadata(home, draft_id)
@@ -509,63 +608,120 @@ class WorkflowDrafts:
                 raise RouterUnavailable("publication_not_found", 404)
             try:
                 record = json.loads(target.read_bytes())
-                wanted = {
-                    "format",
-                    "home",
-                    "instance_id",
-                    "run_id",
-                    "base_state_version",
-                    "draft_id",
-                    "frozen_token",
-                    "files_sha256",
-                    "request_id",
-                    "receipts",
-                    "candidate_id",
-                    "run_state_version",
-                    "pause_request",
-                    "submit_request",
-                }
-                if (
-                    set(record) not in (wanted, wanted | {"terminal_candidate_id"})
-                    or record["format"] != "millrace-os-publication/v1"
-                    or record["home"] != home
-                    or record["instance_id"] != instance_id
-                ):
-                    raise ValueError
-                self._folder(record["draft_id"])
-                self._folder(record["frozen_token"])
-                if not isinstance(record["receipts"], list) or any(
-                    not isinstance(r, dict) or not isinstance(r.get("request_id"), str)
-                    for r in record["receipts"]
-                ):
-                    raise ValueError
-                for field, operation in (
-                    ("pause_request", "pause_run"),
-                    ("submit_request", "submit_revision"),
-                ):
-                    request = record[field]
-                    if request is None:
-                        continue
-                    expected_version = request["expected_state_version"]
-                    if (operation == "pause_run" and expected_version is not None) or (
-                        operation == "submit_revision"
-                        and (type(expected_version) is not int or expected_version < 1)
-                    ):
-                        raise ValueError
-                    expected = self._request(
-                        operation,
-                        instance_id,
-                        record["run_id"],
-                        request["request_id"],
-                        expected_version,
-                    )
-                    if request != expected or (
-                        operation == "submit_revision"
-                        and request["request_id"] != record["request_id"]
-                    ):
-                        raise ValueError
+                self._marker(record, home, instance_id, IN_PROGRESS)
             except (ValueError, TypeError, KeyError) as exc:
                 raise RouterUnavailable("publication_evidence_invalid", 409) from exc
             return self._publish(record)
         finally:
             release()
+
+    def _marker(self, record, home, instance_id, allowed):
+        """Strictly check one publication marker; shared by repair and status.
+
+        ValueError, TypeError or KeyError means invalid evidence. A draft or
+        frozen token that is not ID-shaped refuses `draft_not_found`, as repair
+        always has.
+        """
+        if (
+            set(record) not in allowed
+            or record["format"] != "millrace-os-publication/v1"
+            or record["home"] != home
+            or record["instance_id"] != instance_id
+        ):
+            raise ValueError
+        self._folder(record["draft_id"])
+        self._folder(record["frozen_token"])
+        if not isinstance(record["receipts"], list) or any(
+            not isinstance(r, dict) or not isinstance(r.get("request_id"), str)
+            for r in record["receipts"]
+        ):
+            raise ValueError
+        for field, operation in (
+            ("pause_request", "pause_run"),
+            ("submit_request", "submit_revision"),
+        ):
+            request = record[field]
+            if request is None:
+                continue
+            expected_version = request["expected_state_version"]
+            if (operation == "pause_run" and expected_version is not None) or (
+                operation == "submit_revision"
+                and (type(expected_version) is not int or expected_version < 1)
+            ):
+                raise ValueError
+            expected = self._request(
+                operation,
+                instance_id,
+                record["run_id"],
+                request["request_id"],
+                expected_version,
+            )
+            if request != expected or (
+                operation == "submit_revision"
+                and request["request_id"] != record["request_id"]
+            ):
+                raise ValueError
+
+    def publication_status(self, home, instance_id, request_id):
+        """Exact-Apply publication facts, read without the publication lock.
+
+        Both markers are strictly checked, and only one for this request
+        counts. While both exist, every in-progress value must equal the
+        completed one. A later Apply replaces `completed.json`, so an older
+        request becomes unknown (`publication_not_found`). Nothing is repaired,
+        published, accepted or resumed.
+        """
+        folder = self._publication(home, instance_id)
+        found = {}
+        for name, allowed in (
+            ("in-progress.json", IN_PROGRESS),
+            ("completed.json", COMPLETED),
+        ):
+            target, exists = validate_file_target(folder / name)
+            if not exists:
+                continue
+            try:
+                # Strict parse: duplicate keys and NaN/Infinity are invalid.
+                record = strict_json(target.read_bytes())
+                self._marker(record, home, instance_id, allowed)
+                if name == "completed.json":
+                    terminal = "terminal_evidence" in record
+                    evidence = record.get("terminal_evidence")
+                    if record["status"] != (
+                        "terminal_files_ready" if terminal else "paused_pending"
+                    ) or (
+                        terminal
+                        and not (
+                            type(evidence) is dict
+                            and evidence.keys() == {"status", "state_version"}
+                            and evidence["status"] in TERMINAL
+                            and type(evidence["state_version"]) is int
+                        )
+                    ):
+                        raise ValueError
+            except (ValueError, TypeError, KeyError) as exc:
+                raise RouterUnavailable("publication_evidence_invalid", 409) from exc
+            if record["request_id"] == request_id:
+                found[name] = record
+        if not found:
+            raise RouterUnavailable("publication_not_found", 404)
+        progress = found.get("in-progress.json")
+        completed = found.get("completed.json")
+        if progress and completed and any(
+            key not in completed or completed[key] != value
+            for key, value in progress.items()
+        ):
+            raise RouterUnavailable("publication_evidence_invalid", 409)
+
+        def projected(record):
+            if record is None:
+                return None
+            return {k: v for k, v in record.items() if k != "frozen_token"}
+
+        return {
+            "home": home,
+            "instance_id": instance_id,
+            "request_id": request_id,
+            "in_progress": projected(progress),
+            "completed": projected(completed),
+        }

@@ -204,6 +204,102 @@ attempt became durable. The service never retries on its own. The helper's
 guide in Plus, `docs/workflow-views.md`, gives the record schema, the
 canonical JSON rule and the storage rules.
 
+## Headless parity reads
+
+These reads report existing OS facts. They read no Core store except where
+noted, and they repair, replay, accept or resume nothing. Every route uses
+normal trust and a fixed query allowlist. Each response is measured against
+`RESPONSE_LIMIT`, and each uses the existing eight read slots
+(`router_read_busy`, 429) except the local-call snapshot.
+
+| Route | Query | Response |
+| --- | --- | --- |
+| `GET /api/v1/client/capabilities` | none | `millrace-os-client-capabilities/v1` |
+| `GET /api/v1/router/local-calls/{request_id}` | `home` | `millrace-os-router-local-call/v1` |
+| `GET /api/v1/router/publications/{instance_id}` | `home`, `request_id` | `millrace-os-router-publication/v1` |
+| `GET /api/v1/router/drafts/{draft_id}/manifest` | `home`, `limit`, `cursor` | `millrace-os-draft-manifest/v1` |
+| `GET /api/v1/router/drafts/{draft_id}/file` | `home`, `path` | `millrace-os-draft-file/v1` |
+
+### Client capabilities
+
+`{contract, api_version: "v1", operations: [{operation_id, method, path,
+request_contract, response_contract, available, reason}], observed_at}`
+lists the 44 headless operations, sorted by ID.
+
+- **Contracts** are registry `contract_id`s or null.
+- **Availability** reflects lazy import checks of the optional router
+  components only (control, bounded inspection, the output helper, the
+  catalog); no store is read.
+- **Unavailable operations** name the first missing component as `reason`,
+  such as `router_unavailable`. OS-local operations (drafts, presentation,
+  homes, local calls, publication status) are always available.
+- **`actions.invoke`** is always unavailable (`action_unavailable`).
+- **Exclusions:** trust bootstrap, exchange and rotation, recovery
+  diagnostics, and frontend and demo operations are not listed.
+
+This is the client operation list. The observation contracts one home
+offers are `OPTIONS /api/v1/router/requests?home=`.
+
+### Local call results
+
+`{contract, home, request_id, request_digest, operation, instance_id, run_id,
+phase, holder_joined, error, result, observed_at}` reports one OS-local call
+(catalog init/copy, Apply, publication repair) that OS still retains.
+
+- **Phases:** `phase` is one of the four owned phases. The status is 202
+  while `admission_pending` or `call_active`, else 200.
+- **Results and errors:** `result` is non-null only for `call_returned` and
+  equals that call's 200 `data`. `error` is the stored `os.error.v1` of a
+  failed call.
+- **Retention:** OS keeps a finished call for 300 seconds, and at most the
+  latest 128 joined calls. After that, after a restart, or for a Core request,
+  the read refuses `local_call_unavailable` (404).
+- **Unknown, not failed:** that 404 means unknown, not refusal or success.
+  There is no Core fallback and no replay.
+
+Apply uses the caller's request ID. Catalog and repair calls receive an ID
+that appears only in their 202 observation.
+
+### Publication status
+
+`{contract, home, instance_id, request_id, in_progress, completed,
+observed_at}` reports the exact Apply's publication markers, read without the
+publication lock.
+
+- **Strict checks:** each present marker is strictly checked with the
+  validator that repair uses. A malformed marker refuses
+  `publication_evidence_invalid` (409), even if it belongs to another request.
+- **Matching:** a marker is reported only when its `request_id` matches, and
+  `frozen_token` is omitted.
+- **Both markers:** while both exist, every in-progress value must equal the
+  completed one, else `publication_evidence_invalid`.
+- **Not found:** with no matching marker the read refuses
+  `publication_not_found` (404). A later Apply replaces `completed.json`, so an
+  older request becomes unknown in this way.
+
+### Draft manifest and file reads
+
+The manifest returns `{contract, home, draft_id, sha256, items: [{path,
+sha256, size}], next_cursor, observed_at}`.
+
+- **Order:** items are sorted by path.
+- **Digest:** `sha256` is the draft read's whole-draft digest.
+- **Cursor:** `d` followed by 40 hex characters of that digest, `_` and an
+  offset. A changed draft makes an older cursor refuse `draft_changed` (409).
+  A malformed cursor or one past the end refuses `invalid_request`.
+
+The file read returns `{contract, home, draft_id, path, sha256, size,
+content_base64, observed_at}`.
+
+- **Guards:** the same path and owner guards as draft writes apply.
+- **Refusals:** an absent file refuses `draft_file_not_found` (404), and
+  content whose base64 exceeds 1,048,576 characters refuses
+  `draft_file_too_large` (409).
+- **Nothing runs:** a read executes nothing.
+
+The Apply route's OpenAPI now documents its actual 202 response; Apply itself
+is unchanged.
+
 ## CLI
 
 ```text
@@ -216,7 +312,26 @@ millrace-os router outputs publish --home NAME --file RECORD
 millrace-os router outputs list --home NAME --instance I --run R [--limit N] [--cursor C]
 millrace-os router outputs read --home NAME --instance I --run R --output O
     --record-sha256 S --representation report|json
+millrace-os router local-call --home NAME --request-id X
+millrace-os router draft manifest --home NAME --draft D [--limit N] [--cursor C]
+millrace-os router draft read-file --home NAME --draft D --path REL
+millrace-os router draft replace-files --home NAME --draft D --entry REL=FILE ...
+millrace-os router draft publication-status --home NAME --instance I --request-id X
+millrace-os router request ... [--observation v1|v2]
+millrace-os client inspect --kind KIND [--home NAME] [--contract-id C --digest S]
 ```
+
+`client inspect` reads one foundation surface and prints it unchanged:
+
+- **Kinds:** `health`, `identity`, `version`, `contracts`, `schema` (with
+  `--contract-id` and `--digest`), `diagnostics`, `providers`, `actions`,
+  `availability` (the single event), and `capabilities`.
+- **`observation`** (with `--home`): the observation contracts that home
+  offers.
+
+`--observation v2` asks for the call-v2 observation; without it the
+observation stays v1. `replace-files` replaces the whole draft with the given
+files.
 
 `router outputs publish` parses the saved record file strictly. A duplicate
 key, `NaN`/`Infinity` or invalid UTF-8 refuses locally before any request. The

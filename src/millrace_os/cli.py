@@ -58,6 +58,24 @@ PRESENTATION_MUTATIONS = frozenset(
     }
 )
 PRESENTATION_ROUTE = "/api/v1/client/presentation"
+# `client inspect --kind`: foundation reads, capabilities and observation.
+CLIENT_KINDS = {
+    "health": "/api/v1/health",
+    "identity": "/api/v1/identity",
+    "version": "/api/v1/version",
+    "contracts": "/api/v1/contracts",
+    "schema": "/api/v1/contracts/{contract_id}/1/{digest}",
+    "diagnostics": "/api/v1/diagnostics",
+    "providers": "/api/v1/providers",
+    "actions": "/api/v1/actions",
+    "availability": "/api/v1/events",
+    "capabilities": "/api/v1/client/capabilities",
+    "observation": "/api/v1/router/requests",
+}
+CALL_MEDIA_TYPES = {
+    "v1": "application/vnd.millrace.router-call.v1+json",
+    "v2": "application/vnd.millrace.router-call.v2+json",
+}
 
 
 class _PidFile:
@@ -101,6 +119,12 @@ def _parser() -> argparse.ArgumentParser:
         "--transport", choices=["stdio", "streamable-http"], default="stdio"
     )
     mcp_serve.add_argument("--config", required=True)
+    mcp_serve.add_argument(
+        "--tools",
+        choices=["v1", "v2"],
+        default="v1",
+        help="tool profile: v1 (default, unchanged) or the separate v2 profile",
+    )
     serve = subparsers.add_parser(
         "serve", help="start the local daemon in the foreground"
     )
@@ -144,6 +168,11 @@ def _parser() -> argparse.ArgumentParser:
                 action="store_true",
                 help="strict bounded observation; requires --instance",
             )
+            command.add_argument(
+                "--observation",
+                choices=("v1", "v2"),
+                help="select the call observation contract (default v1)",
+            )
         elif name == "validate":
             command.add_argument("--instance", required=True)
             command.add_argument("--run")
@@ -151,6 +180,10 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument(
                 "--summary", action="store_true", help="bounded validation summary"
             )
+    local = commands.add_parser("local-call", help="one retained OS-local call result")
+    _add_config_options(local)
+    local.add_argument("--home", required=True)
+    local.add_argument("--request-id", required=True)
     homes = commands.add_parser("homes", help="list configured state-home names")
     _add_config_options(homes)
     views = commands.add_parser("views", help="bounded Core inspection views")
@@ -202,22 +235,52 @@ def _parser() -> argparse.ArgumentParser:
     drafts = commands.add_parser("draft").add_subparsers(
         dest="draft_command", required=True
     )
-    for name in ("create", "read", "put", "validate", "apply", "repair-publication"):
+    for name in (
+        "create",
+        "read",
+        "put",
+        "replace-files",
+        "manifest",
+        "read-file",
+        "validate",
+        "apply",
+        "repair-publication",
+        "publication-status",
+    ):
         command = drafts.add_parser(name)
         _add_config_options(command)
         command.add_argument("--home", required=True)
-        if name not in {"create", "repair-publication"}:
+        if name not in {"create", "repair-publication", "publication-status"}:
             command.add_argument("--draft", required=True)
         if name == "put":
             command.add_argument("--path", required=True)
             command.add_argument("--file", required=True)
-        if name in {"validate", "apply", "repair-publication"}:
+        if name == "replace-files":
+            command.add_argument(
+                "--entry", action="append", required=True, metavar="REL=FILE"
+            )
+        if name == "manifest":
+            command.add_argument("--limit", type=int)
+            command.add_argument("--cursor")
+        if name == "read-file":
+            command.add_argument("--path", required=True)
+        if name in {"validate", "apply", "repair-publication", "publication-status"}:
             command.add_argument("--instance", required=True)
         if name in {"validate", "apply"}:
             command.add_argument("--run", required=name == "apply")
         if name == "apply":
             command.add_argument("--base-state-version", type=int, required=True)
+        if name in {"apply", "publication-status"}:
             command.add_argument("--request-id", required=True)
+    client = subparsers.add_parser(
+        "client", help="read OS client surfaces headlessly"
+    ).add_subparsers(dest="client_command", required=True)
+    inspect = client.add_parser("inspect", help="one foundation or capability read")
+    _add_config_options(inspect)
+    inspect.add_argument("--kind", required=True, choices=CLIENT_KINDS)
+    inspect.add_argument("--home", help="observation: the configured home")
+    inspect.add_argument("--contract-id", help="schema: the registry contract ID")
+    inspect.add_argument("--digest", help="schema: the registry SHA-256")
     presentation = subparsers.add_parser(
         "presentation", help="shared presentation preferences (display data only)"
     ).add_subparsers(dest="presentation_command", required=True)
@@ -428,6 +491,8 @@ def _router(args):
         )
     elif command == "instances":
         route += "/instances"
+    elif command == "local-call":
+        route += "/local-calls/" + urllib.parse.quote(args.request_id, safe="")
     elif command == "inspect":
         route += "/instances/" + urllib.parse.quote(args.instance, safe="")
         if args.run:
@@ -523,9 +588,33 @@ def _router(args):
                 route + "/repair-publication",
                 {"home": args.home, "instance_id": args.instance},
             )
+        elif action == "publication-status":
+            route += "/publications/" + urllib.parse.quote(args.instance, safe="")
+            query["request_id"] = args.request_id
         else:
             route += "/drafts/" + urllib.parse.quote(args.draft, safe="")
-            if action == "put":
+            if action == "replace-files":
+                files = []
+                for entry in args.entry:
+                    name, separator, path = entry.partition("=")
+                    if not separator or not name or not path:
+                        raise ConfigurationError("--entry takes REL=FILE")
+                    content = base64.b64encode(Path(path).read_bytes()).decode()
+                    files.append({"path": name, "content_base64": content})
+                # The 1 MiB route policy counts the API encoding: compact UTF-8.
+                method, route = "PUT", route + "/files"
+                raw = _compact({"home": args.home, "files": files})
+            elif action == "manifest":
+                route += "/manifest"
+                query.update(
+                    (key, value)
+                    for key, value in (("limit", args.limit), ("cursor", args.cursor))
+                    if value is not None
+                )
+            elif action == "read-file":
+                route += "/file"
+                query["path"] = args.path
+            elif action == "put":
                 method, route = "PUT", route + "/file"
                 body = {
                     "home": args.home,
@@ -551,6 +640,8 @@ def _router(args):
     token = CredentialStore(config.credential_path).ensure()
     endpoint = f"http://{_endpoint_host(config.host)}:{config.port}"
     headers = {"Authorization": "Bearer " + token}
+    if getattr(args, "observation", None):
+        headers["Accept"] = CALL_MEDIA_TYPES[args.observation]
     if body is not None:
         raw = json.dumps(body, allow_nan=False).encode()
     if raw is not None:
@@ -574,6 +665,36 @@ def _router(args):
     except (OSError, ValueError):
         print(json.dumps({"error": "router_observation_unavailable"}))
         return 1
+
+
+def _client(args):
+    """`client inspect`: one read printed as the service returned it."""
+    config = _config(args)
+    kind = args.kind
+    if (kind == "schema") != (args.contract_id is not None) or (
+        (kind == "schema") != (args.digest is not None)
+    ):
+        raise ConfigurationError("--contract-id and --digest belong to --kind schema")
+    if (kind == "observation") != (args.home is not None):
+        raise ConfigurationError("--home belongs to --kind observation")
+    route = CLIENT_KINDS[kind].format(
+        contract_id=urllib.parse.quote(args.contract_id or "", safe=""),
+        digest=urllib.parse.quote(args.digest or "", safe=""),
+    )
+    method = "GET"
+    if kind == "observation":
+        # The observation contracts this home offers (`OPTIONS`), not the
+        # client capability list (`--kind capabilities`).
+        method = "OPTIONS"
+        route += "?" + urllib.parse.urlencode({"home": args.home})
+    token = CredentialStore(config.credential_path).ensure()
+    try:
+        status, body = _local_call(config, token, method, route)
+    except OSError:
+        print(json.dumps({"error": "daemon_unavailable"}))
+        return 1
+    print(body.decode())
+    return 0 if 200 <= status < 300 else 1
 
 
 def _local_call(config, token, method, route, raw=None):
@@ -704,7 +825,10 @@ def main(argv: list[str] | None = None) -> int:
                 if sys.version_info[:2] not in {(3, 12), (3, 13)}:
                     raise ValueError("unsupported MCP profile")
                 from .mcp_bridge import serve
-                serve(args.config, args.transport)
+                if args.tools == "v1":
+                    serve(args.config, args.transport)
+                else:
+                    serve(args.config, args.transport, tools=args.tools)
                 return 0
             except (ImportError, ValueError, OSError):
                 print(json.dumps({
@@ -717,6 +841,8 @@ def main(argv: list[str] | None = None) -> int:
             return _router(args)
         if args.command == "presentation":
             return _presentation(args)
+        if args.command == "client":
+            return _client(args)
         if args.command == "serve":
             return _serve(args)
         if args.command in {"open", "rotate-credential"}:

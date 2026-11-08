@@ -26,12 +26,17 @@ from .contracts import (
     BootstrapNonce,
     CatalogCopyInput,
     CatalogInitInput,
+    ClientCapabilities,
+    ClientOperation,
     Diagnostics,
     DraftApplyInput,
     DraftCreateInput,
     DraftFile,
     DraftFileInput,
+    DraftFileQuery,
+    DraftFileRead,
     DraftFilesInput,
+    DraftManifest,
     DraftRead,
     DraftValidateInput,
     Error,
@@ -47,6 +52,7 @@ from .contracts import (
     PresentationState,
     PresentationWrite,
     ProviderInfo,
+    PublicationQuery,
     PublicationRepairInput,
     Read,
     Registry,
@@ -55,8 +61,10 @@ from .contracts import (
     RouterCallObservationV2,
     RouterHomeItem,
     RouterHomes,
+    RouterLocalCall,
     RouterLocalRead,
     RouterObservationCapabilities,
+    RouterPublication,
     RouterRead,
     RouterRequestInput,
     RouterValidateInput,
@@ -94,6 +102,102 @@ STRICT_BODY_ROUTES = frozenset(
 RETRYABLE_CODES = frozenset(
     {"router_busy", "router_read_busy", "publication_busy", "presentation_busy"}
 )
+ROUTER = "/api/v1/router"
+VIEWS = ROUTER + "/views/instances"
+RUN_OUTPUTS = ROUTER + "/outputs/instances/{instance_id}/runs/{run_id}"
+# OS-G0 7.1 headless operations: (operation_id, method, path, request contract,
+# response contract, lazily imported components). Availability reflects those
+# import checks only; actions.invoke never runs. Frontend/demo operations are
+# not part of this headless list.
+CLIENT_OPERATIONS = (
+    ("actions.invoke", "POST", "/api/v1/actions/{action_id}:invoke",
+     ActionInput, Error, None),
+    ("actions.list", "GET", "/api/v1/actions", None, Read[Page[ActionInfo]], ()),
+    ("client.capabilities.read", "GET", "/api/v1/client/capabilities",
+     None, ClientCapabilities, ()),
+    ("client.presentation.read", "GET", "/api/v1/client/presentation",
+     None, PresentationState, ()),
+    ("client.presentation.write", "PUT", "/api/v1/client/presentation",
+     PresentationWrite, PresentationState, ()),
+    ("contracts.read", "GET", "/api/v1/contracts", None, Read[Registry], ()),
+    ("contracts.schema.read", "GET",
+     "/api/v1/contracts/{contract_id}/{version}/{digest}", None, None, ()),
+    ("diagnostics.read", "GET", "/api/v1/diagnostics", None, Read[Diagnostics], ()),
+    ("events.availability", "GET", "/api/v1/events", None, Event, ()),
+    ("health.read", "GET", "/api/v1/health", None, Health, ()),
+    ("identity.read", "GET", "/api/v1/identity", None, Read[Identity], ()),
+    ("providers.list", "GET", "/api/v1/providers",
+     None, Read[Page[ProviderInfo]], ()),
+    ("router.catalog.copy", "POST", ROUTER + "/catalog/copy",
+     CatalogCopyInput, RouterLocalRead, ("catalog",)),
+    ("router.catalog.init", "POST", ROUTER + "/catalog/init",
+     CatalogInitInput, RouterLocalRead, ("catalog",)),
+    ("router.catalog.list", "GET", ROUTER + "/catalog/templates",
+     None, RouterLocalRead, ("catalog",)),
+    ("router.draft.apply", "POST", ROUTER + "/drafts/{draft_id}/apply",
+     DraftApplyInput, RouterLocalRead, ("control", "catalog")),
+    ("router.draft.create", "POST", ROUTER + "/drafts",
+     DraftCreateInput, DraftRead, ()),
+    ("router.draft.manifest", "GET", ROUTER + "/drafts/{draft_id}/manifest",
+     None, DraftManifest, ()),
+    ("router.draft.put_file", "PUT", ROUTER + "/drafts/{draft_id}/file",
+     DraftFileInput, DraftRead, ()),
+    ("router.draft.read", "GET", ROUTER + "/drafts/{draft_id}", None, DraftRead, ()),
+    ("router.draft.read_file", "GET", ROUTER + "/drafts/{draft_id}/file",
+     None, DraftFileRead, ()),
+    ("router.draft.replace_files", "PUT", ROUTER + "/drafts/{draft_id}/files",
+     DraftFilesInput, DraftRead, ()),
+    ("router.draft.validate", "POST", ROUTER + "/drafts/{draft_id}/validate",
+     DraftValidateInput, RouterRead[RouterValidation], ("control",)),
+    ("router.homes.list", "GET", ROUTER + "/homes", None, RouterHomes, ()),
+    ("router.instance.read", "GET", ROUTER + "/instances/{instance_id}",
+     None, RouterRead[JsonValue], ("control",)),
+    ("router.instances.read", "GET", ROUTER + "/instances",
+     None, RouterRead[JsonValue], ("control",)),
+    ("router.local_call.read", "GET", ROUTER + "/local-calls/{request_id}",
+     None, RouterLocalCall, ()),
+    ("router.outputs.list", "GET", RUN_OUTPUTS, None, WorkflowOutputs, ("views",)),
+    ("router.outputs.publish", "POST", ROUTER + "/outputs",
+     WorkflowOutputPublishInput, WorkflowOutputPublication,
+     ("views", "inspection")),
+    ("router.outputs.read", "GET", RUN_OUTPUTS + "/{output_id}",
+     None, WorkflowOutput, ("views",)),
+    ("router.publication.repair", "POST", ROUTER + "/repair-publication",
+     PublicationRepairInput, RouterLocalRead, ("control", "catalog")),
+    ("router.publication.status", "GET", ROUTER + "/publications/{instance_id}",
+     None, RouterPublication, ()),
+    ("router.request.capabilities", "OPTIONS", ROUTER + "/requests",
+     None, RouterObservationCapabilities, ()),
+    ("router.request.observe", "GET", ROUTER + "/requests/{request_id}",
+     None, RouterCallObservation, ("control",)),
+    ("router.request.submit", "POST", ROUTER + "/requests",
+     RouterRequestInput, RouterCallObservation, ("control",)),
+    ("router.run.read", "GET", ROUTER + "/instances/{instance_id}/runs/{run_id}",
+     None, RouterRead[JsonValue], ("control",)),
+    ("router.validate", "POST", ROUTER + "/validate",
+     RouterValidateInput, RouterRead[RouterValidation], ("control",)),
+    ("router.views.instance", "GET", VIEWS + "/{instance_id}",
+     None, RouterView, ("inspection",)),
+    ("router.views.instances", "GET", VIEWS, None, RouterView, ("inspection",)),
+    ("router.views.request", "GET", ROUTER + "/views/requests/{request_id}",
+     None, RouterCallObservation, ("inspection",)),
+    ("router.views.revision", "GET",
+     VIEWS + "/{instance_id}/runs/{run_id}/revisions/{revision_id}",
+     None, RouterView, ("inspection",)),
+    ("router.views.run", "GET", VIEWS + "/{instance_id}/runs/{run_id}",
+     None, RouterView, ("inspection",)),
+    ("router.views.validate", "POST", ROUTER + "/views/validate",
+     RouterViewValidateInput, RouterView, ("inspection",)),
+    ("version.read", "GET", "/api/v1/version", None, Read[Version], ()),
+)
+CallId = Annotated[str, Path(pattern=r"^[0-9a-f]{32}$", min_length=32, max_length=32)]
+
+
+def contract_id(model):
+    """The registry `contract_id` of a model (as `schema_artifacts` names it)."""
+    if model is None:
+        return None
+    return model.__name__.replace("[", "-").replace("]", "")
 
 
 def body_limit(path, method):
@@ -119,6 +223,15 @@ def _view_query(parts):
         if run:
             return frozenset({"home", "record_sha256", "representation"})
         return frozenset()
+    # Headless parity reads (M1): exact shapes only; anything else is legacy.
+    if len(parts) == 6 and parts[4] == "local-calls":
+        return frozenset({"home"})
+    if len(parts) == 6 and parts[4] == "publications":
+        return frozenset({"home", "request_id"})
+    if len(parts) == 7 and parts[4] == "drafts" and parts[6] == "manifest":
+        return frozenset({"home", "limit", "cursor"})
+    if len(parts) == 7 and parts[4] == "drafts" and parts[6] == "file":
+        return frozenset({"home", "path"})
     if parts[4] != "views":
         return None
     if parts[5:6] == ["requests"] and len(parts) == 7:
@@ -776,6 +889,100 @@ def configure_router_api(app, service):
         )
         return bounded(PresentationState.model_validate(state))
 
+    # Headless parity reads (M1). Each reads existing OS facts only: no Core
+    # fallback, no repair, replay or other side effect.
+    def requirement_reasons():
+        """Lazy import checks of the optional components; no store is read."""
+        reasons = {}
+        for name in ("control", "inspection", "views", "catalog"):
+            try:
+                getattr(service.router_client, "_" + name)()
+                reasons[name] = None
+            except RouterUnavailable as exc:
+                reasons[name] = exc.code
+        return reasons
+
+    @app.get("/api/v1/client/capabilities", response_model=ClientCapabilities)
+    async def client_capabilities():
+        reasons = await offload(requirement_reasons)
+        operations = []
+        for operation_id, method, path, request, response, needs in CLIENT_OPERATIONS:
+            reason = (
+                "action_unavailable"
+                if needs is None
+                else next((reasons[n] for n in needs if reasons[n]), None)
+            )
+            operations.append(
+                ClientOperation(
+                    operation_id=operation_id,
+                    method=method,
+                    path=path,
+                    request_contract=contract_id(request),
+                    response_contract=contract_id(response),
+                    available=reason is None,
+                    reason=reason,
+                )
+            )
+        operations.sort(key=lambda item: item.operation_id)
+        return bounded(
+            ClientCapabilities(
+                operations=operations, observed_at=datetime.now(UTC).isoformat()
+            )
+        )
+
+    @app.get(
+        "/api/v1/router/local-calls/{request_id}",
+        response_model=RouterLocalCall,
+        responses={202: {"model": RouterLocalCall}},
+    )
+    async def router_local_call(request_id: CallId, home: Identifier):
+        snapshot = service.router_workers.local_call(home, request_id)
+        active = snapshot["phase"] in {"admission_pending", "call_active"}
+        return bounded(
+            RouterLocalCall(observed_at=datetime.now(UTC).isoformat(), **snapshot),
+            status_code=202 if active else 200,
+        )
+
+    @app.get(
+        "/api/v1/router/publications/{instance_id}", response_model=RouterPublication
+    )
+    async def publication_status(
+        instance_id: Identifier, query: Annotated[PublicationQuery, Query()]
+    ):
+        result = await offload(
+            service.workflow_drafts.publication_status,
+            query.home,
+            instance_id,
+            query.request_id,
+        )
+        return bounded(
+            RouterPublication(observed_at=datetime.now(UTC).isoformat(), **result)
+        )
+
+    @app.get("/api/v1/router/drafts/{draft_id}/manifest", response_model=DraftManifest)
+    async def draft_manifest(
+        draft_id: Identifier, query: Annotated[ViewPageQuery, Query()]
+    ):
+        page = await offload(
+            service.workflow_drafts.manifest,
+            query.home,
+            draft_id,
+            limit=query.limit,
+            cursor=query.cursor,
+        )
+        return bounded(DraftManifest(observed_at=datetime.now(UTC).isoformat(), **page))
+
+    @app.get("/api/v1/router/drafts/{draft_id}/file", response_model=DraftFileRead)
+    async def draft_read_file(
+        draft_id: Identifier, query: Annotated[DraftFileQuery, Query()]
+    ):
+        result = await offload(
+            service.workflow_drafts.read_file, query.home, draft_id, query.path
+        )
+        return bounded(
+            DraftFileRead(observed_at=datetime.now(UTC).isoformat(), **result)
+        )
+
     def observation_version(accept):
         selected = ", ".join(accept or []).strip()
         if selected == CALL_V2_MEDIA_TYPE:
@@ -1001,7 +1208,11 @@ def configure_router_api(app, service):
         RouterValidation.model_validate(data)
         return core_read(body.home, data)
 
-    @app.post("/api/v1/router/drafts/{draft_id}/apply", response_model=RouterLocalRead)
+    @app.post(
+        "/api/v1/router/drafts/{draft_id}/apply",
+        response_model=RouterLocalRead,
+        responses={202: {"model": RouterLocalRead}},
+    )
     async def draft_apply(draft_id: Identifier, body: DraftApplyInput):
         return await local_call(
             body.home,
