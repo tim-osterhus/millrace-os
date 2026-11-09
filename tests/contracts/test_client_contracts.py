@@ -543,7 +543,7 @@ def test_openapi_documents_parity_reads_and_the_apply_202(tmp_path):
         "DraftManifest",
         "DraftFileRead",
     } <= names
-    assert len(names) == 58
+    assert len(names) == 60
 
 
 def run_cli(monkeypatch, tmp_path, *argv):

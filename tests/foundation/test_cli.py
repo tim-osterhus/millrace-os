@@ -169,3 +169,91 @@ def test_router_cli_preserves_saved_envelope_and_disables_proxy_redirects(
     output = capsys.readouterr().out
     assert token not in output and json.loads(output)["core_receipt"] is None
     assert json.loads(saved.read_text()) == envelope
+
+
+def _fake_trust(monkeypatch, opened: list[str], requests: list | None = None):
+    nonce = "n" * 43
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self, limit):
+            return json.dumps({"nonce": nonce, "expires_in": 60}).encode()
+
+    class Opener:
+        def open(self, request, timeout):
+            if requests is None:
+                raise AssertionError("an invalid target must not contact the service")
+            requests.append(request)
+            return Response()
+
+    monkeypatch.setattr(
+        "millrace_os.cli.urllib.request.build_opener", lambda *handlers: Opener()
+    )
+    monkeypatch.setattr(
+        "millrace_os.cli.webbrowser.open", lambda url: opened.append(url) or True
+    )
+    return nonce
+
+
+def _open_args(tmp_path, *extra: str) -> list[str]:
+    return [
+        "open",
+        *extra,
+        "--config-dir",
+        str(tmp_path / "config"),
+        "--state-dir",
+        str(tmp_path / "state"),
+    ]
+
+
+def test_open_targets_the_exact_stock_base_and_keeps_the_nonce_in_the_fragment(
+    monkeypatch, tmp_path, capsys
+):
+    instance, run = "a" * 32, "b" * 32
+    cases = [
+        ((), "/ui/stock/"),
+        (("--home", "main"), "/ui/stock/?home=main"),
+        (
+            ("--home", "main", "--instance", instance),
+            f"/ui/stock/?home=main&instance={instance}",
+        ),
+        (
+            ("--home", "main", "--instance", instance, "--run", run),
+            f"/ui/stock/?home=main&instance={instance}&run={run}",
+        ),
+        (("--recovery",), "/recovery"),
+    ]
+    for extra, path in cases:
+        opened, requests = [], []
+        nonce = _fake_trust(monkeypatch, opened, requests)
+        assert main(_open_args(tmp_path, *extra)) == 0
+        assert opened == ["http://127.0.0.1:8731" + path + "#" + nonce]
+        assert requests[0].full_url == "http://127.0.0.1:8731/api/v1/auth/bootstrap"
+        assert json.loads(requests[0].data) == {"recovery": extra == ("--recovery",)}
+        output = capsys.readouterr().out
+        assert json.loads(output) == {"status": "browser_opened"}
+        assert nonce not in output
+
+
+def test_open_refuses_invalid_targets_before_contacting_the_service(
+    monkeypatch, tmp_path, capsys
+):
+    instance = "a" * 32
+    for extra in (
+        ("--instance", instance),
+        ("--home", "main", "--run", instance),
+        ("--home=-bad",),
+        ("--home", "main", "--instance", "ABC"),
+        ("--recovery", "--home", "main"),
+        ("--recovery", "--home", "main", "--instance", instance),
+    ):
+        opened: list[str] = []
+        _fake_trust(monkeypatch, opened)
+        assert main(_open_args(tmp_path, *extra)) == 2
+        assert opened == []
+        assert json.loads(capsys.readouterr().out) == {"error": "invalid_target"}

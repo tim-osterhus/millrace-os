@@ -48,11 +48,18 @@ class ProviderProcessBoundary(Protocol):
     """Marker boundary; service shutdown never owns this process lifecycle."""
 
 
+class DemoContextPending(Exception):
+    """Raised by a present demo context reader whose target is not yet bound."""
+
+
 @dataclass(slots=True)
 class ServiceDependencies:
     provider_processes: ProviderProcessBoundary | None = None
     state_factory: Callable[[Path], SQLiteState] = SQLiteState.open
     router_client: object | None = None
+    # Fixed before app creation by a private demo owner only. None means an
+    # ordinary service: `/api/v1/demo/context` answers `demo_context_unavailable`.
+    demo_context_reader: Callable[[], dict[str, object]] | None = None
 
 
 def _public_liveness(service: Service) -> tuple[dict[str, str], int]:

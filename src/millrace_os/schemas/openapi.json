@@ -277,6 +277,107 @@
         "title": "ClientOperation",
         "type": "object"
       },
+      "DemoContext": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted_output_refs": {
+            "items": {
+              "$ref": "#/components/schemas/DemoOutputRef"
+            },
+            "title": "Accepted Output Refs",
+            "type": "array"
+          },
+          "finish_available": {
+            "title": "Finish Available",
+            "type": "boolean"
+          },
+          "format": {
+            "const": "millrace-os-demo-context/v1",
+            "title": "Format",
+            "type": "string"
+          },
+          "home": {
+            "const": "demo",
+            "title": "Home",
+            "type": "string"
+          },
+          "instance_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "output_error": {
+            "anyOf": [
+              {
+                "maxLength": 96,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Error"
+          },
+          "run_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "format",
+          "home",
+          "instance_id",
+          "run_id",
+          "finish_available",
+          "accepted_output_refs",
+          "output_error"
+        ],
+        "title": "DemoContext",
+        "type": "object"
+      },
+      "DemoOutputRef": {
+        "additionalProperties": false,
+        "properties": {
+          "json_sha256": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Json Sha256"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/OutputReference"
+          },
+          "report_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Report Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference",
+          "report_sha256",
+          "json_sha256"
+        ],
+        "title": "DemoOutputRef",
+        "type": "object"
+      },
       "Diagnostics": {
         "additionalProperties": false,
         "properties": {
@@ -3257,6 +3358,37 @@
         "title": "SchemaEntry",
         "type": "object"
       },
+      "SessionContext": {
+        "additionalProperties": false,
+        "description": "The existing session's lexical CSRF for a reloaded browser page.\n\n`expires_in` is the ceiling of the remaining lifetime; it never renews the\nsession and is never zero.",
+        "properties": {
+          "contract": {
+            "const": "os.session-context.v1",
+            "default": "os.session-context.v1",
+            "title": "Contract",
+            "type": "string"
+          },
+          "csrf": {
+            "maxLength": 64,
+            "minLength": 43,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Csrf",
+            "type": "string"
+          },
+          "expires_in": {
+            "maximum": 900.0,
+            "minimum": 1.0,
+            "title": "Expires In",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "csrf",
+          "expires_in"
+        ],
+        "title": "SessionContext",
+        "type": "object"
+      },
       "SessionOutput": {
         "additionalProperties": false,
         "properties": {
@@ -4396,6 +4528,145 @@
         "summary": "Rotate"
       }
     },
+    "/api/v1/auth/session-context": {
+      "get": {
+        "operationId": "session_context_api_v1_auth_session_context_get",
+        "parameters": [
+          {
+            "description": "Exactly 1.",
+            "in": "header",
+            "name": "X-Millrace-Session-Context",
+            "required": true,
+            "schema": {
+              "enum": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exactly same-origin, sent by the browser.",
+            "in": "header",
+            "name": "Sec-Fetch-Site",
+            "required": true,
+            "schema": {
+              "enum": [
+                "same-origin"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionContext"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Session Context"
+      }
+    },
     "/api/v1/client/capabilities": {
       "get": {
         "operationId": "client_capabilities_api_v1_client_capabilities_get",
@@ -5040,6 +5311,122 @@
           }
         ],
         "summary": "Schema"
+      }
+    },
+    "/api/v1/demo/context": {
+      "get": {
+        "operationId": "demo_context_api_v1_demo_context_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoContext"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Demo Context"
       }
     },
     "/api/v1/diagnostics": {

@@ -335,6 +335,152 @@
     "title": "ClientCapabilities",
     "type": "object"
   },
+  "DemoContext": {
+    "$defs": {
+      "DemoOutputRef": {
+        "additionalProperties": false,
+        "properties": {
+          "json_sha256": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Json Sha256"
+          },
+          "reference": {
+            "$ref": "#/$defs/OutputReference"
+          },
+          "report_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Report Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference",
+          "report_sha256",
+          "json_sha256"
+        ],
+        "title": "DemoOutputRef",
+        "type": "object"
+      },
+      "OutputReference": {
+        "additionalProperties": false,
+        "properties": {
+          "instance_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "output_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$",
+            "title": "Output Id",
+            "type": "string"
+          },
+          "record_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Record Sha256",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id",
+          "run_id",
+          "output_id",
+          "record_sha256"
+        ],
+        "title": "OutputReference",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:DemoContext:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "accepted_output_refs": {
+        "items": {
+          "$ref": "#/$defs/DemoOutputRef"
+        },
+        "title": "Accepted Output Refs",
+        "type": "array"
+      },
+      "finish_available": {
+        "title": "Finish Available",
+        "type": "boolean"
+      },
+      "format": {
+        "const": "millrace-os-demo-context/v1",
+        "title": "Format",
+        "type": "string"
+      },
+      "home": {
+        "const": "demo",
+        "title": "Home",
+        "type": "string"
+      },
+      "instance_id": {
+        "maxLength": 32,
+        "minLength": 32,
+        "pattern": "^[0-9a-f]{32}$",
+        "title": "Instance Id",
+        "type": "string"
+      },
+      "output_error": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Output Error"
+      },
+      "run_id": {
+        "maxLength": 32,
+        "minLength": 32,
+        "pattern": "^[0-9a-f]{32}$",
+        "title": "Run Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "format",
+      "home",
+      "instance_id",
+      "run_id",
+      "finish_available",
+      "accepted_output_refs",
+      "output_error"
+    ],
+    "title": "DemoContext",
+    "type": "object"
+  },
   "Diagnostics": {
     "$id": "urn:millrace-os:Diagnostics:1",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -4058,6 +4204,39 @@
       "instance_id"
     ],
     "title": "RouterViewValidateInput",
+    "type": "object"
+  },
+  "SessionContext": {
+    "$id": "urn:millrace-os:SessionContext:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "The existing session's lexical CSRF for a reloaded browser page.\n\n`expires_in` is the ceiling of the remaining lifetime; it never renews the\nsession and is never zero.",
+    "properties": {
+      "contract": {
+        "const": "os.session-context.v1",
+        "default": "os.session-context.v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "csrf": {
+        "maxLength": 64,
+        "minLength": 43,
+        "pattern": "^[A-Za-z0-9_-]+$",
+        "title": "Csrf",
+        "type": "string"
+      },
+      "expires_in": {
+        "maximum": 900,
+        "minimum": 1,
+        "title": "Expires In",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "csrf",
+      "expires_in"
+    ],
+    "title": "SessionContext",
     "type": "object"
   },
   "SessionOutput": {

@@ -173,6 +173,18 @@ class SessionOutput(Contract):
     expires_in: Literal[900] = 900
 
 
+class SessionContext(Contract):
+    """The existing session's lexical CSRF for a reloaded browser page.
+
+    `expires_in` is the ceiling of the remaining lifetime; it never renews the
+    session and is never zero.
+    """
+
+    contract: Literal["os.session-context.v1"] = "os.session-context.v1"
+    csrf: Secret
+    expires_in: Annotated[int, Field(ge=1, le=900)]
+
+
 class Rotation(Contract):
     status: Literal["rotated"] = "rotated"
 
@@ -553,6 +565,24 @@ class WorkflowOutput(Contract):
     representation: OutputRepresentation
 
 
+# Private demo context (UI2 owns the shape; the demo coordinator supplies it).
+# An ordinary service has no reader and answers `demo_context_unavailable`.
+class DemoOutputRef(Contract):
+    reference: OutputReference
+    report_sha256: Sha256
+    json_sha256: Sha256 | None
+
+
+class DemoContext(Contract):
+    format: Literal["millrace-os-demo-context/v1"]
+    home: Literal["demo"]
+    instance_id: CoreId
+    run_id: CoreId
+    finish_available: bool
+    accepted_output_refs: list[DemoOutputRef]
+    output_error: Identifier | None
+
+
 # Shared presentation preferences (P1): display data in the OS configuration
 # directory, never execution authority. `presentation.py` owns the store rules
 # (ordering, uniqueness, references, stock payloads); these strict shapes
@@ -801,6 +831,8 @@ MODELS = [
     BootstrapNonce,
     ExchangeInput,
     SessionOutput,
+    SessionContext,
+    DemoContext,
     Rotation,
     Registry,
     Read[Version],

@@ -13,8 +13,13 @@ stay in the browser.
 
 The store is available headlessly through `GET`/`PUT
 /api/v1/client/presentation` and the `millrace-os presentation` CLI. Both use
-the store and helpers in `millrace_os.presentation`, described below. No
-browser dashboard that uses these preferences ships with this release.
+the store and helpers in `millrace_os.presentation`, described below. The stock
+browser client (`dashboard.md`) reads the store after authentication and writes
+it only on an explicit save, rename, duplicate, delete, default, reset or import
+action, with the same expected-version check. It copies other frontends'
+namespaces back byte-for-byte. When the store is absent, unreadable or newer, or
+the service cannot be reached, it shows Precision in memory with the reason and
+writes nothing. Browser storage holds no presentation data.
 
 ## Store
 

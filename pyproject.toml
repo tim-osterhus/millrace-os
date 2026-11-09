@@ -8,8 +8,8 @@ version = "0.23.1"
 description = "A local headless service for independent Millrace workflow instances."
 readme = "README.md"
 requires-python = ">=3.12"
-license = "Apache-2.0"
-license-files = ["LICENSE"]
+license = "Apache-2.0 AND BSD-3-Clause AND ISC AND MIT"
+license-files = ["LICENSE", "src/millrace_os/assets/dashboard/THIRD_PARTY_NOTICES.txt"]
 authors = [{ name = "Millrace" }]
 dependencies = [
     "fastapi==0.116.1",
@@ -21,7 +21,7 @@ dependencies = [
 mcp = ["mcp==1.30.0; python_version < '3.14'", "PyJWT[crypto]>=2.10.1; python_version < '3.14'"]
 router = ["millrace-plus[router]>=0.23.1,<0.24.0"]
 dev = ["pytest==9.0.2", "ruff==0.14.14", "httpx==0.28.1"]
-browser = ["playwright==1.55.0"]
+browser = ["playwright==1.63.0"]
 
 [project.scripts]
 millrace-os = "millrace_os.cli:main"
@@ -34,8 +34,20 @@ environments = ["python_version < '3.14'", "python_version >= '3.14'"]
 [tool.uv.build-backend]
 module-root = "src"
 module-name = "millrace_os"
-source-include = ["docs/**", "tests/**", "uv.lock"]
-source-exclude = ["/.github", "/.gitignore", "/dist", "/.venv", "__pycache__", "*.pyc", ".DS_Store"]
+source-include = ["docs/**", "tests/**", "uv.lock", "frontend/**", "scripts/export_dashboard.py"]
+source-exclude = [
+    "/.github",
+    "/.gitignore",
+    "/dist",
+    "/.venv",
+    "__pycache__",
+    "*.pyc",
+    ".DS_Store",
+    # Maintainer build staging and dependencies never ship; the closure is prebuilt.
+    "frontend/node_modules",
+    "frontend/dist",
+    "*.map",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

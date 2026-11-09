@@ -6,8 +6,11 @@ The retained foundation implements local trust and OS-owned version-one contract
 read that explicitly configured credential file and send `Authorization: Bearer
 <token>` over the configured loopback endpoint. File possession is not an HTTP
 session. `millrace-os open` authenticates an HTTP nonce-mint request and opens the
-browser with the nonce only in the fragment. `open --recovery` requests a separate
-recovery nonce and opens `/recovery`. No nonce is printed by the CLI. The service
+stock browser client at `/ui/stock/` with the nonce only in the fragment.
+`open --home NAME [--instance ID [--run ID]]` opens that exact target; the CLI
+validates the target before any request. `open --recovery` requests a separate
+recovery nonce and opens `/recovery`; it accepts no target. No nonce is printed
+by the CLI. The service
 must be running at the configured host and port; the CLI does not follow redirects
 or use HTTP proxies for credential-bearing requests.
 
@@ -22,6 +25,17 @@ bearer requests. Minting and rotation require bearer authentication. CORS is
 absent, Host is checked against bind configuration, and forwarded headers do not
 select the trusted origin. Aliases such as localhost and 127.0.0.1 are distinct.
 
+A reloaded page has no nonce. It restores the same session's CSRF value with
+`GET /api/v1/auth/session-context`, which returns `{contract:
+"os.session-context.v1", csrf, expires_in}`. The read accepts only cookie
+authentication (a bearer gets 403 `session_required`; a recovery session gets 403
+`recovery_session_only`) and requires both `X-Millrace-Session-Context: 1` and
+`Sec-Fetch-Site: same-origin`, else 403 `session_context_forbidden`. It refuses any
+query, sets no cookie and never renews the session: `expires_in` is the ceiling
+of the remaining lifetime, from 1 to 900, and a session with no remaining time
+answers 401. A browser that does not send Fetch Metadata needs a fresh `open`.
+See `dashboard.md` for the browser client contract.
+
 Nonces use 256 bits of randomness, expire after 60 seconds, and are single use.
 At most 32 outstanding nonces and 16 sessions exist. Expiry is monotonic; capacity
 refuses with 429. `millrace-os rotate-credential` uses an authenticated local POST,
@@ -31,10 +45,10 @@ there is no offline fallback that leaves its in-memory bearer valid.
 
 The package-owned recovery bundle consists of `assets/recovery.html` and the
 separate `recovery/bootstrap.js` resource. The recovery-owned script is served at
-`/recovery/bootstrap.js`; the normal landing page uses its own
-`assets/bootstrap.js` at `/assets/bootstrap.js`. Recovery does not load that
-normal asset, `/`, normal HTML, preferences, operational SQLite or lower providers.
-Missing normal landing HTML returns 503. The recovery shell itself returns 200;
+`/recovery/bootstrap.js`. Recovery does not load the stock client's closure under
+`assets/dashboard/`, normal HTML, preferences, operational SQLite or lower
+providers. A missing or changed stock closure makes `/ui/stock/` answer 503
+`frontend_unavailable` while recovery keeps working. The recovery shell itself returns 200;
 public readiness returns 503 if storage is unsafe. Authenticated recovery
 `diagnostics` returns 200 with a bounded error code and no raw exception, path,
 credential or state content. A recovery-scoped session cannot access normal API
@@ -45,8 +59,12 @@ receipt rewriting or lower-state mutation endpoint exists in this packet.
 ## Route contract
 
 Only `/health`, `/ready` and `/api/v1/health` expose the public minimal
-`{"status":"ok"|"unavailable"}`. HTML and script routes expose static bootstrap
-assets only. Every other data route requires bearer or cookie authentication.
+`{"status":"ok"|"unavailable"}`. The public static routes are the exact stock
+shell `/ui/stock/`, its manifest-listed assets `/ui/stock/{path}`, the recovery
+shell and script, and 303 redirects from `/`, `/ui/stock` and the
+`/instances/...` forms to `/ui/stock/` plus the validated `home`, `instance` and
+`run` query. None of them carries operational data. Every other data route
+requires bearer or cookie authentication.
 
 - `GET /api/v1/version`, `/diagnostics`, `/identity` and `/contracts`: typed read
   envelopes with OS authority, observation time, redaction and foundation-only
@@ -69,6 +87,12 @@ assets only. Every other data route requires bearer or cookie authentication.
 - `POST /api/v1/auth/bootstrap`, `/auth/exchange`, `/auth/rotate`: bounded typed trust
   inputs and outputs. Rotation returns only status. Exchange needs exact Origin.
 - `GET /api/v1/recovery/diagnostics`: authenticated, redacted, storage-independent.
+- `GET /api/v1/auth/session-context`: the cookie-only reload read described above.
+- `GET /api/v1/demo/context`: authenticated, no query. An ordinary service answers
+  404 `demo_context_unavailable`; only that typed 404 establishes an ordinary
+  service. A private owned-demo service answers its strict
+  `millrace-os-demo-context/v1` record, 503 `demo_context_pending` while its target
+  is unbound, or a sanitized 503 `demo_context_failed`.
 
 Documented router GET routes additionally accept exact home/target query keys. Unknown or duplicate router query keys are refused. JSON mutations are capped at 4096 bytes, including chunked bodies, and require application/json. Only exact router draft file-set/per-file PUT uploads permit 1 MiB of encoded JSON. Auth/Origin checks happen
 before input validation or handlers. Unknown input fields are forbidden. Public

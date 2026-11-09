@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import importlib.util
+import re
 import tomllib
 from importlib.resources import files
 from pathlib import Path
+
+import pytest
 
 
 def test_migration_is_package_data_for_wheel_install() -> None:
@@ -145,3 +149,124 @@ def test_mcp_is_explicit_optional_and_has_dedicated_schemas() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_stock_dashboard_closure_is_exact_package_data() -> None:
+    import hashlib
+    import json
+
+    from millrace_os.frontend import MANIFEST_NAME
+
+    dashboard = files("millrace_os").joinpath("assets", "dashboard")
+    manifest = json.loads(dashboard.joinpath(MANIFEST_NAME).read_bytes())
+    listed = {item["path"]: item["sha256"] for item in manifest["assets"]}
+    assert {"index.html", "THIRD_PARTY_NOTICES.txt", "dependency-inventory.json"} <= (
+        set(listed)
+    )
+    for path, digest in listed.items():
+        content = dashboard.joinpath(*path.split("/")).read_bytes()
+        assert hashlib.sha256(content).hexdigest() == digest, path
+        assert not path.endswith(".map")
+    inventory = json.loads(dashboard.joinpath("dependency-inventory.json").read_bytes())
+    assert inventory["format"] == "millrace-os-dependency-inventory/v1"
+    notices = dashboard.joinpath("THIRD_PARTY_NOTICES.txt").read_text()
+    for package in inventory["bundled"]:
+        assert f"{package['name']}@{package['version']}" in notices
+    assert not files("millrace_os").joinpath("assets", "bootstrap.js").is_file()
+    assert not files("millrace_os").joinpath("assets", "bootstrap.html").is_file()
+    assert files("millrace_os.recovery").joinpath("bootstrap.js").is_file()
+    assert files("millrace_os").joinpath("assets", "recovery.html").is_file()
+
+
+def test_frontend_sources_ship_in_the_sdist_without_node_artifacts() -> None:
+    root = Path(__file__).parents[2]
+    backend = tomllib.loads((root / "pyproject.toml").read_text())["tool"]["uv"][
+        "build-backend"
+    ]
+    assert {"frontend/**", "scripts/export_dashboard.py"} <= set(
+        backend["source-include"]
+    )
+    assert {"frontend/node_modules", "frontend/dist", "*.map"} <= set(
+        backend["source-exclude"]
+    )
+    package = (root / "frontend" / "package.json").read_text()
+    assert '"private": true' in package
+
+
+def test_browser_lane_pins_the_playwright_driver_of_its_chromium_build() -> None:
+    project = tomllib.loads((Path(__file__).parents[2] / "pyproject.toml").read_text())
+    assert project["project"]["optional-dependencies"]["browser"] == [
+        "playwright==1.63.0"
+    ]
+
+
+def _exporter():
+    """The maintainer exporter, loaded from its file; it imports no product."""
+    path = Path(__file__).parents[2] / "scripts" / "export_dashboard.py"
+    spec = importlib.util.spec_from_file_location("export_dashboard", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+CLOSURE = [
+    "assets/graph-b.css",
+    "assets/graph-b.js",
+    "assets/index-a.css",
+    "assets/index-a.js",
+]
+
+
+def _chunk(name: str, *lengths: object) -> dict:
+    modules = [
+        {"id": f"/f/src/{index}.ts", "renderedLength": length}
+        for index, length in enumerate(lengths)
+    ]
+    return {"fileName": name, "modules": modules}
+
+
+def _record(*chunks: object) -> dict:
+    return {"format": "millrace-os-module-closure/v1", "chunks": list(chunks)}
+
+
+GRAPH = _chunk("assets/graph-b.js", 0, 12)
+INDEX = _chunk("assets/index-a.js", 40)
+
+
+def test_exporter_accepts_records_covering_each_emitted_js_chunk_once() -> None:
+    record = _record(GRAPH, INDEX)
+    assert _exporter()._chunks(record, CLOSURE) == [GRAPH, INDEX]
+
+
+@pytest.mark.parametrize(
+    ("chunks", "refusal"),
+    [
+        ([], "missing ['assets/graph-b.js', 'assets/index-a.js'], extra []"),
+        ([INDEX], "missing ['assets/graph-b.js'], extra []"),
+        ([GRAPH, INDEX, INDEX], "duplicate ['assets/index-a.js']"),
+        ([GRAPH, INDEX, _chunk("assets/x.js", 3)], "extra ['assets/x.js']"),
+        ([GRAPH, _chunk("assets/graph-b.css", 3)], "extra ['assets/graph-b.css']"),
+        ([GRAPH, _chunk("assets/index-a.js", 0, 0)], "records no emitted module"),
+        ([GRAPH, _chunk("assets/index-a.js")], "records no emitted module"),
+        ([GRAPH, {"fileName": "assets/index-a.js"}], "malformed chunk"),
+        ([GRAPH, "assets/index-a.js"], "malformed chunk"),
+        ([GRAPH, _chunk("assets/index-a.js", True)], "malformed module record"),
+        ([GRAPH, _chunk("assets/index-a.js", -1)], "malformed module record"),
+        ([GRAPH, _chunk("assets/index-a.js", 2.0)], "malformed module record"),
+    ],
+)
+def test_exporter_refuses_records_that_miss_or_misstate_the_js_closure(
+    chunks: list, refusal: str
+) -> None:
+    exporter = _exporter()
+    with pytest.raises(exporter.ExportError, match=re.escape(refusal)):
+        exporter._chunks(_record(*chunks), CLOSURE)
+
+
+def test_exporter_never_derives_notices_from_an_empty_module_record() -> None:
+    exporter = _exporter()
+    with pytest.raises(exporter.ExportError, match="does not cover"):
+        exporter._inventory(_record(), CLOSURE, {}, b"")
+    with pytest.raises(exporter.ExportError, match="unknown format"):
+        exporter._inventory({"chunks": [GRAPH, INDEX]}, CLOSURE, {}, b"")

@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .config import ApplicationConfig, ConfigurationError, _endpoint_host
 from .credentials import CredentialStore
+from .frontend import FrontendError, shell_location, shell_target
 from .process import (
     ProcessIdentity,
     ProcessIdentityError,
@@ -139,6 +140,9 @@ def _parser() -> argparse.ArgumentParser:
     browser = subparsers.add_parser("open", help="authenticate a local browser")
     _add_config_options(browser)
     browser.add_argument("--recovery", action="store_true")
+    browser.add_argument("--home", metavar="NAME")
+    browser.add_argument("--instance", metavar="ID")
+    browser.add_argument("--run", metavar="ID")
     rotate = subparsers.add_parser(
         "rotate-credential", help="rotate credential and revoke browser trust"
     )
@@ -397,7 +401,34 @@ def _query(args: argparse.Namespace) -> int:
         return 1
 
 
+def _open_path(args: argparse.Namespace) -> str:
+    """The exact shell route for `open`, validated before any request."""
+    target = [
+        (key, value)
+        for key, value in (
+            ("home", args.home),
+            ("instance", args.instance),
+            ("run", args.run),
+        )
+        if value is not None
+    ]
+    if args.recovery:
+        if target:
+            raise FrontendError("invalid_target", 2)
+        return "/recovery"
+    try:
+        return shell_location(shell_target(target))
+    except FrontendError as error:
+        raise FrontendError("invalid_target", 2) from error
+
+
 def _trust_command(args: argparse.Namespace) -> int:
+    if args.command == "open":
+        try:
+            path = _open_path(args)
+        except FrontendError as error:
+            print(json.dumps({"error": error.code}))
+            return 2
     config = _config(args)
     # Explicitly configured local credential is used only in the request header.
     token = CredentialStore(config.credential_path).ensure()
@@ -424,7 +455,7 @@ def _trust_command(args: argparse.Namespace) -> int:
         with opener.open(request, timeout=5) as response:
             payload = json.loads(response.read(4096))
         if args.command == "open":
-            path = "/recovery" if recovery else "/"
+            # The nonce rides only in the fragment, after the exact base/query.
             if not webbrowser.open(endpoint + path + "#" + payload["nonce"]):
                 print(json.dumps({"error": "browser_unavailable"}))
                 return 1

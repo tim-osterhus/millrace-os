@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import math
 import secrets
 import uuid
 from datetime import UTC, datetime
@@ -13,10 +14,17 @@ from typing import Annotated, Literal
 
 from fastapi import FastAPI, Header, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import JsonValue
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
+from pydantic import JsonValue, ValidationError
 from starlette.exceptions import HTTPException
 
+from . import frontend
 from .auth import COOKIE, SESSION_TTL, TrustError
 from .config import _endpoint_host
 from .contracts import (
@@ -28,6 +36,7 @@ from .contracts import (
     CatalogInitInput,
     ClientCapabilities,
     ClientOperation,
+    DemoContext,
     Diagnostics,
     DraftApplyInput,
     DraftCreateInput,
@@ -72,6 +81,7 @@ from .contracts import (
     RouterView,
     RouterViewValidateInput,
     RunViewQuery,
+    SessionContext,
     SessionOutput,
     Version,
     ViewPageQuery,
@@ -86,6 +96,7 @@ from .contracts import (
 from .paths import UnsafePathError
 from .presentation import PresentationError, read_state, write_state
 from .router_client import RouterUnavailable
+from .service import DemoContextPending
 
 DEFAULT_BODY_LIMIT = 4096
 DRAFT_UPLOAD_LIMIT = 1048576
@@ -99,6 +110,12 @@ PAGE_QUERY_PATHS = frozenset({"/api/v1/providers", "/api/v1/actions"})
 STRICT_BODY_ROUTES = frozenset(
     {("POST", "/api/v1/router/outputs"), ("PUT", "/api/v1/client/presentation")}
 )
+# Every response except the exact shell bases keeps this policy unchanged.
+DEFAULT_CSP = (
+    "default-src 'none'; script-src 'self'; connect-src 'self'; "
+    "base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+)
+DEMO_CONTEXT_LIMIT = 4096
 RETRYABLE_CODES = frozenset(
     {"router_busy", "router_read_busy", "publication_busy", "presentation_busy"}
 )
@@ -257,6 +274,9 @@ def query_allowlist(path, method):
     """
     if path in PAGE_QUERY_PATHS:
         return None
+    shell = frontend.query_keys(path)
+    if shell is not None and method == "GET":
+        return shell  # values are validated by the shell/redirect handlers
     if path == "/api/v1/router/requests" and method == "OPTIONS":
         return frozenset({"home"})  # and exactly once; see `trust_boundary`
     if not path.startswith("/api/v1/router/") or method != "GET":
@@ -318,15 +338,21 @@ def configure_api(app: FastAPI, service):
             if supplied_origin is not None and supplied_origin != expected:
                 raise TrustError("wrong_origin", 403)
             path = request.url.path
-            public = path in {
-                "/",
-                "/recovery",
-                "/assets/bootstrap.js",
-                "/recovery/bootstrap.js",
-                "/health",
-                "/ready",
-                "/api/v1/health",
-            }
+            # Static shells, manifest assets and redirects carry no operational
+            # data; every API read behind them keeps its own authentication.
+            public = (
+                path
+                in {
+                    "/",
+                    "/recovery",
+                    "/recovery/bootstrap.js",
+                    "/health",
+                    "/ready",
+                    "/api/v1/health",
+                }
+                or path.startswith("/ui/")
+                or frontend.legacy_target(path) is not None
+            )
             exchange = path == "/api/v1/auth/exchange"
             if exchange:
                 if supplied_origin != expected:
@@ -403,8 +429,9 @@ def configure_api(app: FastAPI, service):
                 "X-Content-Type-Options": "nosniff",
                 "X-Frame-Options": "DENY",
                 "Content-Security-Policy": (
-                    "default-src 'none'; script-src 'self'; connect-src 'self'; "
-                    "base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+                    frontend.SHELL_CSP
+                    if request.url.path == frontend.STOCK_BASE
+                    else DEFAULT_CSP
                 ),
             }
         )
@@ -431,6 +458,10 @@ def configure_api(app: FastAPI, service):
     async def trust_error(request, exc):
         return error_response(exc.code, exc.status)
 
+    @app.exception_handler(frontend.FrontendError)
+    async def frontend_error(request, exc):
+        return error_response(exc.code, exc.status)
+
     @app.exception_handler(HTTPException)
     async def http_error(request, exc):
         return error_response(
@@ -444,23 +475,55 @@ def configure_api(app: FastAPI, service):
     def recovery_asset(name):
         return files("millrace_os.recovery").joinpath(name).read_text()
 
-    @app.get("/", include_in_schema=False)
-    async def bootstrap():
-        try:
-            return HTMLResponse(asset("bootstrap.html"))
-        except FileNotFoundError:
-            return error_response("normal_assets_unavailable", 503)
+    # The stock client is compatible only with the exact contract digests it
+    # was built against and with operations that need no optional component.
+    stock = frontend.StockFrontend(
+        registry={entry.contract_id: entry.sha256 for entry in registry.schemas},
+        available_operations=[
+            operation[0] for operation in CLIENT_OPERATIONS if operation[5] == ()
+        ],
+    )
+
+    async def to_stock(request: Request):
+        target = frontend.shell_target(request.query_params.multi_items())
+        return RedirectResponse(frontend.shell_location(target), status_code=303)
+
+    async def legacy_to_stock(request: Request):
+        # `/instances/...` forms carry the instance/run in the path and `home`
+        # in the query; the redirect keeps no fragment so a nonce survives.
+        instance, run = frontend.legacy_target(request.url.path)
+        items = list(request.query_params.multi_items()) + [("instance", instance)]
+        if run is not None:
+            items.append(("run", run))
+        target = frontend.shell_target(items)
+        return RedirectResponse(frontend.shell_location(target), status_code=303)
+
+    for redirect_path in ("/", "/ui/stock"):
+        app.add_api_route(
+            redirect_path, to_stock, methods=["GET"], include_in_schema=False
+        )
+    for prefix in ("/instances", "/ui/stock/instances"):
+        for suffix in ("/{instance_id}", "/{instance_id}/runs/{run_id}"):
+            app.add_api_route(
+                prefix + suffix,
+                legacy_to_stock,
+                methods=["GET"],
+                include_in_schema=False,
+            )
+
+    @app.get(frontend.STOCK_BASE, include_in_schema=False)
+    async def stock_shell(request: Request):
+        frontend.shell_target(request.query_params.multi_items())
+        return Response(stock.shell(), media_type=frontend.MEDIA_TYPES[".html"])
+
+    @app.get(frontend.STOCK_BASE + "{asset_path:path}", include_in_schema=False)
+    async def stock_asset(asset_path: str):
+        content, media_type = stock.read(asset_path)
+        return Response(content, media_type=media_type)
 
     @app.get("/recovery", include_in_schema=False)
     async def recovery():
         return HTMLResponse(asset("recovery.html"))
-
-    @app.get("/assets/bootstrap.js", include_in_schema=False)
-    async def script():
-        try:
-            return Response(asset("bootstrap.js"), media_type="text/javascript")
-        except FileNotFoundError:
-            return error_response("normal_assets_unavailable", 503)
 
     @app.get("/recovery/bootstrap.js", include_in_schema=False)
     async def recovery_script():
@@ -502,6 +565,46 @@ def configure_api(app: FastAPI, service):
     async def rotate(body: BootstrapInput):
         service.trust.rotate()
         return Rotation()
+
+    @app.get("/api/v1/auth/session-context", response_model=SessionContext)
+    async def session_context(request: Request):
+        # Restores this page's lexical CSRF after a reload. Cookie sessions
+        # only; it neither creates nor renews a session.
+        if request.state.identity != "session":
+            raise TrustError("session_required", 403)
+        if request.headers.getlist("x-millrace-session-context") != ["1"] or (
+            request.headers.getlist("sec-fetch-site") != ["same-origin"]
+        ):
+            raise TrustError("session_context_forbidden", 403)
+        session = service.trust.session(request.cookies.get(COOKIE))
+        remaining = session.expires - service.trust.clock()
+        if remaining <= 0:
+            raise TrustError()
+        return SessionContext(
+            csrf=session.csrf, expires_in=min(SESSION_TTL, math.ceil(remaining))
+        )
+
+    @app.get("/api/v1/demo/context", response_model=DemoContext)
+    async def demo_context():
+        # Only an owned demo service fixes a reader before app creation; the
+        # typed 404 is the sole evidence of an ordinary service.
+        reader = service.dependencies.demo_context_reader
+        if reader is None:
+            raise TrustError("demo_context_unavailable", 404)
+        try:
+            data = await asyncio.to_thread(reader)
+        except DemoContextPending:
+            raise TrustError("demo_context_pending", 503) from None
+        except Exception:
+            raise TrustError("demo_context_failed", 503) from None
+        try:
+            context = DemoContext.model_validate(data)
+        except ValidationError:
+            raise TrustError("demo_context_failed", 503) from None
+        response = JSONResponse(context.model_dump())
+        if len(response.body) > DEMO_CONTEXT_LIMIT:
+            raise TrustError("demo_context_failed", 503)
+        return response
 
     @app.get("/api/v1/identity", response_model=Read[Identity])
     async def identity(request: Request):
@@ -1263,6 +1366,26 @@ def export_artifacts(app):
                 operation["security"] = [{"Bearer": []}, {"Session": []}]
             if name in {"/api/v1/auth/bootstrap", "/api/v1/auth/rotate"}:
                 operation["security"] = [{"Bearer": []}]
+            if name == "/api/v1/auth/session-context":
+                # Cookie session only, with both headers a cross-site page
+                # cannot add to a simple request.
+                operation["security"] = [{"Session": []}]
+                operation["parameters"] = [
+                    {
+                        "name": "X-Millrace-Session-Context",
+                        "in": "header",
+                        "required": True,
+                        "description": "Exactly 1.",
+                        "schema": {"type": "string", "enum": ["1"]},
+                    },
+                    {
+                        "name": "Sec-Fetch-Site",
+                        "in": "header",
+                        "required": True,
+                        "description": "Exactly same-origin, sent by the browser.",
+                        "schema": {"type": "string", "enum": ["same-origin"]},
+                    },
+                ]
             if method in {"post", "put", "patch"}:
                 operation.setdefault("requestBody", {})["x-max-body-bytes"] = (
                     body_limit(name, method)

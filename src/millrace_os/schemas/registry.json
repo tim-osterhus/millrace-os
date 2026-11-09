@@ -42,6 +42,11 @@
       "version": 1
     },
     {
+      "contract_id": "DemoContext",
+      "sha256": "d48649e8d043a26109186a8afeb304526c9ec4549d80549418ca84a51be099ff",
+      "version": 1
+    },
+    {
       "contract_id": "Diagnostics",
       "sha256": "b61d56d2ddc0f1701b5f3ba4f55e706a9498a6e3ef60551765a1c45d6d86dcf8",
       "version": 1
@@ -254,6 +259,11 @@
     {
       "contract_id": "RouterViewValidateInput",
       "sha256": "38dcfbe2c57aea077a3b788d064ec76bec65b44f046ac29a39974bc76bd24faa",
+      "version": 1
+    },
+    {
+      "contract_id": "SessionContext",
+      "sha256": "87359113352b9573db67055641eb242d7cd6eb215c87e4c9bb440886f0a61754",
       "version": 1
     },
     {

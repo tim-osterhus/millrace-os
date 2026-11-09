@@ -1,0 +1,128 @@
+{
+ "api_version": "v1",
+ "assets": [
+  {
+   "media_type": "text/plain; charset=utf-8",
+   "path": "THIRD_PARTY_NOTICES.txt",
+   "sha256": "ea07ae322e87e10c57ddb88c933bba80f2d527d7f93f2653190d1685606b7d02"
+  },
+  {
+   "media_type": "text/javascript; charset=utf-8",
+   "path": "assets/History-DUIxljzQ.js",
+   "sha256": "715e9289dbfa63da42a4bb2ba3a1fbd60baa252342d28644ff42418f2af8135d"
+  },
+  {
+   "media_type": "text/javascript; charset=utf-8",
+   "path": "assets/Report-BmrN_El1.js",
+   "sha256": "0c0727e59094a273f75c7ac82504d2f804a2e9686471582318ba36d267a9da60"
+  },
+  {
+   "media_type": "text/javascript; charset=utf-8",
+   "path": "assets/Revisions-Dqtik9EB.js",
+   "sha256": "3786880e0210c736b1641307359d081e48a95b3ff8e4f5dc5cd2b36d519bdb6c"
+  },
+  {
+   "media_type": "text/css; charset=utf-8",
+   "path": "assets/graph-DLioOiRN.css",
+   "sha256": "b0cb7bd6fec5951c9c8f5808821438206604b1629a912c96009ac427f38e7d69"
+  },
+  {
+   "media_type": "text/javascript; charset=utf-8",
+   "path": "assets/graph-DrfouTBl.js",
+   "sha256": "ed68046b773c1246b03689fc9e88c6a822e5b437d15089c97640ce4a8e761abd"
+  },
+  {
+   "media_type": "text/javascript; charset=utf-8",
+   "path": "assets/index-C-9ZhDPJ.js",
+   "sha256": "b2cf4755d44633ca693c833ac73017ff642ee86b300677cf5c33d35060fc1247"
+  },
+  {
+   "media_type": "text/css; charset=utf-8",
+   "path": "assets/index-DDh0236Y.css",
+   "sha256": "a606e28e3983c8c0a345a827c71102b5ccf239eede7f9e294ae960c584f38aeb"
+  },
+  {
+   "media_type": "application/json",
+   "path": "dependency-inventory.json",
+   "sha256": "364aa8fb3a868905e6c17430000044648fd4304b546ba76b3dbcd0ad169d0b49"
+  },
+  {
+   "media_type": "text/html; charset=utf-8",
+   "path": "index.html",
+   "sha256": "f1ed253024f543e243824b81d952bcc331a26449602e0ed2eceb85e14809ff12"
+  }
+ ],
+ "default_presentation": null,
+ "entry": "index.html",
+ "format": "millrace-os-frontend-bundle/v1",
+ "frontend_id": "stock",
+ "frontend_version": "0.23.1",
+ "presentation_format": null,
+ "required_capabilities": [
+  "client.capabilities.read",
+  "client.presentation.read",
+  "client.presentation.write"
+ ],
+ "required_contracts": [
+  {
+   "contract_id": "ClientCapabilities",
+   "sha256": "7760e03df3b1c86279d8996ea6be701c66288ac9c67470539b87786f26efe501",
+   "version": 1
+  },
+  {
+   "contract_id": "DemoContext",
+   "sha256": "d48649e8d043a26109186a8afeb304526c9ec4549d80549418ca84a51be099ff",
+   "version": 1
+  },
+  {
+   "contract_id": "Error",
+   "sha256": "98d07364229a385d557f26bc43d769fead05c0701a7c70d29edada0d90c3539f",
+   "version": 1
+  },
+  {
+   "contract_id": "ExchangeInput",
+   "sha256": "5aae776f5722c80995746ad34eb9400f85338e2e07f1d1a99d7dd53b84efbf3c",
+   "version": 1
+  },
+  {
+   "contract_id": "PresentationState",
+   "sha256": "bbb1c278bab0a0e025e96fcb6583faadeb55294b517007f3eb25169fb918b174",
+   "version": 1
+  },
+  {
+   "contract_id": "PresentationWrite",
+   "sha256": "893208d95ccc7a1f709c00938bd5512b5176fec8d9d2cc0efb0be5aa3efc1b43",
+   "version": 1
+  },
+  {
+   "contract_id": "RouterHomes",
+   "sha256": "ac436fda733b791f170e9ac10e176e7900e6ad243b97af16881d9c02f6f23963",
+   "version": 1
+  },
+  {
+   "contract_id": "RouterView",
+   "sha256": "5ee820eb05e6e5bf49f846896b3d6962d77ba6a863855f2eaecfc474071bc390",
+   "version": 1
+  },
+  {
+   "contract_id": "SessionContext",
+   "sha256": "87359113352b9573db67055641eb242d7cd6eb215c87e4c9bb440886f0a61754",
+   "version": 1
+  },
+  {
+   "contract_id": "SessionOutput",
+   "sha256": "aeb2b843cd3ca8b2f681a2ec8f3220406a4a32e2fa511417c892d29c8a212871",
+   "version": 1
+  },
+  {
+   "contract_id": "WorkflowOutput",
+   "sha256": "7b7787658cc82f1f24267882cae34ce9674de172553f0e860323547dff0e633f",
+   "version": 1
+  },
+  {
+   "contract_id": "WorkflowOutputs",
+   "sha256": "43ee74433d5e4af4c875802e51ebfa2b7e0780a88b504a586cbd0c3640fd5dd0",
+   "version": 1
+  }
+ ]
+}
