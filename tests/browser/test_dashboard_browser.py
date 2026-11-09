@@ -51,11 +51,14 @@ def real_run(live, review_gate, name="service"):
 
 
 def test_nonce_journey_from_inventory_to_graph_inspector_and_history(
-    live, page, page_errors, evidence, review_gate
+    live, page, page_errors, evidence, review_gate, context_reads
 ):
     service, instance, run = real_run(live, review_gate)
     nonce = service.nonce()
-    page.goto(service.url(nonce=nonce))
+    context_reads.claimed = True
+    with page.expect_request("**/api/v1/demo/context") as context_read:
+        with page.expect_response("**/api/v1/demo/context") as context_reply:
+            page.goto(service.url(nonce=nonce))
     expect(heading(page, "State homes")).to_be_visible()
     first = fetches(page)[0]
     assert first["url"].endswith("/api/v1/auth/exchange") and first["hash"] == ""
@@ -97,6 +100,8 @@ def test_nonce_journey_from_inventory_to_graph_inspector_and_history(
     expect(heading(page, "Run")).to_be_visible()
     expect(page.get_by_role("region", name="Status")).to_contain_text(run)
     assert csp_violations(page) == []
+    # Correlate the stock reader's EOF and semantic guard with this exact read.
+    context_reads.settle(context_read.value, context_reply.value)
     assert page_errors == []
 
 

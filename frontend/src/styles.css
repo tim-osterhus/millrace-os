@@ -669,6 +669,89 @@ tr.is-last {
   gap: 0.375rem;
 }
 
+/* ---- control requests ------------------------------------------------------------ */
+
+.region--requests {
+  border-left: 4px solid var(--line-strong);
+}
+
+.control-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--gap);
+}
+
+.control-form > p,
+.control-form > .toolbar,
+.control-form > .review,
+.control-form > .notice,
+.control-form__wide {
+  flex-basis: 100%;
+}
+
+.control-form__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.control-form textarea {
+  display: block;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: var(--pad-y) var(--pad-x);
+}
+
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* The exact request bytes, whole and wrapped; never truncated. */
+.request-body {
+  margin: 0;
+  padding: var(--pad-y) var(--pad-x);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: var(--text-s);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.request-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.request {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: var(--gap);
+  border-top: 1px solid var(--line);
+}
+
+.request__head {
+  overflow-wrap: anywhere;
+}
+
+.request--resolved .request__head {
+  color: var(--muted);
+}
+
 /* ---- narrow screens and motion -------------------------------------------------- */
 
 @media (max-width: 56rem) {

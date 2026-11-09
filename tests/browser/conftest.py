@@ -213,6 +213,20 @@ class Live:
         return response.json()["data"]
 
     def create_and_start(self, files_by_name: dict[str, str], *, workspaces=()):
+        instance = self.create(files_by_name, workspaces=workspaces)
+        started = self.send(
+            self.request(
+                "start_run",
+                instance,
+                version=self.read(instance)["state_version"],
+                payload={"edit_mode": "locked"},
+            )
+        )
+        assert started["status"] == "applied", started
+        return instance, started["run_id"]
+
+    def create(self, files_by_name: dict[str, str], *, workspaces=()):
+        """One command-only instance and no run (UI3 starts it from the browser)."""
         folder = self.root / f"workflow-{len(self.projects)}"
         workflow, project = folder / "workflow", folder / "project"
         workflow.mkdir(parents=True)
@@ -236,17 +250,13 @@ class Live:
             )
         )
         assert receipt["status"] == "applied", receipt
-        instance = receipt["instance_id"]
-        started = self.send(
-            self.request(
-                "start_run",
-                instance,
-                version=self.read(instance)["state_version"],
-                payload={"edit_mode": "locked"},
-            )
-        )
-        assert started["status"] == "applied", started
-        return instance, started["run_id"]
+        return receipt["instance_id"]
+
+    def cancel(self, instance, run):
+        """Public cleanup of a test-owned run: cancel it and wait until it settles."""
+        receipt = self.send(self.request("cancel_run", instance, run))
+        assert receipt["status"] == "applied", receipt
+        return self.settled(instance, run)
 
     def settled(self, instance, run, *, timeout=20, finished=True):
         """Quiescent (every writer stopped) and, when `finished`, not running."""
@@ -413,8 +423,26 @@ def _typed_demo_context(response, *, evidence: dict | None = None) -> bool:
     )
 
 
+class ContextReads:
+    """Claim the nonce journey's context read for application-reader proof.
+
+    Its requestfinished callback only records observations. The journey's
+    settle step correlates its captured response with the existing fetch probe,
+    reader EOF and ordinary-service UI, without a driver body read.
+    """
+
+    def __init__(self):
+        self.claimed = False
+        self.settle = None
+
+
 @pytest.fixture
-def page(browser, evidence, request, page_errors):
+def context_reads() -> ContextReads:
+    return ContextReads()
+
+
+@pytest.fixture
+def page(browser, evidence, request, page_errors, context_reads):
     context = browser.new_context(viewport={"width": 1440, "height": 960})
     context.add_init_script(PAGE_PROBES)
     page = context.new_page()
@@ -466,6 +494,12 @@ def page(browser, evidence, request, page_errors):
             "strict_demo_context": False,
         }
         resource_errors.append(record)
+        if context_reads.claimed:
+            record["claimed"] = True
+            return
+        classify(finished, record)
+
+    def classify(finished, record):
         try:
             reply = finished.response()
         except sync_api.Error as error:
@@ -487,6 +521,73 @@ def page(browser, evidence, request, page_errors):
         else:
             typed.append(reply.url)
 
+    def settle(read, reply):
+        """Pair this response only after the stock reader and UI verify it."""
+        assert context_reads.claimed, "claim the read before navigating"
+        probe = {"url": read.url, "method": read.method}
+        matching = (
+            "(probe) => window.__fetches.filter((item) => "
+            "item.method === probe.method && "
+            "new URL(item.url, document.baseURI).href === probe.url)"
+        )
+        record = {
+            "kind": "application_reader",
+            "method": read.method,
+            "path": urlsplit(read.url).path,
+            "status": reply.status,
+            "content_type": reply.headers.get("content-type"),
+            "request_failure": read.failure,
+            "transport_terminal": "unknown",
+            "verification_source": (
+                "stock application reader EOF and ordinary-service guard"
+            ),
+            "strict_demo_context": False,
+        }
+        resource_errors.append(record)
+
+        def consumption():
+            matches = page.evaluate(matching, probe)
+            record["matching_application_fetches"] = [
+                {
+                    "method": item["method"],
+                    "path": urlsplit(item["url"]).path,
+                    "consumed": item["consumed"],
+                }
+                for item in matches
+            ]
+            record["matching_application_fetch_count"] = len(matches)
+            assert len(matches) == 1, (
+                f"{len(matches)} application fetches match the captured context read"
+            )
+            return matches[0]["consumed"]
+
+        record["exact_captured_response"] = (
+            reply.request == read and reply.url == read.url
+        )
+        assert record["exact_captured_response"]
+        assert read.method == "GET" and urlsplit(read.url).path == DEMO_CONTEXT
+        assert not urlsplit(read.url).query and not urlsplit(read.url).fragment
+        assert reply.status == 404
+        assert record["content_type"] == "application/json"
+        consumption()
+        page.wait_for_function(
+            f"(probe) => ({matching})(probe)[0].consumed", arg=probe
+        )
+        assert consumption() is True
+        ordinary = page.get_by_text("ordinary service", exact=True)
+        sync_api.expect(ordinary).to_be_visible()
+        record["ordinary_service_visible"] = True
+        record["strict_demo_context"] = True
+        if reply.url in logged:
+            logged.remove(reply.url)
+            page_errors.remove(NOT_FOUND)
+            record["console_paired"] = True
+        else:
+            typed.append(reply.url)
+            record["console_paired"] = False
+        return record
+
+    context_reads.settle = settle
     page.on("pageerror", lambda error: page_errors.append(str(error)))
     page.on("console", console)
     page.on("response", response)
@@ -648,13 +749,15 @@ def output_item(output_id: str, index: int) -> dict:
 class FakeRouter:
     """Serves fixed projections whose rows name the target they were read for.
 
-    `fail_summary` simulates a later read failure; `reconciled` reports a run
-    whose recorded writer is still `may_live` but whose effective writers are
-    all stopped after an operator reconciliation.
+    `fail_summary` simulates a later read failure; `summary_budget` a bounded
+    view budget refusal of the summary; `reconciled` reports a run whose
+    recorded writer is still `may_live` but whose effective writers are all
+    stopped after an operator reconciliation.
     """
 
     def __init__(self):
         self.fail_summary = False
+        self.summary_budget = False
         self.reconciled = False
         self.calls: list[str] = []
 
@@ -709,10 +812,16 @@ class FakeRouter:
         }
         return _result("instance", data, items=[run], run_id=None)
 
+    def receipt(self, home, request_id, **targets):
+        """No recorded control row, so a strict observation is unavailable (404)."""
+        return None
+
     def view_run(self, home, instance_id, run_id, **selectors):
         section = selectors.get("section", "summary")
         self.calls.append("run:" + section)
         if section == "summary":
+            if self.summary_budget:
+                raise RouterUnavailable("core_inspection_too_large", 409)
             if self.fail_summary:
                 raise RouterUnavailable("router_read_busy", 429)
             summary = crowded_summary()

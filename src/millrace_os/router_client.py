@@ -77,6 +77,11 @@ class RouterClient:
             execution = importlib.import_module("millrace.router.execution")
             if isinstance(exc, execution.RouterError):
                 raise RouterUnavailable("core_" + exc.code, 409) from exc
+            # Plus's public ownership/catalog guard refuses before Core runs;
+            # keep its machine code in the established catalog_<code> form.
+            catalog = importlib.import_module("millrace_plus.catalog")
+            if isinstance(exc, catalog.CatalogError):
+                raise RouterUnavailable("catalog_" + exc.code, 409) from exc
             raise
 
     def list_instances(self, home):

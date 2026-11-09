@@ -102,14 +102,82 @@ every control stay disabled; a transport failure is not an ordinary service.
   - *History* reads one section page (invocations, transitions and moves, or
     control receipts) only after the section is chosen.
   - *Revisions* shows the startup, active and pending revisions. An invalid
-    candidate shows its diagnostic instead of a graph.
+    candidate shows its diagnostic instead of a graph. **Validate current
+    editable files** is an explicit bounded read of the files as they are now.
+    It publishes nothing, captures no candidate and never replaces the
+    captured Graph or the active routing revision.
 - **Reports.** These load only when opened.
 
 Absent or wrongly typed facts read "unknown". A recorded null reads "none".
 Codes Core does not freeze, such as statuses and reasons, appear exactly as
 recorded. Reads run one at a time: homes or the selected page, then the selected
-summary. A hidden optional panel performs no reads. This build refreshes only on
-**Refresh**.
+summary. A hidden optional panel performs no reads.
+
+One coordinator observes the selected target. It refreshes a visible run
+summary every 2 seconds and unresolved requests at 1 second, then every 2
+seconds. Each observation window is five minutes, then **Continue monitoring**
+offers another. A hidden tab reads nothing. Failures back off to 5, 15 and 30
+seconds, then stop with **Retry**. A bounded-view budget refusal stops automatic
+reads at once; there is no fallback to a full read. A terminal, quiescent run
+stops fast refresh, which still proves no holder closure. **Refresh** reads once
+on demand.
+
+## Control requests
+
+The instance screen offers **Start**; the run screen offers pause, cancel,
+resume and recover for the run; pause, cancel and resume for a plane; retry,
+redirect and reconcile; and submit and accept for revisions. Each form shows the
+exact target, operation, payload, expected state version and a new request ID
+before **Send**.
+
+- **Envelope.** Each form builds one `millrace-router-request/v2` envelope with
+  all eight fields and explicit nulls, wrapped as `{home, request}` for
+  `POST /api/v1/router/requests`.
+- **Request ID.** The ID is 16 random bytes as 32 lowercase hex characters.
+- **Versions.** Stop requests carry a null version. Every other request carries
+  the reviewed observed version: run state, or instance settings for Start.
+- **Start mode.** Start is locked unless **live** is chosen.
+- **Deliberate inputs.** Retry, redirect and reconcile need a reason.
+  Reconciling needs an explicit, never preselected attestation that every writer
+  has stopped.
+- **Redirect.** Redirect offers only nodes of the active captured revision. It
+  reads that graph once if Graph is hidden.
+- **Accept.** Accept names the pending candidate and may resume routing.
+- **Authority.** Core and Plus decide applicability. A disabled control is a
+  hint, never enforcement.
+
+The reviewed bytes are serialized once. They are the only bytes sent, and the
+only bytes replayed. An answer is an observation, not task success:
+
+- **Core receipt.** The receipt status (queued, applied, refused) and code are
+  shown separately from the OS call phase.
+- **Holder join.** This client uses call/v1, which cannot attest a holder join.
+- **Lost answers.** If the answer is lost or unreadable, the request is
+  "Delivery unknown". It is observed only through the strict view,
+  `GET /api/v1/router/views/requests/{id}`, by exact ID and known target. A 404
+  stays unknown.
+- **Start.** Start learns its run only from a matching receipt.
+- **Binding.** The first digest observed for a request is bound to it. A later
+  mismatch is an integrity error that disables replay.
+- **No automatic follow-ups.** A stale version is refused under its original ID.
+  Nothing refreshes the version, changes the ID, resends, accepts or resumes
+  automatically.
+- **One at a time.** One unresolved non-stop request is allowed per target. Stop
+  requests stay available.
+
+**Requests in this tab** cannot be hidden by a preset. It lists every request
+with **Observe**, **Replay exact request**, **Export request JSON** and
+**Retire**. Intents are kept in memory and in this tab's history entries only,
+never in storage or preferences, and never with trust material:
+
+- **Navigation.** Each history entry holds the whole set. Back and Forward merge
+  the visited entry, so newer requests are never lost. Reload restores requests
+  observe-only.
+- **Limits.** An entry holds at most 20 intents and 64 KiB. Over that, new sends
+  wait until requests are exported and retired; nothing is evicted silently.
+- **Integrity.** Different bytes under one ID disable replay.
+- **History unavailable.** If the history entry cannot be written, the page
+  warns that a reload would lose replay bytes before it sends anything.
 
 ## Reports
 

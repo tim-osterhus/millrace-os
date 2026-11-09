@@ -213,6 +213,83 @@ export async function revisionGraph(target: Target, revisionId: string): Promise
   return observed(await read(path), coreView("graph"));
 }
 
+// ---- exact control requests ---------------------------------------------------
+
+/**
+ * One `millrace-os-router-call/v1` observation. Its phase is the OS call's, its
+ * receipt is Core's; neither is run completion, writer closure or a holder
+ * join (call/v1 cannot attest one).
+ */
+export interface CallObservation {
+  home: string;
+  requestId: string;
+  requestDigest: string | null;
+  instanceId: string | null;
+  runId: string | null;
+  source: "os_owned_call" | "core_receipt";
+  phase: string;
+  coreReceipt: Json | null;
+  observedAt: string;
+}
+
+const PHASES = new Set(["admission_pending", "call_active", "call_returned", "call_failed", "receipt_observed"]);
+
+function callObservation(body: Json): CallObservation | null {
+  const home = text(body.home);
+  const requestId = text(body.request_id);
+  const digest = body.request_digest;
+  const source = body.source;
+  const phase = text(body.phase);
+  const receipt = body.core_receipt;
+  if (
+    body.contract !== "millrace-os-router-call/v1" ||
+    home === null ||
+    requestId === null ||
+    (digest !== null && (typeof digest !== "string" || !SHA256.test(digest))) ||
+    (source !== "os_owned_call" && source !== "core_receipt") ||
+    phase === null ||
+    !PHASES.has(phase) ||
+    (receipt !== null && record(receipt) === null) ||
+    (body.instance_id !== null && text(body.instance_id) === null) ||
+    (body.run_id !== null && text(body.run_id) === null)
+  ) {
+    return null;
+  }
+  return {
+    home,
+    requestId,
+    requestDigest: digest as string | null,
+    instanceId: text(body.instance_id),
+    runId: text(body.run_id),
+    source: source as CallObservation["source"],
+    phase,
+    coreReceipt: record(receipt),
+    observedAt: text(body.observed_at) ?? "",
+  };
+}
+
+/** POST the exact retained body bytes. 200/202 is an OS observation, never task success. */
+export async function submitRequest(body: string): Promise<Observed<CallObservation>> {
+  return observed(await write("POST", "/api/v1/router/requests", body), callObservation);
+}
+
+/** The strict bounded receipt view by exact ID and known target. 404 stays unknown. */
+export async function observeRequest(
+  home: string,
+  requestId: string,
+  instanceId: string,
+  runId: string | null,
+): Promise<Observed<CallObservation>> {
+  const path = `/api/v1/router/views/requests/${segment(requestId)}` + query({ home, instance_id: instanceId, run_id: runId });
+  return observed(await read(path), callObservation);
+}
+
+/** Bounded validation of the current editable files; it publishes and replaces nothing. */
+export async function validateCurrent(target: Target): Promise<Observed<CoreView>> {
+  const body = JSON.stringify({ home: target.home, instance_id: target.instance, run_id: target.run });
+  return observed(await write("POST", "/api/v1/router/views/validate", body), coreView("validation"));
+}
+
 // ---- generic workflow outputs ----------------------------------------------
 
 export interface OutputItem {

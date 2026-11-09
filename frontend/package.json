@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test src/preferences.test.ts src/presets.test.ts src/layout.test.ts src/links.test.ts",
+    "test": "node --test src/preferences.test.ts src/presets.test.ts src/layout.test.ts src/links.test.ts src/requests.test.ts",
     "build": "vite build"
   },
   "dependencies": {

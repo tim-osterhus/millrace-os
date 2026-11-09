@@ -1,18 +1,89 @@
 // Startup, active routing and pending candidate revisions (lazy chunk).
 // A candidate's diagnostic and changed paths never establish acceptance, and
 // an invalid candidate shows its diagnostic instead of a plausible graph.
+// Validating the current editable files is an explicit bounded read: it
+// publishes nothing, captures no candidate and never replaces the Graph.
 
-import { display, list, record, recorded, text, type Json } from "../api.ts";
+import { useState } from "react";
+
+import {
+  display,
+  list,
+  record,
+  recorded,
+  text,
+  validateCurrent,
+  type CoreView,
+  type Json,
+  type Observed,
+  type Target,
+} from "../api.ts";
+import { FailureNote } from "./Inventory.tsx";
+
+function Validation({ value }: { value: CoreView }) {
+  const data = value.data;
+  const candidate = record(data.candidate);
+  const lists: [string, unknown][] = [
+    ["Diagnostics", data.diagnostics],
+    ["Diagnostic details", data.diagnostic_details],
+    ["Warnings", data.warnings],
+    ["Changed relative paths", candidate?.changed_paths],
+  ];
+  return (
+    <>
+      <dl className="facts">
+        <div>
+          <dt>Current files valid</dt>
+          <dd>{recorded(data, "valid")}</dd>
+        </div>
+        <div>
+          <dt>Revision they would form</dt>
+          <dd>
+            <code className="id">{recorded(data, "revision_id")}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>Candidate diagnostic</dt>
+          <dd>{candidate === null ? "no candidate" : recorded(candidate, "diagnostic")}</dd>
+        </div>
+      </dl>
+      {lists.map(([label, raw]) => {
+        const items = list(raw);
+        return items === null || items.length === 0 ? null : (
+          <div key={label}>
+            <h4>{label}</h4>
+            <ul className="path-list">
+              {items.map((item, index) => (
+                <li key={`${display(item)}|${index}`}>
+                  <code>{display(item)}</code>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 export default function Revisions({
   summary,
   shownRevision,
   onShowGraph,
+  target,
+  canValidate,
 }: {
   summary: Json;
   shownRevision: string | null;
   onShowGraph: (revisionId: string) => void;
+  target: Target;
+  canValidate: boolean;
 }) {
+  const [validation, setValidation] = useState<Observed<CoreView> | "reading" | null>(null);
+  const validate = async () => {
+    setValidation("reading");
+    setValidation(await validateCurrent(target));
+  };
   const candidate = record(summary.pending_candidate);
   const candidateRevision = text(candidate?.revision_id);
   const diagnostic = candidate === null ? null : candidate.diagnostic;
@@ -123,6 +194,23 @@ export default function Revisions({
             </ul>
           )}
         </>
+      )}
+      <h3>Current editable files</h3>
+      <p className="muted">
+        Validation reads the files as they are now. It publishes nothing and does not change the captured Graph, the active routing
+        revision or a pending candidate. Submit and accept stay explicit requests.
+      </p>
+      <button type="button" disabled={!canValidate || validation === "reading"} onClick={() => void validate()}>
+        Validate current editable files
+      </button>
+      {validation === null ? null : validation === "reading" ? (
+        <p className="muted" role="status">
+          Validating current files…
+        </p>
+      ) : !validation.ok ? (
+        <FailureNote failure={validation} what="Validation" />
+      ) : (
+        <Validation value={validation.value} />
       )}
     </section>
   );

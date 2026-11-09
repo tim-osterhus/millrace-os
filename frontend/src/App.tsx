@@ -6,6 +6,9 @@
 // hidden panel never reads. Presentation changes alter layout only: never the
 // target, selection, trust or any request. Saved presentations are written
 // only by an explicit action, with the service's expected-version check.
+// Control requests are reviewed exact Core envelopes kept, with their bytes, in
+// one lexical intent set carried by this tab's history entries; one finite
+// selected-target coordinator observes the summary and unresolved requests.
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Group, Panel, Separator, type GroupImperativeHandle } from "react-resizable-panels";
@@ -16,8 +19,10 @@ import {
   homes,
   instance,
   instances,
+  integer,
   invocation,
   NO_TARGET,
+  observeRequest,
   parseCapturedGraph,
   parseTarget,
   presentationState,
@@ -27,6 +32,7 @@ import {
   runHistory,
   runSummary,
   saveText,
+  submitRequest,
   targetHref,
   text,
   type Capability,
@@ -43,6 +49,38 @@ import { Inspector, type Selection } from "./panels/Inspector.tsx";
 import { Instance } from "./panels/Instance.tsx";
 import { FailureNote, Inventory, TargetLink, type Paged } from "./panels/Inventory.tsx";
 import { CurrentWorkRegion, planesOf, PlanesRegion, StatusRegion, type Summary } from "./panels/Run.tsx";
+import {
+  ControlForm,
+  MonitorStatus,
+  RequestArea,
+  type ControlTarget,
+  type MonitorState,
+  type RequestFlags,
+  type SendResult,
+} from "./panels/Controls.tsx";
+import {
+  applyReply,
+  envelopeOf,
+  fits,
+  intentFromBuilt,
+  keyOf,
+  merge,
+  newEntry,
+  nextDelay,
+  outstanding,
+  readHistory,
+  RECEIPT_FIRST_MS,
+  restoredEntry,
+  RECEIPT_MS,
+  resolved,
+  sameTarget,
+  stateWith,
+  SUMMARY_MS,
+  WINDOW_MS,
+  type Built,
+  type Entry,
+  type Operation,
+} from "./requests.ts";
 import {
   createConfig,
   deleteConfig,
@@ -142,6 +180,33 @@ function sameRef(a: Ref | null, b: Ref | null): boolean {
   return a === null || b === null ? a === b : a.kind === b.kind && a.id === b.id;
 }
 
+// ---- control requests ----------------------------------------------------------
+
+/** Optional router features this service may lack; each is named when absent. */
+const OPTIONAL_FEATURES: Record<string, string> = {
+  "router.views.run": "Router inspection",
+  "router.outputs.list": "Workflow outputs",
+  "router.request.submit": "Control requests",
+  "router.views.request": "Request observation",
+  "router.views.validate": "Current-file validation",
+};
+
+const TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
+
+type Reviewed = Extract<Built, { ok: true }>;
+type ReadOutcome = "ok" | "failed" | "budget";
+
+interface Monitor {
+  since: number;
+  errors: number;
+  halted: "window" | "errors" | "budget" | null;
+  /** The first receipt read after a new request comes after one second. */
+  fast: boolean;
+  beat: number;
+}
+
+const freshMonitor = (): Monitor => ({ since: Date.now(), errors: 0, halted: null, fast: true, beat: 0 });
+
 /** What one presentation write was issued for, captured when it is sent. */
 interface Intent {
   ref: Ref | null;
@@ -215,6 +280,24 @@ export function App() {
   const [presentation, setPresentation] = useState<Presentation>(INITIAL_PRESENTATION);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
+  // One lexical intent set for this tab, restored observe-only from this entry.
+  const [restored] = useState(() => readHistory(window.history.state));
+  const intentsRef = useRef<Entry[]>(restored.kept.map(restoredEntry));
+  const [entries, setEntries] = useState<Entry[]>(intentsRef.current);
+  const [flags, setFlags] = useState<RequestFlags>({ historyUnavailable: false, overCapacity: false, invalidRestore: restored.invalid });
+  // History data that could not be restored stays exportable, never silently lost.
+  const [unreadable, setUnreadable] = useState<string[]>(() => (restored.raw === null ? [] : [restored.raw]));
+  /** The delay of the coordinator's armed next read, set where it is armed. */
+  const [armed, setArmed] = useState<number | null>(null);
+  const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
+  const [monitor, setMonitor] = useState<Monitor>(freshMonitor);
+  const [hidden, setHidden] = useState(() => document.visibilityState !== "visible");
+  // In-flight ownership shared by automatic and manual reads, held until each
+  // read settles: one summary read per target, whose result every interested
+  // caller adopts, and one observation read per request.
+  const summaryReads = useRef(new Map<string, Promise<Observed<CoreView>>>());
+  const observing = useRef(new Set<string>());
+
   const screen = target.run !== null ? "run" : target.instance !== null ? "instance" : "inventory";
   const payload = presentation.working;
   // Writes need trust and a positively observed context: an ordinary service
@@ -227,6 +310,8 @@ export function App() {
   const targetKey = targetHref(target);
   const targetKeyRef = useRef(targetKey);
   targetKeyRef.current = targetKey;
+  const targetRef = useRef(target);
+  targetRef.current = target;
   const instancesKey = `${target.home}`;
   const instanceKey = `${target.home}|${target.instance}`;
   const historyKey = `${targetKey}|${historySection}`;
@@ -254,22 +339,84 @@ export function App() {
     setInstancesPage(unkeyed());
     setInstancePage(unkeyed());
     setReportsOpen(false);
+    setMonitor(freshMonitor());
   };
 
+  // ---- the lexical intent set and this tab's history entries ---------------------
+
+  /** Keep the set and write it into the current history entry when it fits. */
+  const commitIntents = useCallback((next: Entry[]): boolean => {
+    intentsRef.current = next;
+    setEntries(next);
+    if (!fits(next)) {
+      setFlags((current) => ({ ...current, overCapacity: true }));
+      return false;
+    }
+    try {
+      window.history.replaceState(stateWith(window.history.state, next), "");
+      setFlags((current) =>
+        current.overCapacity || current.historyUnavailable ? { ...current, overCapacity: false, historyUnavailable: false } : current,
+      );
+      return true;
+    } catch {
+      setFlags((current) => ({ ...current, overCapacity: false, historyUnavailable: true }));
+      return false;
+    }
+  }, []);
+
+  const updateEntry = useCallback(
+    (key: string, change: (entry: Entry) => Entry) =>
+      commitIntents(intentsRef.current.map((entry) => (keyOf(entry.intent) === key ? change(entry) : entry))),
+    [commitIntents],
+  );
+
+  const setBusyKey = useCallback((key: string, on: boolean) => {
+    setBusy((current) => {
+      const next = new Set(current);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
+
+  /** Every pushed entry carries the whole set (unless it no longer fits one entry). */
+  const pushTarget = useCallback((href: string) => {
+    const items = intentsRef.current;
+    try {
+      window.history.pushState(fits(items) ? stateWith(window.history.state, items) : window.history.state, "", href);
+    } catch {
+      setFlags((current) => ({ ...current, historyUnavailable: true }));
+      window.history.pushState(null, "", href);
+    }
+  }, []);
+
   const navigate = useCallback((next: Target) => {
-    window.history.pushState(window.history.state, "", targetHref(next));
+    pushTarget(targetHref(next));
     resetTargetState();
     setTarget(next);
     window.requestAnimationFrame(() => headingRef.current?.focus());
-  }, []);
+  }, [pushTarget]);
 
   useEffect(() => {
-    const restore = () => {
+    const restore = (event: PopStateEvent) => {
+      // Merge the visited entry into the set and write the merged set back to
+      // it, so Back/Forward never replaces newer unresolved requests.
+      const incoming = readHistory(event.state);
+      if (incoming.invalid) setFlags((current) => ({ ...current, invalidRestore: true }));
+      const raw = incoming.raw;
+      if (raw !== null) setUnreadable((current) => (current.includes(raw) ? current : [...current, raw]));
+      commitIntents(merge(intentsRef.current, incoming.kept));
       resetTargetState();
       setTarget(parseTarget(window.location.search) ?? NO_TARGET);
     };
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
+  }, [commitIntents]);
+
+  useEffect(() => {
+    const change = () => setHidden(document.visibilityState !== "visible");
+    document.addEventListener("visibilitychange", change);
+    return () => document.removeEventListener("visibilitychange", change);
   }, []);
 
   // Boot: after trust, observe demo context, then shared presentation.
@@ -306,20 +453,36 @@ export function App() {
       const operations = await capabilities();
       if (!current) return;
       // Name optional features this service cannot serve, before any panel reads.
-      setUnavailable(
-        operations.ok
-          ? operations.value.filter(
-              (item) =>
-                !item.available && (item.operationId === "router.views.run" || item.operationId === "router.outputs.list"),
-            )
-          : [],
-      );
+      setUnavailable(operations.ok ? operations.value.filter((item) => !item.available && item.operationId in OPTIONAL_FEATURES) : []);
       setBooted(true);
     })();
     return () => {
       current = false;
     };
   }, [trust.state, booted, loadPresentation]);
+
+  /** The target's one in-flight summary read, started only if none is in flight. */
+  const readSummary = useCallback((selected: Target): Promise<Observed<CoreView>> => {
+    const key = targetHref(selected);
+    const pending = summaryReads.current.get(key);
+    if (pending !== undefined) return pending;
+    const read = runSummary(selected).finally(() => summaryReads.current.delete(key));
+    summaryReads.current.set(key, read);
+    return read;
+  }, []);
+
+  /** Show a summary result only while its target is still selected. */
+  const applySummary = useCallback((key: string, observed: Observed<CoreView>): ReadOutcome => {
+    if (key !== targetKeyRef.current) return "ok";
+    setSummaryLoading(false);
+    if (observed.ok) {
+      setSummary({ view: observed.value, observedAt: observed.observedAt });
+      setSummaryFailure(null);
+      return "ok";
+    }
+    setSummaryFailure(observed);
+    return observed.code === "core_inspection_too_large" ? "budget" : "failed";
+  }, []);
 
   // One sequential read sequence for the selected screen.
   useEffect(() => {
@@ -343,22 +506,17 @@ export function App() {
         const page = await instance(target.home, target.instance, runCursors[runCursors.length - 1]);
         if (current) setInstancePage({ observation: page, loading: false, page: runCursors.length - 1, key });
       } else if (screen === "run") {
+        // Refresh or a return to this target shares a read already in flight;
+        // its result is shown if this target is still selected, whichever
+        // effect started it.
         setSummaryLoading(true);
-        const observed = await runSummary(target);
-        if (!current) return;
-        setSummaryLoading(false);
-        if (observed.ok) {
-          setSummary({ view: observed.value, observedAt: observed.observedAt });
-          setSummaryFailure(null);
-        } else {
-          setSummaryFailure(observed);
-        }
+        applySummary(targetHref(target), await readSummary(target));
       }
     })();
     return () => {
       current = false;
     };
-  }, [booted, trust.state, screen, target, homeCursors, instanceCursors, runCursors, refreshEpoch, instancesKey, instanceKey]);
+  }, [booted, trust.state, screen, target, homeCursors, instanceCursors, runCursors, refreshEpoch, instancesKey, instanceKey, readSummary, applySummary]);
 
   const data = summary?.view.data ?? null;
   const activeRevision = text(data?.active_revision_id);
@@ -448,6 +606,278 @@ export function App() {
       setCursors((cursors) =>
         direction === 1 && next !== null ? [...cursors, next] : direction === -1 && cursors.length > 1 ? cursors.slice(0, -1) : cursors,
       );
+
+  // ---- control requests --------------------------------------------------------
+
+  const controlsUnavailable = unavailable.some(
+    (item) => item.operationId === "router.request.submit" || item.operationId === "router.views.request",
+  );
+
+  /** One summary read for the coordinator; skipped while another is in flight. */
+  const refreshSummary = useCallback(async (): Promise<ReadOutcome> => {
+    const selected = targetRef.current;
+    if (selected.run === null) return "ok";
+    setSummaryLoading(true);
+    return applySummary(targetHref(selected), await readSummary(selected));
+  }, [readSummary, applySummary]);
+
+  /** Observe one request by exact ID and its known target, through the strict view only. */
+  const observe = useCallback(
+    async (key: string): Promise<ReadOutcome> => {
+      const entry = intentsRef.current.find((item) => keyOf(item.intent) === key);
+      if (entry === undefined || entry.integrity !== null || observing.current.has(key)) return "ok";
+      const envelope = envelopeOf(entry.intent);
+      const run = envelope.operation === "start_run" ? (entry.intent.binding?.runId ?? null) : envelope.run_id;
+      observing.current.add(key);
+      setBusyKey(key, true);
+      const result = await observeRequest(entry.intent.home, entry.intent.requestId, envelope.instance_id, run);
+      observing.current.delete(key);
+      setBusyKey(key, false);
+      updateEntry(key, (current) => applyReply(current, result, false));
+      if (result.ok || result.status === 404) return "ok";
+      return result.code === "core_inspection_too_large" ? "budget" : "failed";
+    },
+    [setBusyKey, updateEntry],
+  );
+
+  /** Send exactly these retained bytes. An unreadable answer leaves delivery unknown. */
+  const dispatch = useCallback(
+    async (key: string, body: string) => {
+      setBusyKey(key, true);
+      const result = await submitRequest(body);
+      setBusyKey(key, false);
+      updateEntry(key, (entry) => applyReply(entry, result, true));
+      // The keyed ledger always takes the reply. Monitoring is the selected
+      // target's own: a reply never restarts its window, backoff or halt, and
+      // only a request for the target still selected gets its first read after 1 s.
+      const entry = intentsRef.current.find((item) => keyOf(item.intent) === key);
+      const selected = targetRef.current;
+      if (
+        entry !== undefined &&
+        selected.home !== null &&
+        selected.instance !== null &&
+        sameTarget(entry, selected.home, selected.instance, selected.run)
+      ) {
+        setMonitor((current) => (current.halted === null ? { ...current, fast: true } : current));
+      }
+    },
+    [setBusyKey, updateEntry],
+  );
+
+  const sendReviewed = useCallback(
+    async (reviewed: Reviewed, unprotected: boolean): Promise<SendResult> => {
+      const home = targetRef.current.home;
+      const envelope = reviewed.envelope;
+      if (home === null) return { sent: false, reason: "No home is selected." };
+      const waiting = outstanding(intentsRef.current, envelope.operation, home, envelope.instance_id, envelope.run_id);
+      if (waiting !== null) return { sent: false, reason: waiting };
+      const intent = intentFromBuilt(home, reviewed);
+      const before = intentsRef.current;
+      const next = [...before, newEntry(intent, "sending")];
+      if (!fits(next)) {
+        return {
+          sent: false,
+          reason: "This tab already holds as many requests as one history entry keeps (20 or 64 KiB). Export and retire some first.",
+        };
+      }
+      // The exact bytes enter this tab's history before any network dispatch.
+      if (!commitIntents(next) && !unprotected) {
+        commitIntents(before);
+        return {
+          sent: false,
+          reason: "This tab's history cannot hold the request, so a reload would lose its replay bytes. Send anyway only if you accept that.",
+          unprotected: true,
+        };
+      }
+      await dispatch(keyOf(intent), intent.body);
+      return { sent: true };
+    },
+    [commitIntents, dispatch],
+  );
+
+  const requestActions = useMemo(
+    () => ({
+      observe: (key: string) => void observe(key),
+      replay: (key: string) => {
+        const entry = intentsRef.current.find((item) => keyOf(item.intent) === key);
+        if (entry === undefined || entry.conflicts.length > 0 || entry.integrity !== null) return;
+        updateEntry(key, (current) => ({ ...current, delivery: "sending", answer: null, intent: { ...current.intent, sent: true } }));
+        void dispatch(key, entry.intent.body);
+      },
+      retire: (key: string) => commitIntents(intentsRef.current.filter((entry) => keyOf(entry.intent) !== key)),
+      openRun: (home: string, instanceId: string, runId: string) => navigate({ home, instance: instanceId, run: runId }),
+    }),
+    [observe, updateEntry, dispatch, commitIntents, navigate],
+  );
+
+  // ---- the selected-target coordinator --------------------------------------------
+
+  const runData = summary?.view.data ?? null;
+  const terminalQuiet = runData !== null && TERMINAL.has(text(runData.status) ?? "") && runData.quiescent === true;
+  const watchSummary = booted && screen === "run" && summary !== null && !terminalQuiet;
+  const watchedKeys =
+    target.home === null || target.instance === null
+      ? []
+      : entries
+          .filter(
+            (entry) =>
+              !resolved(entry) &&
+              !entry.halted &&
+              entry.integrity === null &&
+              entry.delivery !== "sending" &&
+              sameTarget(entry, target.home as string, target.instance as string, target.run),
+          )
+          .map((entry) => keyOf(entry.intent));
+  const watchedKey = watchedKeys.join(",");
+  const watching = watchSummary || watchedKeys.length > 0;
+
+  // Finite and sequential: one read in flight, summary every 2 s and receipts
+  // at 1 s then 2 s, five-minute windows, no reads while hidden, failures back
+  // off 5/15/30 s then stop with Retry, and a budget refusal stops at once.
+  useEffect(() => {
+    if (!booted || trust.state !== "ready" || monitor.halted !== null || hidden || !watching) {
+      setArmed(null);
+      return;
+    }
+    if (Date.now() - monitor.since >= WINDOW_MS) {
+      setArmed(null);
+      setMonitor((current) => ({ ...current, halted: "window" }));
+      return;
+    }
+    const receipts = watchedKey === "" ? [] : watchedKey.split(",");
+    const delay = nextDelay(monitor.errors, receipts.length > 0 ? (monitor.fast ? RECEIPT_FIRST_MS : RECEIPT_MS) : SUMMARY_MS);
+    if (delay === null) {
+      setArmed(null);
+      setMonitor((current) => ({ ...current, halted: "errors" }));
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState !== "visible") return; // the hidden-tab effect rearms on return
+      if (Date.now() - monitor.since >= WINDOW_MS) {
+        setMonitor((current) => ({ ...current, halted: "window" }));
+        return;
+      }
+      void (async () => {
+        // A summary budget refusal (only reported while its target is selected)
+        // stops this target's reads at once: no receipt read follows, and a
+        // cleaned-up batch still records it. A receipt's refusal stops that request.
+        const summaryOutcome = watchSummary ? await refreshSummary() : "ok";
+        if (summaryOutcome === "budget") {
+          setMonitor((current) => ({ ...current, halted: "budget" }));
+          return;
+        }
+        const outcomes: ReadOutcome[] = [summaryOutcome];
+        for (const key of receipts) {
+          if (cancelled) return;
+          outcomes.push(await observe(key));
+        }
+        if (cancelled) return;
+        setMonitor((current) => ({
+          ...current,
+          errors: outcomes.includes("failed") ? current.errors + 1 : 0,
+          fast: false,
+          beat: current.beat + 1,
+        }));
+      })();
+    }, delay);
+    setArmed(delay);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [booted, trust.state, monitor, hidden, watching, watchSummary, watchedKey, refreshSummary, observe]);
+
+  const monitorState: MonitorState = !booted
+    ? { kind: "idle" }
+    : monitor.halted !== null
+      ? { kind: "stopped", why: monitor.halted }
+      : watching && hidden
+        ? { kind: "hidden" }
+        : watching
+          ? { kind: "watching", until: monitor.since + WINDOW_MS, nextIn: armed, failures: monitor.errors }
+          : screen === "run" && terminalQuiet
+            ? { kind: "stopped", why: "terminal" }
+            : { kind: "idle" };
+
+  // ---- control forms --------------------------------------------------------------
+
+  const activeEntry = activeRevision === null ? undefined : graphs.get(activeRevision);
+  const activeGraph = useMemo(
+    () =>
+      activeEntry !== undefined && activeEntry !== "loading" && activeEntry.ok ? parseCapturedGraph(activeEntry.value.data) : null,
+    [activeEntry],
+  );
+  const activeNodes = useMemo(
+    () =>
+      activeGraph === null
+        ? null
+        : Object.fromEntries(activeGraph.planes.map((item): [string, string[]] => [item.planeId, item.nodes.map((node) => node.id)])),
+    [activeGraph],
+  );
+  const needActiveGraph = useCallback(() => {
+    if (activeRevision !== null && !graphs.has(activeRevision)) void loadGraph(activeRevision);
+  }, [activeRevision, graphs, loadGraph]);
+
+  const formDisabled = !writable
+    ? "Sending needs browser trust and an observed service context."
+    : controlsUnavailable
+      ? "Control requests or their observation are not available on this service."
+      : flags.overCapacity
+        ? "Export and retire requests first: this tab holds more than one history entry keeps."
+        : null;
+  const outstandingFor = (operation: Operation) =>
+    target.home === null || target.instance === null
+      ? null
+      : outstanding(entries, operation, target.home, target.instance, operation === "start_run" ? null : target.run);
+
+  let controlTarget: ControlTarget | null = null;
+  if (target.home !== null && target.instance !== null && screen === "run" && runData !== null) {
+    const version = integer(runData.state_version);
+    const pending = record(runData.pending_candidate);
+    const chosen = selection?.kind === "invocation" ? selection.invocationId : null;
+    const row =
+      chosen === null
+        ? null
+        : (historyRows.find((item) => item.invocation_id === chosen) ??
+          (shownInvocation?.observation?.ok ? record(shownInvocation.observation.value.items[0]) : null));
+    controlTarget = {
+      home: target.home,
+      instanceId: target.instance,
+      runId: target.run,
+      // A failed latest read is not a fresh observation; a reviewed request keeps its own version.
+      version: version !== null && version >= 1 && summaryFailure === null && summary !== null ? { value: version, observedAt: summary.observedAt } : null,
+      planes: planesOf(runData).map(([id]) => id),
+      candidateId: pending !== null && pending.diagnostic === null ? text(pending.candidate_id) : null,
+      activeNodes,
+      activeGraph: activeEntry === undefined ? "absent" : activeEntry === "loading" ? "loading" : activeNodes !== null ? "loaded" : "failed",
+      selectedInvocation: chosen === null ? null : { invocationId: chosen, planeId: text(row?.plane_id) },
+    };
+  } else if (target.home !== null && target.instance !== null && screen === "instance" && shownInstance.observation?.ok) {
+    const settings = integer(shownInstance.observation.value.data.settings_version);
+    controlTarget = {
+      home: target.home,
+      instanceId: target.instance,
+      runId: null,
+      version: settings !== null && settings >= 1 ? { value: settings, observedAt: shownInstance.observation.observedAt } : null,
+      planes: [],
+      candidateId: null,
+      activeNodes: null,
+      activeGraph: "absent",
+      selectedInvocation: null,
+    };
+  }
+  const controls =
+    controlTarget === null ? null : (
+      <ControlForm
+        key={targetKey}
+        target={controlTarget}
+        disabled={formDisabled}
+        outstanding={outstandingFor}
+        onNeedGraph={needActiveGraph}
+        onSend={sendReviewed}
+      />
+    );
 
   // ---- presentation actions --------------------------------------------------
 
@@ -702,6 +1132,15 @@ export function App() {
           target={target}
           unavailable={unavailable}
         />
+        <MonitorStatus state={monitorState} onContinue={() => setMonitor(freshMonitor())} />
+        <RequestArea
+          entries={entries}
+          flags={flags}
+          busy={busy}
+          writable={writable}
+          actions={requestActions}
+          unreadable={unreadable}
+        />
         {!booted ? (
           <p className="muted" role="status">
             {trust.state === "pending" ? "Establishing browser trust…" : trust.state === "ready" ? "Reading service context…" : ""}
@@ -719,12 +1158,15 @@ export function App() {
             navigate={navigate}
           />
         ) : screen === "instance" ? (
-          <Instance
-            target={target}
-            page={shownInstance}
-            onPage={page(setRunCursors, shownInstance.observation?.ok ? shownInstance.observation.value.nextCursor : null)}
-            navigate={navigate}
-          />
+          <>
+            <Instance
+              target={target}
+              page={shownInstance}
+              onPage={page(setRunCursors, shownInstance.observation?.ok ? shownInstance.observation.value.nextCursor : null)}
+              navigate={navigate}
+            />
+            {controls}
+          </>
         ) : (
           <RunScreen
             target={target}
@@ -761,6 +1203,8 @@ export function App() {
             invocationPage={shownInvocation}
             reportsOpen={reportsOpen}
             onOpenReports={() => setReportsOpen(true)}
+            controls={controls}
+            canValidate={writable && !unavailable.some((item) => item.operationId === "router.views.validate")}
           />
         )}
       </main>
@@ -803,7 +1247,7 @@ function Notices({
   for (const item of unavailable) {
     items.push({
       tone: "warn",
-      content: `${item.operationId === "router.views.run" ? "Router inspection" : "Workflow outputs"} unavailable on this service (${item.reason ?? "unknown"}).`,
+      content: `${OPTIONAL_FEATURES[item.operationId] ?? item.operationId} unavailable on this service (${item.reason ?? "unknown"}).`,
     });
   }
   if (!targetValid) items.push({ tone: "error", content: "The address had an invalid target; showing state homes instead." });
@@ -885,6 +1329,9 @@ interface RunScreenProps {
   invocationPage: Paged<CoreView> | null;
   reportsOpen: boolean;
   onOpenReports: () => void;
+  /** The exact control form, after Status: never a hideable panel. */
+  controls: ReactNode;
+  canValidate: boolean;
 }
 
 const LAZY_FALLBACK = (
@@ -923,7 +1370,13 @@ function RunScreen(props: RunScreenProps) {
     revisions:
       data === null ? null : (
         <Suspense fallback={LAZY_FALLBACK}>
-          <Revisions summary={data} shownRevision={props.shownRevision} onShowGraph={props.onShowRevision} />
+          <Revisions
+            summary={data}
+            shownRevision={props.shownRevision}
+            onShowGraph={props.onShowRevision}
+            target={props.target}
+            canValidate={props.canValidate}
+          />
         </Suspense>
       ),
   };
@@ -965,6 +1418,7 @@ function RunScreen(props: RunScreenProps) {
       />
       {summary === null && props.summaryFailure !== null ? <FailureNote failure={props.summaryFailure} what="Run summary" /> : null}
       <ActionsNav payload={payload} reveal={props.reveal} reportsOpen={props.reportsOpen} onOpenReports={props.onOpenReports} />
+      {props.controls}
       {summary === null ? null : (
         <>
           {slots}
