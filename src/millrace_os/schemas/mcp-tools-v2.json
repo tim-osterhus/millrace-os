@@ -1,6 +1,6 @@
 {
   "contract": "millrace-os-mcp-tools/v2",
-  "sha256": "86c321d46f8ebc793d498ea745db728211678c6f400487cf5024bc608a705252",
+  "sha256": "14bd9684136c100c2c93e6735592626b1324ae7e4393a38ac21a7e404e36b62f",
   "tools": [
     {
       "inputSchema": {
@@ -2361,6 +2361,192 @@
         "type": "object"
       },
       "name": "millrace_v2_presentation"
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "FrontendInspect": {
+            "additionalProperties": false,
+            "properties": {
+              "operation": {
+                "const": "inspect",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation"
+            ],
+            "title": "FrontendInspect",
+            "type": "object"
+          },
+          "FrontendReset": {
+            "additionalProperties": false,
+            "properties": {
+              "expected_version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Expected Version"
+              },
+              "operation": {
+                "const": "reset",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "expected_version"
+            ],
+            "title": "FrontendReset",
+            "type": "object"
+          },
+          "FrontendSelect": {
+            "additionalProperties": false,
+            "properties": {
+              "desired": {
+                "discriminator": {
+                  "mapping": {
+                    "local": "#/$defs/LocalChoice",
+                    "stock": "#/$defs/StockChoice"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/StockChoice"
+                  },
+                  {
+                    "$ref": "#/$defs/LocalChoice"
+                  }
+                ],
+                "title": "Desired"
+              },
+              "expected_version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{32}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Expected Version"
+              },
+              "operation": {
+                "const": "select",
+                "title": "Operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "expected_version",
+              "desired"
+            ],
+            "title": "FrontendSelect",
+            "type": "object"
+          },
+          "FrontendValidate": {
+            "additionalProperties": false,
+            "properties": {
+              "operation": {
+                "const": "validate",
+                "title": "Operation",
+                "type": "string"
+              },
+              "path": {
+                "maxLength": 3968,
+                "minLength": 1,
+                "title": "Path",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation",
+              "path"
+            ],
+            "title": "FrontendValidate",
+            "type": "object"
+          },
+          "LocalChoice": {
+            "additionalProperties": false,
+            "properties": {
+              "bundle_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Bundle Sha256",
+                "type": "string"
+              },
+              "kind": {
+                "const": "local",
+                "title": "Kind",
+                "type": "string"
+              },
+              "path": {
+                "maxLength": 3968,
+                "minLength": 1,
+                "title": "Path",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "bundle_sha256"
+            ],
+            "title": "LocalChoice",
+            "type": "object"
+          },
+          "StockChoice": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "stock",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "StockChoice",
+            "type": "object"
+          }
+        },
+        "discriminator": {
+          "mapping": {
+            "inspect": "#/$defs/FrontendInspect",
+            "reset": "#/$defs/FrontendReset",
+            "select": "#/$defs/FrontendSelect",
+            "validate": "#/$defs/FrontendValidate"
+          },
+          "propertyName": "operation"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/FrontendInspect"
+          },
+          {
+            "$ref": "#/$defs/FrontendValidate"
+          },
+          {
+            "$ref": "#/$defs/FrontendSelect"
+          },
+          {
+            "$ref": "#/$defs/FrontendReset"
+          }
+        ],
+        "type": "object"
+      },
+      "name": "millrace_v2_frontend"
     }
   ]
 }

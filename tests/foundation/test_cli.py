@@ -175,6 +175,11 @@ def _fake_trust(monkeypatch, opened: list[str], requests: list | None = None):
     nonce = "n" * 43
 
     class Response:
+        status = 200
+
+        def __init__(self, payload):
+            self.payload = payload
+
         def __enter__(self):
             return self
 
@@ -182,14 +187,18 @@ def _fake_trust(monkeypatch, opened: list[str], requests: list | None = None):
             return False
 
         def read(self, limit):
-            return json.dumps({"nonce": nonce, "expires_in": 60}).encode()
+            return json.dumps(self.payload).encode()
 
     class Opener:
         def open(self, request, timeout):
             if requests is None:
                 raise AssertionError("an invalid target must not contact the service")
             requests.append(request)
-            return Response()
+            if request.full_url.endswith("/api/v1/client/frontend"):
+                # Plain `open` first reads the effective base (here stock).
+                stock = {"kind": "stock", "base": "/ui/stock/", "bundle_sha256": None}
+                return Response({"effective": stock})
+            return Response({"nonce": nonce, "expires_in": 60})
 
     monkeypatch.setattr(
         "millrace_os.cli.urllib.request.build_opener", lambda *handlers: Opener()
@@ -233,6 +242,12 @@ def test_open_targets_the_exact_stock_base_and_keeps_the_nonce_in_the_fragment(
         nonce = _fake_trust(monkeypatch, opened, requests)
         assert main(_open_args(tmp_path, *extra)) == 0
         assert opened == ["http://127.0.0.1:8731" + path + "#" + nonce]
+        if extra != ("--recovery",):
+            frontend = requests.pop(0)
+            assert (frontend.get_method(), frontend.full_url) == (
+                "GET",
+                "http://127.0.0.1:8731/api/v1/client/frontend",
+            )
         assert requests[0].full_url == "http://127.0.0.1:8731/api/v1/auth/bootstrap"
         assert json.loads(requests[0].data) == {"recovery": extra == ("--recovery",)}
         output = capsys.readouterr().out

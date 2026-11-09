@@ -16,6 +16,7 @@ import { Group, Panel, Separator, type GroupImperativeHandle } from "react-resiz
 import {
   capabilities,
   demoContext,
+  frontendChoice,
   homes,
   instance,
   instances,
@@ -40,6 +41,7 @@ import {
   type CoreView,
   type DemoMode,
   type Failure,
+  type FrontendChoice,
   type HistorySection,
   type HomesPage,
   type Observed,
@@ -255,6 +257,7 @@ export function App() {
   const [targetValid] = useState(() => parseTarget(window.location.search) !== null);
   const [demo, setDemo] = useState<DemoMode | null>(null);
   const [unavailable, setUnavailable] = useState<Capability[]>([]);
+  const [frontend, setFrontend] = useState<FrontendChoice | null>(null);
   const [booted, setBooted] = useState(false);
   const [refreshEpoch, setRefreshEpoch] = useState(0);
 
@@ -454,6 +457,10 @@ export function App() {
       if (!current) return;
       // Name optional features this service cannot serve, before any panel reads.
       setUnavailable(operations.ok ? operations.value.filter((item) => !item.available && item.operationId in OPTIONAL_FEATURES) : []);
+      // Say so when this stock client stands in for an unavailable selection.
+      const choice = await frontendChoice();
+      if (!current) return;
+      setFrontend(choice.ok ? choice.value : null);
       setBooted(true);
     })();
     return () => {
@@ -1131,6 +1138,7 @@ export function App() {
           presentation={presentation}
           target={target}
           unavailable={unavailable}
+          frontend={frontend}
         />
         <MonitorStatus state={monitorState} onContinue={() => setMonitor(freshMonitor())} />
         <RequestArea
@@ -1235,6 +1243,7 @@ function Notices({
   presentation,
   target,
   unavailable,
+  frontend,
 }: {
   trust: Trust;
   demo: DemoMode | null;
@@ -1242,8 +1251,23 @@ function Notices({
   presentation: Presentation;
   target: Target;
   unavailable: Capability[];
+  frontend: FrontendChoice | null;
 }) {
   const items: { tone: "info" | "warn" | "error"; content: ReactNode }[] = [];
+  if (frontend !== null && frontend.reason !== null) {
+    const selected = frontend.unreadable
+      ? "The saved frontend selection cannot be read"
+      : `The selected frontend${frontend.frontendId === null ? "" : ` ${frontend.frontendId}`} is not available`;
+    items.push({
+      tone: "warn",
+      content: (
+        <>
+          {selected} (<code>{frontend.reason}</code>), so this stock frontend is in use. The selection is kept. See the{" "}
+          <a href="/client">frontend launcher</a> for details, or open <a href="/recovery">Recovery</a>.
+        </>
+      ),
+    });
+  }
   for (const item of unavailable) {
     items.push({
       tone: "warn",

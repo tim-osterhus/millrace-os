@@ -66,6 +66,7 @@ FILE = {"path": "workflow.json", "content_base64": "e30="}
 USER = {"kind": "user", "id": A}
 COMMAND = {"kind": "bundled", "id": "command"}
 DEFAULT = {"kind": "bundled", "id": "default"}
+LOCAL = {"kind": "local", "path": "/opt/board", "bundle_sha256": D}
 
 # (tool, alternative) -> (required fields, optional fields, valid sample).
 # The discriminator is a required field; the sample uses every required field.
@@ -301,6 +302,18 @@ FIELDS = {
         {"name", "expected_version"},
         {"config": CONFIG},
     ),
+    ("frontend", "inspect"): ({"operation"}, set(), {}),
+    ("frontend", "validate"): ({"operation", "path"}, set(), {"path": "/opt/board"}),
+    ("frontend", "select"): (
+        {"operation", "expected_version", "desired"},
+        set(),
+        {"expected_version": None, "desired": LOCAL},
+    ),
+    ("frontend", "reset"): (
+        {"operation", "expected_version"},
+        set(),
+        {"expected_version": A},
+    ),
 }
 DISCRIMINATORS = {
     "discover": "kind",
@@ -311,6 +324,7 @@ DISCRIMINATORS = {
     "draft": "operation",
     "outputs": "operation",
     "presentation": "operation",
+    "frontend": "operation",
 }
 SINGLE = {
     "request": (
@@ -375,7 +389,7 @@ def test_v2_framing_constants_follow_the_n11_amended_equations() -> None:
     assert mc.MAX_OUTPUT - mc.MAX_INPUT - 1_024 == 982_016
 
 
-def test_bundle_has_exactly_the_ten_headless_tools() -> None:
+def test_bundle_has_exactly_the_eleven_tools() -> None:
     bundle = mc.schema_bundle_v2()
     assert bundle == mc.schema_bundle_v2()  # deterministic
     names = [tool["name"] for tool in bundle["tools"]]
@@ -392,9 +406,10 @@ def test_bundle_has_exactly_the_ten_headless_tools() -> None:
             "local_call",
             "outputs",
             "presentation",
+            "frontend",
         )
     ]
-    assert not any("frontend" in name or "demo" in name for name in names)
+    assert not any("demo" in name for name in names)
     raw = json.dumps(bundle["tools"], sort_keys=True, separators=(",", ":")).encode()
     assert bundle["contract"] == "millrace-os-mcp-tools/v2"
     assert bundle["sha256"] == hashlib.sha256(raw).hexdigest()
@@ -459,7 +474,7 @@ def test_every_alternative_accepts_its_sample_and_refuses_shape_errors() -> None
         refuses(tool, {DISCRIMINATORS[tool]: "undeclared"})
         refuses(tool, {})
     with pytest.raises(ValueError):
-        mc.admit_arguments_v2("millrace_v2_frontend", {}, HOMES)
+        mc.admit_arguments_v2("millrace_v2_demo", {}, HOMES)
 
 
 def test_optional_fields_round_trip_without_coercion() -> None:
@@ -706,6 +721,9 @@ EXPECTED_ROUTES = {
         f"{ROUTER}/outputs/instances/{A}/runs/{B}/report-a",
         {"instance_id", "run_id", "output_id"},
     ),
+    ("frontend", "inspect"): ("GET", "/api/v1/client/frontend", set()),
+    ("frontend", "validate"): ("POST", "/api/v1/client/frontend/validate", set()),
+    ("frontend", "select"): ("PUT", "/api/v1/client/frontend", set()),
     ("request", None): ("POST", ROUTER + "/requests", set()),
     ("local_call", None): ("GET", f"{ROUTER}/local-calls/{C}", {"request_id"}),
 }
@@ -753,7 +771,7 @@ def test_every_alternative_maps_to_real_capability_operations() -> None:
 
 def test_advertisement_hides_tools_with_any_unavailable_operation() -> None:
     names = {"millrace_v2_" + name for name in [*DISCRIMINATORS, *SINGLE]}
-    assert set(advertised_v2(ALL)) == names and len(names) == 10
+    assert set(advertised_v2(ALL)) == names and len(names) == 11
     assert advertised_v2({}) == []
     for missing, hidden in (
         ("router.draft.apply", "millrace_v2_draft"),
@@ -762,10 +780,13 @@ def test_advertisement_hides_tools_with_any_unavailable_operation() -> None:
         ("router.outputs.publish", "millrace_v2_outputs"),
         ("client.presentation.write", "millrace_v2_presentation"),
         ("router.local_call.read", "millrace_v2_local_call"),
+        ("client.frontend.write", "millrace_v2_frontend"),
+        ("client.frontend.validate", "millrace_v2_frontend"),
     ):
         listed = advertised_v2(ALL | {missing: False})
-        assert hidden not in listed and len(listed) == 9, missing
-    assert not any("frontend" in n or "demo" in n for n in advertised_v2(ALL))
+        assert hidden not in listed and len(listed) == 10, missing
+    assert "millrace_v2_frontend" in advertised_v2(ALL)
+    assert not any("demo" in n for n in advertised_v2(ALL))
 
 
 def v2_call(config, handler, name, arguments, *, capabilities=None, admitted=True):
@@ -868,6 +889,7 @@ def test_results_and_refusals_keep_their_meaning(bridge_config) -> None:
     sent.clear()
     for name, values, options, code in (
         ("millrace_v2_inspect", run_args | {"extra": 1}, {}, "invalid_arguments"),
+        ("millrace_v2_demo", {}, {}, "invalid_arguments"),
         ("millrace_v2_frontend", {}, {}, "invalid_arguments"),
         ("millrace_v2_inspect", run_args | {"home": "other"}, {}, "invalid_arguments"),
         ("millrace_v2_inspect", run_args,
@@ -897,6 +919,53 @@ def test_results_and_refusals_keep_their_meaning(bridge_config) -> None:
     access = parsed(result)["access_error"]
     assert (access["code"], access["delivery"]) == ("backend_unavailable", "not_sent")
     assert access["correlation"] == {"home": "main", "instance_id": A, "run_id": B}
+
+
+def test_frontend_reset_is_the_stock_selection_through_the_same_put(
+    bridge_config,
+) -> None:
+    sent = []
+
+    def handler(request):
+        sent.append(request)
+        return httpx.Response(200, json={"ok": True})
+
+    stock = {"expected_version": A, "desired": {"kind": "stock"}}
+    for alternative, values in (
+        ("reset", {"expected_version": A}),
+        ("select", stock),
+    ):
+        result = v2_call(
+            bridge_config,
+            handler,
+            "millrace_v2_frontend",
+            {"operation": alternative, **values},
+        )
+        assert result.isError is False, alternative
+    assert [(r.method, r.url.path) for r in sent] == [
+        ("PUT", "/api/v1/client/frontend")
+    ] * 2
+    assert json.loads(sent[0].content) == json.loads(sent[1].content) == stock
+    sent.clear()
+    # Shape errors refuse before HTTP: no version, an extra field, a desired
+    # stock choice carrying a path, an over-long path, a non-digest key.
+    for values in (
+        {"operation": "reset"},
+        {"operation": "reset", "expected_version": A, "desired": {"kind": "stock"}},
+        {"operation": "select", "expected_version": None,
+         "desired": {"kind": "stock", "path": "/opt/board"}},
+        {"operation": "validate", "path": "/" + "a" * 3968},
+        {"operation": "select", "expected_version": None,
+         "desired": LOCAL | {"bundle_sha256": "C" * 64}},
+        {"operation": "inspect", "home": "main"},
+    ):
+        result = v2_call(bridge_config, handler, "millrace_v2_frontend", values)
+        access = parsed(result)["access_error"]
+        assert (access["code"], access["delivery"]) == (
+            "invalid_arguments",
+            "not_sent",
+        ), values
+    assert not sent
 
 
 def test_busy_is_retryable_and_not_sent(bridge_config) -> None:
@@ -1006,7 +1075,7 @@ def test_discover_bridge_is_local_and_describes_the_profile(bridge_config) -> No
     body = parsed(result)
     assert result.isError is False
     assert body["tool_schema_sha256"] == mc.schema_bundle_v2()["sha256"]
-    assert "millrace_v2_draft" not in body["tools"] and len(body["tools"]) == 9
+    assert "millrace_v2_draft" not in body["tools"] and len(body["tools"]) == 10
     assert body["homes"] == ["main"] and body["api"] == "v1"
     assert body["limits"] == {
         "max_input": 2_162_688,

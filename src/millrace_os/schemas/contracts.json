@@ -1187,6 +1187,555 @@
     "title": "ExchangeInput",
     "type": "object"
   },
+  "FrontendState": {
+    "$defs": {
+      "FrontendEffective": {
+        "additionalProperties": false,
+        "properties": {
+          "base": {
+            "pattern": "^/ui/(stock|local/[0-9a-f]{64})/$",
+            "title": "Base",
+            "type": "string"
+          },
+          "bundle_sha256": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Sha256"
+          },
+          "kind": {
+            "enum": [
+              "stock",
+              "local"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "base",
+          "bundle_sha256"
+        ],
+        "title": "FrontendEffective",
+        "type": "object"
+      },
+      "FrontendIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "bundle_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Bundle Sha256",
+            "type": "string"
+          },
+          "frontend_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Frontend Id",
+            "type": "string"
+          },
+          "frontend_version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+            "title": "Frontend Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "frontend_id",
+          "frontend_version",
+          "bundle_sha256"
+        ],
+        "title": "FrontendIdentity",
+        "type": "object"
+      },
+      "FrontendLocalChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "bundle_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Bundle Sha256",
+            "type": "string"
+          },
+          "kind": {
+            "const": "local",
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 3968,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "path",
+          "bundle_sha256"
+        ],
+        "title": "FrontendLocalChoice",
+        "type": "object"
+      },
+      "FrontendStockChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "stock",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "FrontendStockChoice",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:FrontendState:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "The saved desired choice and the effective one; desired is kept when a\nlocal closure is unavailable, and `reason` says why stock is effective.",
+    "properties": {
+      "contract": {
+        "const": "millrace-os-frontend-state/v1",
+        "default": "millrace-os-frontend-state/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "desired": {
+        "anyOf": [
+          {
+            "discriminator": {
+              "mapping": {
+                "local": "#/$defs/FrontendLocalChoice",
+                "stock": "#/$defs/FrontendStockChoice"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/FrontendStockChoice"
+              },
+              {
+                "$ref": "#/$defs/FrontendLocalChoice"
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Desired"
+      },
+      "effective": {
+        "$ref": "#/$defs/FrontendEffective"
+      },
+      "manifest": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/FrontendIdentity"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "observed_at": {
+        "maxLength": 40,
+        "title": "Observed At",
+        "type": "string"
+      },
+      "reason": {
+        "anyOf": [
+          {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Reason"
+      },
+      "status": {
+        "enum": [
+          "absent",
+          "ready",
+          "invalid"
+        ],
+        "title": "Status",
+        "type": "string"
+      },
+      "version": {
+        "anyOf": [
+          {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Version"
+      }
+    },
+    "required": [
+      "status",
+      "version",
+      "desired",
+      "effective",
+      "manifest",
+      "reason",
+      "observed_at"
+    ],
+    "title": "FrontendState",
+    "type": "object"
+  },
+  "FrontendValidateInput": {
+    "$id": "urn:millrace-os:FrontendValidateInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "path": {
+        "maxLength": 3968,
+        "minLength": 1,
+        "title": "Path",
+        "type": "string"
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "title": "FrontendValidateInput",
+    "type": "object"
+  },
+  "FrontendValidation": {
+    "$defs": {
+      "FrontendAsset": {
+        "additionalProperties": false,
+        "properties": {
+          "media_type": {
+            "enum": [
+              "text/html; charset=utf-8",
+              "text/javascript; charset=utf-8",
+              "text/css; charset=utf-8",
+              "application/json",
+              "text/plain; charset=utf-8",
+              "image/png",
+              "image/jpeg",
+              "image/webp",
+              "image/avif",
+              "image/vnd.microsoft.icon",
+              "font/woff2",
+              "font/woff"
+            ],
+            "title": "Media Type",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256",
+          "media_type"
+        ],
+        "title": "FrontendAsset",
+        "type": "object"
+      },
+      "FrontendManifest": {
+        "additionalProperties": false,
+        "description": "`millrace-os-frontend-bundle/v1` (`millrace-os-frontend.json`).",
+        "properties": {
+          "api_version": {
+            "const": "v1",
+            "title": "Api Version",
+            "type": "string"
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/$defs/FrontendAsset"
+            },
+            "title": "Assets",
+            "type": "array"
+          },
+          "default_presentation": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Presentation"
+          },
+          "entry": {
+            "const": "index.html",
+            "title": "Entry",
+            "type": "string"
+          },
+          "format": {
+            "const": "millrace-os-frontend-bundle/v1",
+            "title": "Format",
+            "type": "string"
+          },
+          "frontend_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "title": "Frontend Id",
+            "type": "string"
+          },
+          "frontend_version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+            "title": "Frontend Version",
+            "type": "string"
+          },
+          "presentation_format": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presentation Format"
+          },
+          "required_capabilities": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z_]*(\\.[a-z][a-z_]*)+$",
+              "type": "string"
+            },
+            "title": "Required Capabilities",
+            "type": "array"
+          },
+          "required_contracts": {
+            "items": {
+              "$ref": "#/$defs/FrontendRequiredContract"
+            },
+            "title": "Required Contracts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "format",
+          "frontend_id",
+          "frontend_version",
+          "entry",
+          "assets",
+          "api_version",
+          "required_contracts",
+          "required_capabilities",
+          "presentation_format",
+          "default_presentation"
+        ],
+        "title": "FrontendManifest",
+        "type": "object"
+      },
+      "FrontendRequiredContract": {
+        "additionalProperties": false,
+        "properties": {
+          "contract_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "version": {
+            "const": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "contract_id",
+          "version",
+          "sha256"
+        ],
+        "title": "FrontendRequiredContract",
+        "type": "object"
+      },
+      "JsonValue": {}
+    },
+    "$id": "urn:millrace-os:FrontendValidation:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "bundle_sha256": {
+        "maxLength": 64,
+        "minLength": 64,
+        "pattern": "^[0-9a-f]{64}$",
+        "title": "Bundle Sha256",
+        "type": "string"
+      },
+      "contract": {
+        "const": "millrace-os-frontend-validation/v1",
+        "default": "millrace-os-frontend-validation/v1",
+        "title": "Contract",
+        "type": "string"
+      },
+      "manifest": {
+        "$ref": "#/$defs/FrontendManifest"
+      },
+      "path": {
+        "maxLength": 3968,
+        "minLength": 1,
+        "title": "Path",
+        "type": "string"
+      }
+    },
+    "required": [
+      "path",
+      "bundle_sha256",
+      "manifest"
+    ],
+    "title": "FrontendValidation",
+    "type": "object"
+  },
+  "FrontendWrite": {
+    "$defs": {
+      "FrontendLocalChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "bundle_sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Bundle Sha256",
+            "type": "string"
+          },
+          "kind": {
+            "const": "local",
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 3968,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "path",
+          "bundle_sha256"
+        ],
+        "title": "FrontendLocalChoice",
+        "type": "object"
+      },
+      "FrontendStockChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "stock",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "FrontendStockChoice",
+        "type": "object"
+      }
+    },
+    "$id": "urn:millrace-os:FrontendWrite:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Select `desired` if the saved version is `expected_version` (null: none\nsaved). A local choice names exactly the digest validation reported.",
+    "properties": {
+      "desired": {
+        "discriminator": {
+          "mapping": {
+            "local": "#/$defs/FrontendLocalChoice",
+            "stock": "#/$defs/FrontendStockChoice"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/FrontendStockChoice"
+          },
+          {
+            "$ref": "#/$defs/FrontendLocalChoice"
+          }
+        ],
+        "title": "Desired"
+      },
+      "expected_version": {
+        "anyOf": [
+          {
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Expected Version"
+      }
+    },
+    "required": [
+      "expected_version",
+      "desired"
+    ],
+    "title": "FrontendWrite",
+    "type": "object"
+  },
   "Health": {
     "$id": "urn:millrace-os:Health:1",
     "$schema": "https://json-schema.org/draft/2020-12/schema",

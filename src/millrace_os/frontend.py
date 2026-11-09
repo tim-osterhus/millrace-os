@@ -1,4 +1,4 @@
-"""The packaged stock frontend: manifest closure, exact assets and shell targets.
+"""Complete browser frontends: the stock closure and one selected local closure.
 
 The stock client is one prebuilt `millrace-os-frontend-bundle/v1` closure under
 the package resource directory `assets/dashboard/`. That directory is not a
@@ -7,27 +7,67 @@ asset only at `/ui/stock/{manifest path}`. Every shell navigation and every
 asset read re-reads and validates the manifest and re-hashes the bytes it
 serves, so a changed or partial closure refuses instead of mixing files.
 
-Nothing here imports Core, Plus or MCP, and no request selects a filesystem
-path. A trusted replacement frontend (OS-C1) reuses `validate_manifest`.
+The operator may also select one prebuilt local closure (OS-C1): an explicit
+absolute directory with the same manifest, keyed by the SHA-256 of its
+canonical manifest. It is validated in place, never copied, installed or run
+by the service, and served only at `/ui/local/{bundle_sha256}/` while it is
+the effective selection. The desired selection is `config_dir/frontend.json`;
+every navigation rereads it and revalidates the whole closure, and any failure
+makes stock effective without changing what was selected.
+
+Nothing here imports Core, Plus or MCP. Only the operator's explicit
+validation and selection name a filesystem path; no shell or asset request
+does.
 """
 
 from __future__ import annotations
 
+import contextlib
+import copy
+import fcntl
 import hashlib
+import os
 import re
 import stat
 import urllib.parse
-from collections.abc import Iterable, Mapping
+import uuid
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from importlib.resources import files
+from pathlib import Path
 
 from .contracts import strict_json
+from .paths import (
+    UnsafePathError,
+    ensure_directory,
+    open_new_file,
+    validate_ancestors,
+    validate_file_target,
+)
+from .presentation import (
+    PresentationError,
+    canonical_json_bytes,
+    state_fits,
+    store_lock,
+)
 
 MANIFEST_FORMAT = "millrace-os-frontend-bundle/v1"
 MANIFEST_NAME = "millrace-os-frontend.json"
 STOCK_ID = "stock"
 STOCK_BASE = "/ui/stock/"
+LOCAL_PREFIX = "/ui/local/"
+LAUNCHER = "/client"
 TARGET_KEYS = ("home", "instance", "run")
+STATE_CONTRACT = "millrace-os-frontend-state/v1"
+VALIDATION_CONTRACT = "millrace-os-frontend-validation/v1"
+SELECTION_FORMAT = "millrace-os-frontend-selection/v1"
+SELECTION_NAME = "frontend.json"
+SELECTION_LOCK = ".frontend.lock"
+# A selected local directory path, in characters, so the PUT body fits the
+# default 4,096-byte request policy (OS-G0 9).
+PATH_LIMIT = 3968
+_CHUNK = 65_536
 # The reviewed normal-document policy for exact shell bases only. API and
 # recovery responses keep the middleware's existing policy.
 SHELL_CSP = (
@@ -74,6 +114,22 @@ _OPERATION = re.compile(r"[a-z][a-z_]*(\.[a-z][a-z_]*)+")
 _CONTRACT_ID = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}")
 IDENTIFIER = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}")
 CORE_ID = re.compile(r"[0-9a-f]{32}")
+_LOCAL_BASE = re.compile(r"/ui/local/([0-9a-f]{64})/")
+_LOCAL_LEGACY = re.compile(r"/ui/local/[0-9a-f]{64}/instances/")
+_NOT_PATH = re.compile(r"[\x00-\x1f\x7f\ud800-\udfff]")
+# A local base that is not the effective selection answers with this fixed
+# page: never stock HTML, and only the permanent routes that always work.
+UNAVAILABLE_PAGE = (
+    '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
+    '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    "<title>Frontend unavailable</title></head>\n<body><main>"
+    "<h1>This frontend is not available</h1>"
+    "<p>frontend_unavailable: this is not the selected frontend, or its files "
+    "are missing, changed or incompatible. Nothing was replayed or changed.</p>"
+    '<ul><li><a href="/ui/stock/">Open the stock frontend</a></li>'
+    '<li><a href="/client">Frontend launcher</a></li>'
+    '<li><a href="/recovery">Recovery</a></li></ul></main></body></html>\n'
+)
 
 
 class FrontendError(Exception):
@@ -253,9 +309,455 @@ class StockFrontend:
         return self.read("index.html")[0]
 
 
+# --- the operator-selected local closure (OS-C1) ---
+
+
+def bundle_root(path: object) -> Path:
+    """An explicit absolute directory path with no lexical alias.
+
+    `.`/`..` components, repeated or trailing slashes, a leading `//`, control
+    characters and unpaired surrogates refuse `invalid_request`, so one
+    directory has one spelling. Symlinks are refused when it is read.
+    """
+    if not (
+        type(path) is str
+        and 1 <= len(path) <= PATH_LIMIT
+        and path.startswith("/")
+        and not path.startswith("//")
+        and _NOT_PATH.search(path) is None
+        and os.path.normpath(path) == path
+    ):
+        raise FrontendError("invalid_request", 422)
+    return Path(path)
+
+
+def _read(root: Path, relative: str, *, keep: bool) -> tuple[str, bytes | None]:
+    """The SHA-256 (and, if `keep`, the bytes) of one declared bundle file.
+
+    Every lexical ancestor must be a real directory owned by this user or root
+    and not writable by others (`paths.validate_ancestors`); the file itself
+    must be such a regular file, opened without following a symlink.
+    """
+    target = root.joinpath(*relative.split("/"))
+    validate_ancestors(target.parent)
+    if stat.S_ISLNK(os.lstat(target).st_mode):
+        raise UnsafePathError(f"frontend file must not be a symbolic link: {target}")
+    descriptor = os.open(
+        target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+    )
+    try:
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid not in {0, os.getuid()}
+            or info.st_mode & 0o022
+        ):
+            raise UnsafePathError(f"frontend file is not safe: {target}")
+        digest = hashlib.sha256()
+        kept = bytearray() if keep else None
+        while chunk := os.read(descriptor, _CHUNK):
+            digest.update(chunk)
+            if kept is not None:
+                kept.extend(chunk)
+    finally:
+        os.close(descriptor)
+    return digest.hexdigest(), None if kept is None else bytes(kept)
+
+
+@contextlib.contextmanager
+def _bundle_files() -> Iterator[None]:
+    """Unsafe paths keep their typed refusal; other file failures are
+    `frontend_unavailable`."""
+    try:
+        yield
+    except UnsafePathError:
+        raise
+    except OSError as exc:
+        raise FrontendError("frontend_unavailable", 503) from exc
+
+
+def read_manifest(
+    root: Path, *, registry: Mapping[str, str], operations: Iterable[str]
+) -> tuple[dict[str, object], dict[str, Asset], str]:
+    """The validated local manifest, its assets and its bundle key.
+
+    The key is the SHA-256 of the manifest's `millrace-canonical-json/v1`
+    bytes (sorted keys, compact UTF-8), so a cosmetic re-encoding keeps it.
+    """
+    with _bundle_files():
+        raw = _read(root, MANIFEST_NAME, keep=True)[1] or b""
+    try:
+        manifest, assets = validate_manifest(
+            raw, registry=registry, available_operations=operations, stock=False
+        )
+        digest = hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()
+    except ValueError as exc:
+        raise FrontendError("frontend_incompatible", 409) from exc
+    return manifest, assets, digest
+
+
+def verify_closure(
+    root: Path, assets: Mapping[str, Asset], want: str | None = None
+) -> bytes | None:
+    """Re-hash every declared asset; return the bytes of `want` if listed.
+
+    A missing or unreadable file is `frontend_unavailable`; bytes that differ
+    from their declared digest are `frontend_conflict`. Undeclared files in
+    the directory are ignored and never served.
+    """
+    content = None
+    for asset in assets.values():
+        with _bundle_files():
+            digest, data = _read(root, asset.path, keep=asset.path == want)
+        if digest != asset.sha256:
+            raise FrontendError("frontend_conflict", 409)
+        if asset.path == want:
+            content = data
+    return content
+
+
+def bundled_default(
+    manifest: Mapping[str, object], bundle_sha256: str
+) -> dict[str, object] | None:
+    """The bundle's immutable presentation default as a bundled config, if any.
+
+    OS keeps the custom payload as finite JSON; only its own client reads it.
+    """
+    if manifest["presentation_format"] is None:
+        return None
+    payload = manifest["default_presentation"]
+    return {
+        "frontend_id": manifest["frontend_id"],
+        "presentation_format": manifest["presentation_format"],
+        "id": "default",
+        "name": "Default",
+        "payload": copy.deepcopy(payload),
+        "payload_sha256": hashlib.sha256(canonical_json_bytes(payload)).hexdigest(),
+        "bundle_sha256": bundle_sha256,
+    }
+
+
+def _choice(value: object) -> dict[str, str] | None:
+    """A strict desired choice: stock, or a canonical local path and digest."""
+    if type(value) is not dict:
+        return None
+    if value.keys() == {"kind"} and value["kind"] == "stock":
+        return {"kind": "stock"}
+    if not (
+        value.keys() == {"kind", "path", "bundle_sha256"}
+        and value["kind"] == "local"
+        and _match(_SHA256, value["bundle_sha256"])
+    ):
+        return None
+    try:
+        bundle_root(value["path"])
+    except FrontendError:
+        return None
+    return {
+        "kind": "local",
+        "path": value["path"],
+        "bundle_sha256": value["bundle_sha256"],
+    }
+
+
+@dataclass(frozen=True)
+class Selection:
+    """The saved selection: `absent` (stock), `ready` or `invalid`."""
+
+    status: str
+    version: str | None
+    desired: dict[str, str] | None
+
+
+def read_selection(config_dir: Path) -> Selection:
+    """The saved selection. No lock, no write; unsafe targets raise.
+
+    One descriptor read, so a concurrent replace yields the old or the new
+    whole file. A malformed record is `invalid` and is never rewritten
+    implicitly.
+    """
+    target, exists = validate_file_target(Path(config_dir) / SELECTION_NAME)
+    if not exists:
+        return Selection("absent", None, {"kind": "stock"})
+    descriptor = os.open(
+        target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+    )
+    try:
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or info.st_mode & 0o077
+        ):
+            raise UnsafePathError(f"frontend selection is not safe: {target}")
+        raw = bytearray()
+        while chunk := os.read(descriptor, _CHUNK):
+            raw.extend(chunk)
+    finally:
+        os.close(descriptor)
+    try:
+        record = strict_json(bytes(raw))
+    except ValueError:
+        return Selection("invalid", None, None)
+    if not (
+        type(record) is dict
+        and record.keys() == {"format", "version", "desired"}
+        and record["format"] == SELECTION_FORMAT
+        and _match(CORE_ID, record["version"])
+        and _choice(record["desired"]) is not None
+    ):
+        return Selection("invalid", None, None)
+    return Selection("ready", record["version"], _choice(record["desired"]))
+
+
+def _commit(directory: Path, encoded: bytes) -> None:
+    """Write the selection with the presentation store's replace pattern.
+
+    Before or at `os.replace` a failure leaves the previous bytes and removes
+    the temporary file. A failed `config_dir` fsync after the replace raises
+    `frontend_write_uncertain`: the new selection may be visible; read and
+    compare before any retry.
+    """
+    target, _ = validate_file_target(directory / SELECTION_NAME)
+    fd, temporary = open_new_file(directory / (".frontend-" + uuid.uuid4().hex))
+    try:
+        try:
+            view = memoryview(encoded)
+            while view:
+                view = view[os.write(fd, view) :]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        validate_file_target(target)  # recheck immediately before replacing
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    try:
+        folder = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        try:
+            os.fsync(folder)
+        finally:
+            os.close(folder)
+    except OSError as exc:
+        raise FrontendError("frontend_write_uncertain", 503) from exc
+
+
+@dataclass(frozen=True)
+class Resolution:
+    """One navigation's effective choice; `sha256` is None for stock.
+
+    `identity` is known whenever the manifest at the selected path still has
+    the selected digest, even if a declared file then failed.
+    """
+
+    selection: Selection | None
+    sha256: str | None = None
+    manifest: dict[str, object] | None = None
+    assets: Mapping[str, Asset] | None = None
+    identity: dict[str, object] | None = None
+    reason: str | None = None
+    content: bytes | None = None
+
+    @property
+    def base(self) -> str:
+        return STOCK_BASE if self.sha256 is None else local_base(self.sha256)
+
+
+class LocalFrontend:
+    """The selected local closure, reread and revalidated on every use.
+
+    No cache: each shell navigation, asset read and state read rereads the
+    selection, the manifest and every declared file. `available` returns the
+    currently available operation IDs; it runs only when a local closure is
+    selected. Any failure makes stock effective and keeps the desired record.
+    """
+
+    def __init__(
+        self,
+        config_dir: Path,
+        *,
+        registry: Mapping[str, str],
+        available: Callable[[], Iterable[str]],
+    ) -> None:
+        self.config_dir = Path(config_dir)
+        self.registry = dict(registry)
+        self.available = available
+
+    def _manifest(self, root: Path) -> tuple[dict[str, object], dict[str, Asset], str]:
+        operations = self.available()
+        return read_manifest(root, registry=self.registry, operations=operations)
+
+    def _effective(self, selection: Selection, want: str | None = None) -> Resolution:
+        if selection.status == "invalid":
+            return Resolution(selection, reason="frontend_selection_invalid")
+        desired = selection.desired
+        if desired is None or desired["kind"] == "stock":
+            return Resolution(selection)
+        root = Path(desired["path"])
+        try:
+            manifest, assets, digest = self._manifest(root)
+        except UnsafePathError:
+            return Resolution(selection, reason="unsafe_path")
+        except FrontendError as exc:
+            return Resolution(selection, reason=exc.code)
+        if digest != desired["bundle_sha256"]:
+            # Changed manifest bytes: it is no longer the selected bundle.
+            return Resolution(selection, reason="frontend_conflict")
+        identity = {
+            "frontend_id": manifest["frontend_id"],
+            "frontend_version": manifest["frontend_version"],
+            "bundle_sha256": digest,
+        }
+        try:
+            content = verify_closure(root, assets, want)
+        except UnsafePathError:
+            return Resolution(selection, identity=identity, reason="unsafe_path")
+        except FrontendError as exc:
+            return Resolution(selection, identity=identity, reason=exc.code)
+        return Resolution(selection, digest, manifest, assets, identity, None, content)
+
+    def resolve(self, want: str | None = None) -> Resolution:
+        """The effective choice for one navigation; any failure means stock."""
+        try:
+            selection = read_selection(self.config_dir)
+        except UnsafePathError:
+            return Resolution(None, reason="unsafe_path")
+        return self._effective(selection, want)
+
+    def state(self) -> dict[str, object]:
+        """`millrace-os-frontend-state/v1`. Reads only; an unsafe selection
+        target raises `UnsafePathError` as the presentation GET does."""
+        selection = read_selection(self.config_dir)
+        resolution = self._effective(selection)
+        return {
+            "contract": STATE_CONTRACT,
+            "status": selection.status,
+            "version": selection.version,
+            "desired": selection.desired,
+            "effective": {
+                "kind": "stock" if resolution.sha256 is None else "local",
+                "base": resolution.base,
+                "bundle_sha256": resolution.sha256,
+            },
+            "manifest": resolution.identity,
+            "reason": resolution.reason,
+            "observed_at": datetime.now(UTC).isoformat(),
+        }
+
+    def validate(self, path: object) -> dict[str, object]:
+        """Read and verify one explicit directory; select or install nothing."""
+        root = bundle_root(path)
+        manifest, assets, digest = self._manifest(root)
+        verify_closure(root, assets)
+        return {
+            "contract": VALIDATION_CONTRACT,
+            "path": path,
+            "bundle_sha256": digest,
+            "manifest": manifest,
+        }
+
+    def write(
+        self, expected_version: str | None, desired: Mapping[str, object]
+    ) -> dict[str, object]:
+        """Compare the version, revalidate the exact bytes, then commit.
+
+        Under a nonblocking lock: a held lock, a changed or unreadable record,
+        or a version other than `expected_version` (null: none saved) refuses
+        `frontend_conflict` without writing. A local choice must validate to
+        exactly its `bundle_sha256` with every listed file unchanged (else
+        `frontend_conflict`). If it carries a presentation default, the size
+        check and the commit also hold the presentation store's lock, which
+        every store write holds while it resolves this selection: a busy store
+        refuses `frontend_conflict`, and a GET over its 1 MiB policy refuses
+        `frontend_incompatible`. Nothing else is changed.
+        """
+        choice = _choice(desired)
+        if choice is None:
+            raise FrontendError("invalid_request", 422)
+        directory = ensure_directory(self.config_dir)
+        lock, _ = validate_file_target(directory / SELECTION_LOCK)
+        descriptor = os.open(
+            lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600
+        )
+        try:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise FrontendError("frontend_conflict", 409) from exc
+            current = read_selection(directory)
+            if current.status == "invalid" or current.version != expected_version:
+                raise FrontendError("frontend_conflict", 409)
+            default: dict[str, object] | None = None
+            if choice["kind"] == "local":
+                root = bundle_root(choice["path"])
+                manifest, assets, digest = self._manifest(root)
+                if digest != choice["bundle_sha256"]:
+                    raise FrontendError("frontend_conflict", 409)
+                verify_closure(root, assets)
+                default = bundled_default(manifest, digest)
+            record = {
+                "format": SELECTION_FORMAT,
+                "version": uuid.uuid4().hex,
+                "desired": choice,
+            }
+            encoded = canonical_json_bytes(record)
+            if default is None:
+                _commit(directory, encoded)  # a GET can only shrink
+            else:
+                try:
+                    with store_lock(directory):
+                        if not state_fits(directory, default):
+                            raise FrontendError("frontend_incompatible", 409)
+                        _commit(directory, encoded)
+                except PresentationError as exc:  # a store write holds it
+                    raise FrontendError("frontend_conflict", 409) from exc
+        finally:
+            os.close(descriptor)  # also releases the lock
+        return self.state()
+
+    def base(self) -> str:
+        """The effective exact shell base."""
+        return self.resolve().base
+
+    def presentation_default(self) -> dict[str, object] | None:
+        """The effective local closure's presentation default, if any."""
+        resolution = self.resolve()
+        if resolution.sha256 is None or resolution.manifest is None:
+            return None
+        return bundled_default(resolution.manifest, resolution.sha256)
+
+    def shell(self, bundle_sha256: str) -> bytes | None:
+        """The effective entry document, or None if this base is not effective."""
+        resolution = self.resolve("index.html")
+        if resolution.sha256 != bundle_sha256:
+            return None
+        return resolution.content
+
+    def read(self, bundle_sha256: str, path: str) -> tuple[bytes, str]:
+        """Exact listed bytes of the effective closure; never another digest."""
+        resolution = self.resolve(path)
+        if resolution.sha256 != bundle_sha256 or resolution.assets is None:
+            raise FrontendError("frontend_unavailable", 503)
+        asset = resolution.assets.get(path)
+        if asset is None:
+            raise FrontendError("route_not_found", 404)
+        if resolution.content is None:  # a listed asset's bytes were kept
+            raise FrontendError("frontend_unavailable", 503)
+        return resolution.content, asset.media_type
+
+
+def local_base(bundle_sha256: str) -> str:
+    return LOCAL_PREFIX + bundle_sha256 + "/"
+
+
+def is_shell(path: str) -> bool:
+    """The two exact shell-base patterns that take the normal-document policy."""
+    return path == STOCK_BASE or _LOCAL_BASE.fullmatch(path) is not None
+
+
 def query_keys(path: str) -> frozenset[str] | None:
     """Query keys admitted on shell and redirect paths; None for other paths."""
-    if path in {"/", "/ui/stock", STOCK_BASE}:
+    if path in {"/", "/ui/stock"} or is_shell(path):
         return frozenset(TARGET_KEYS)
     if legacy_target(path) is not None:
         return frozenset({"home"})
@@ -264,7 +766,11 @@ def query_keys(path: str) -> frozenset[str] | None:
 
 def legacy_target(path: str) -> tuple[str, str | None] | None:
     """`(instance, run)` for `/instances/...` and `{base}instances/...` forms."""
-    for prefix in ("/instances/", STOCK_BASE + "instances/"):
+    prefixes = ["/instances/", STOCK_BASE + "instances/"]
+    local = _LOCAL_LEGACY.match(path)
+    if local is not None:
+        prefixes.append(local[0])
+    for prefix in prefixes:
         if path.startswith(prefix):
             parts = path[len(prefix) :].split("/")
             if len(parts) == 1:
@@ -291,9 +797,9 @@ def shell_target(items: Iterable[tuple[str, str]]) -> dict[str, str]:
     return {key: target[key] for key in TARGET_KEYS if key in target}
 
 
-def shell_location(target: Mapping[str, str]) -> str:
-    """The exact stock base plus validated query; never a fragment."""
+def shell_location(target: Mapping[str, str], base: str = STOCK_BASE) -> str:
+    """An exact shell base plus validated query; never a fragment."""
     query = urllib.parse.urlencode(
         [(key, target[key]) for key in TARGET_KEYS if key in target]
     )
-    return STOCK_BASE + ("?" + query if query else "")
+    return base + ("?" + query if query else "")

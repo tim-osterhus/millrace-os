@@ -780,6 +780,117 @@ class DraftFileRead(Contract):
     observed_at: Timestamp
 
 
+# Trusted complete replacement frontend (C1): one operator-selected prebuilt
+# local closure. `frontend.py` owns manifest, path, ownership and hash rules;
+# these strict shapes document the wire forms. Only the four documents in
+# `MODELS` are registered; the others are nested components.
+FrontendPath = Annotated[str, Field(min_length=1, max_length=3968)]
+
+
+class FrontendStockChoice(Contract):
+    kind: Literal["stock"]
+
+
+class FrontendLocalChoice(Contract):
+    kind: Literal["local"]
+    path: FrontendPath
+    bundle_sha256: Sha256
+
+
+FrontendChoice = Annotated[
+    FrontendStockChoice | FrontendLocalChoice, Field(discriminator="kind")
+]
+
+
+class FrontendEffective(Contract):
+    kind: Literal["stock", "local"]
+    base: Annotated[str, Field(pattern=r"^/ui/(stock|local/[0-9a-f]{64})/$")]
+    bundle_sha256: Sha256 | None
+
+
+class FrontendIdentity(Contract):
+    frontend_id: FrontendId
+    frontend_version: VersionText
+    bundle_sha256: Sha256
+
+
+class FrontendAsset(Contract):
+    path: Annotated[str, Field(min_length=1, max_length=512)]
+    sha256: Sha256
+    media_type: Literal[
+        "text/html; charset=utf-8",
+        "text/javascript; charset=utf-8",
+        "text/css; charset=utf-8",
+        "application/json",
+        "text/plain; charset=utf-8",
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "image/avif",
+        "image/vnd.microsoft.icon",
+        "font/woff2",
+        "font/woff",
+    ]
+
+
+class FrontendRequiredContract(Contract):
+    contract_id: Identifier
+    version: Literal[1]
+    sha256: Sha256
+
+
+class FrontendManifest(Contract):
+    """`millrace-os-frontend-bundle/v1` (`millrace-os-frontend.json`)."""
+
+    format: Literal["millrace-os-frontend-bundle/v1"]
+    frontend_id: FrontendId
+    frontend_version: VersionText
+    entry: Literal["index.html"]
+    assets: list[FrontendAsset]
+    api_version: Literal["v1"]
+    required_contracts: list[FrontendRequiredContract]
+    required_capabilities: list[OperationId]
+    presentation_format: FormatId | None
+    default_presentation: dict[str, JsonValue] | None
+
+
+class FrontendState(Contract):
+    """The saved desired choice and the effective one; desired is kept when a
+    local closure is unavailable, and `reason` says why stock is effective."""
+
+    contract: Literal["millrace-os-frontend-state/v1"] = (
+        "millrace-os-frontend-state/v1"
+    )
+    status: Literal["absent", "ready", "invalid"]
+    version: CoreId | None
+    desired: FrontendChoice | None
+    effective: FrontendEffective
+    manifest: FrontendIdentity | None
+    reason: Identifier | None
+    observed_at: Timestamp
+
+
+class FrontendValidation(Contract):
+    contract: Literal["millrace-os-frontend-validation/v1"] = (
+        "millrace-os-frontend-validation/v1"
+    )
+    path: FrontendPath
+    bundle_sha256: Sha256
+    manifest: FrontendManifest
+
+
+class FrontendValidateInput(Contract):
+    path: FrontendPath
+
+
+class FrontendWrite(Contract):
+    """Select `desired` if the saved version is `expected_version` (null: none
+    saved). A local choice names exactly the digest validation reported."""
+
+    expected_version: CoreId | None
+    desired: FrontendChoice
+
+
 MODELS = [
     RouterRead[JsonValue],
     RouterRead[RouterValidation],
@@ -815,6 +926,10 @@ MODELS = [
     RouterPublication,
     DraftManifest,
     DraftFileRead,
+    FrontendState,
+    FrontendValidation,
+    FrontendValidateInput,
+    FrontendWrite,
     Health,
     Error,
     Version,

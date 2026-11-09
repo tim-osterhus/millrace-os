@@ -47,6 +47,7 @@ STOCK_CONTRACTS = (
     "DemoContext",
     "Error",
     "ExchangeInput",
+    "FrontendState",
     "PresentationState",
     "PresentationWrite",
     "RouterCallObservation",
@@ -62,6 +63,7 @@ STOCK_CONTRACTS = (
 # Only operations that need no optional component, so stock always serves.
 STOCK_CAPABILITIES = (
     "client.capabilities.read",
+    "client.frontend.read",
     "client.presentation.read",
     "client.presentation.write",
 )

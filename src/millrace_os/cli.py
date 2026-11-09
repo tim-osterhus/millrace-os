@@ -6,6 +6,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import signal
 import sys
 import urllib.error
@@ -17,7 +18,14 @@ from pathlib import Path
 
 from .config import ApplicationConfig, ConfigurationError, _endpoint_host
 from .credentials import CredentialStore
-from .frontend import FrontendError, shell_location, shell_target
+from .frontend import (
+    STOCK_BASE,
+    FrontendError,
+    bundle_root,
+    is_shell,
+    shell_location,
+    shell_target,
+)
 from .process import (
     ProcessIdentity,
     ProcessIdentityError,
@@ -59,6 +67,7 @@ PRESENTATION_MUTATIONS = frozenset(
     }
 )
 PRESENTATION_ROUTE = "/api/v1/client/presentation"
+FRONTEND_ROUTE = "/api/v1/client/frontend"
 # `client inspect --kind`: foundation reads, capabilities and observation.
 CLIENT_KINDS = {
     "health": "/api/v1/health",
@@ -140,6 +149,12 @@ def _parser() -> argparse.ArgumentParser:
     browser = subparsers.add_parser("open", help="authenticate a local browser")
     _add_config_options(browser)
     browser.add_argument("--recovery", action="store_true")
+    browser.add_argument(
+        "--stock", action="store_true", help="the stock frontend, whatever is selected"
+    )
+    browser.add_argument(
+        "--client", action="store_true", help="the package-owned frontend launcher"
+    )
     browser.add_argument("--home", metavar="NAME")
     browser.add_argument("--instance", metavar="ID")
     browser.add_argument("--run", metavar="ID")
@@ -319,6 +334,28 @@ def _parser() -> argparse.ArgumentParser:
                 metavar="TOKEN|null",
                 help="require this GET token; null requires an absent store",
             )
+    frontends = subparsers.add_parser(
+        "frontend", help="the complete browser frontend this service serves"
+    ).add_subparsers(dest="frontend_command", required=True)
+    for name in ("inspect", "validate", "select", "reset"):
+        # No abbreviations: `--path`/`--port` must never be guessed.
+        command = frontends.add_parser(name, allow_abbrev=False)
+        _add_config_options(command)
+        if name in {"validate", "select"}:
+            command.add_argument(
+                "--path", required=True, help="absolute local bundle directory"
+            )
+        if name == "select":
+            command.add_argument(
+                "--bundle-sha256", required=True, help="the digest validate reported"
+            )
+        if name in {"select", "reset"}:
+            command.add_argument(
+                "--expected-version",
+                required=True,
+                metavar="TOKEN|null",
+                help="the inspected version; null when no selection is saved",
+            )
     return parser
 
 
@@ -401,8 +438,11 @@ def _query(args: argparse.Namespace) -> int:
         return 1
 
 
-def _open_path(args: argparse.Namespace) -> str:
-    """The exact shell route for `open`, validated before any request."""
+def _open_path(args: argparse.Namespace) -> tuple[str | None, dict[str, str]]:
+    """The exact route for `open`, validated before any request.
+
+    The path is None when the effective shell base must be read first.
+    """
     target = [
         (key, value)
         for key, value in (
@@ -412,20 +452,24 @@ def _open_path(args: argparse.Namespace) -> str:
         )
         if value is not None
     ]
-    if args.recovery:
+    fixed = [name for name in ("recovery", "stock", "client") if getattr(args, name)]
+    if len(fixed) > 1:
+        raise FrontendError("invalid_target", 2)
+    if args.recovery or args.client:
         if target:
             raise FrontendError("invalid_target", 2)
-        return "/recovery"
+        return ("/recovery" if args.recovery else "/client"), {}
     try:
-        return shell_location(shell_target(target))
+        selected = shell_target(target)
     except FrontendError as error:
         raise FrontendError("invalid_target", 2) from error
+    return (shell_location(selected, STOCK_BASE) if args.stock else None), selected
 
 
 def _trust_command(args: argparse.Namespace) -> int:
     if args.command == "open":
         try:
-            path = _open_path(args)
+            path, target = _open_path(args)
         except FrontendError as error:
             print(json.dumps({"error": error.code}))
             return 2
@@ -433,6 +477,17 @@ def _trust_command(args: argparse.Namespace) -> int:
     # Explicitly configured local credential is used only in the request header.
     token = CredentialStore(config.credential_path).ensure()
     endpoint = f"http://{_endpoint_host(config.host)}:{config.port}"
+    if args.command == "open" and path is None:
+        # Resolve the exact effective base first; the nonce is appended last.
+        try:
+            status, body = _local_call(config, token, "GET", FRONTEND_ROUTE)
+            base = json.loads(body)["effective"]["base"] if status == 200 else None
+        except (OSError, ValueError, KeyError, TypeError):
+            base = None
+        if not isinstance(base, str) or not is_shell(base):
+            print(json.dumps({"error": "local_trust_unavailable"}))
+            return 1
+        path = shell_location(target, base)
     recovery = bool(getattr(args, "recovery", False))
     route = "bootstrap" if args.command == "open" else "rotate"
     request = urllib.request.Request(
@@ -847,6 +902,53 @@ def _presentation(args):
     return 0 if status == 200 else 1
 
 
+def _frontend(args: argparse.Namespace) -> int:
+    """`frontend`: one GET, validation POST or selection PUT, printed as returned.
+
+    Arguments are checked before contacting the service. A selection always
+    names the expected version; a refusal is printed, never retried.
+    """
+    command = args.frontend_command
+    method, route, body = "GET", FRONTEND_ROUTE, None
+    if command in {"validate", "select"}:
+        try:
+            bundle_root(args.path)
+        except FrontendError as exc:
+            raise ConfigurationError(
+                "--path must be an absolute local directory without . or .. "
+                "components or a trailing slash"
+            ) from exc
+    if command == "validate":
+        method, route, body = "POST", route + "/validate", {"path": args.path}
+    elif command in {"select", "reset"}:
+        version = args.expected_version
+        if version != "null" and not re.fullmatch(r"[0-9a-f]{32}", version):
+            raise ConfigurationError("--expected-version takes a version or null")
+        desired = {"kind": "stock"}
+        if command == "select":
+            if not re.fullmatch(r"[0-9a-f]{64}", args.bundle_sha256):
+                raise ConfigurationError("--bundle-sha256 takes a SHA-256 digest")
+            desired = {
+                "kind": "local",
+                "path": args.path,
+                "bundle_sha256": args.bundle_sha256,
+            }
+        expected = None if version == "null" else version
+        method, body = "PUT", {"expected_version": expected, "desired": desired}
+    config = _config(args)
+    token = CredentialStore(config.credential_path).ensure()
+    raw = None if body is None else _compact(body)
+    try:
+        status, response = _local_call(config, token, method, route, raw)
+    except OSError:
+        # A selection PUT may have been applied: inspect before any retry.
+        error = "frontend_write_unknown" if method == "PUT" else "daemon_unavailable"
+        print(json.dumps({"error": error}))
+        return 1
+    print(response.decode())
+    return 0 if status == 200 else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -872,6 +974,8 @@ def main(argv: list[str] | None = None) -> int:
             return _router(args)
         if args.command == "presentation":
             return _presentation(args)
+        if args.command == "frontend":
+            return _frontend(args)
         if args.command == "client":
             return _client(args)
         if args.command == "serve":

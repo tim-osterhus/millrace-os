@@ -462,6 +462,40 @@ export async function capabilities(): Promise<Observed<Capability[]>> {
   });
 }
 
+/** The saved complete-frontend choice, as far as this stock client shows it. */
+export interface FrontendChoice {
+  /** Why the desired frontend is not in use (stock is), or null when it is. */
+  reason: string | null;
+  /** The desired local frontend's ID while its manifest still matches. */
+  frontendId: string | null;
+  /** The saved selection file itself could not be read. */
+  unreadable: boolean;
+}
+
+/** `GET /api/v1/client/frontend`: one read of the operator's frontend choice. */
+export async function frontendChoice(): Promise<Observed<FrontendChoice>> {
+  return observed(await read("/api/v1/client/frontend"), (body) => {
+    const status = text(body.status);
+    const reason = text(body.reason);
+    const manifest = record(body.manifest);
+    if (
+      body.contract !== "millrace-os-frontend-state/v1" ||
+      (status !== "absent" && status !== "ready" && status !== "invalid") ||
+      record(body.effective) === null ||
+      (body.reason !== null && (reason === null || !IDENTIFIER.test(reason))) ||
+      (body.manifest !== null && manifest === null)
+    ) {
+      return null;
+    }
+    const frontendId = text(manifest?.frontend_id);
+    return {
+      reason,
+      frontendId: frontendId !== null && IDENTIFIER.test(frontendId) ? frontendId : null,
+      unreadable: status === "invalid",
+    };
+  });
+}
+
 export type DemoMode =
   | { kind: "ordinary" }
   | { kind: "demo"; home: string; instanceId: string; runId: string; finishAvailable: boolean }

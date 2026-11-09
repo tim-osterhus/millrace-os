@@ -348,6 +348,7 @@ OutputId = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
 FrontendId = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,63}$")]
 FormatId = Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")]
 DraftPath = Annotated[str, Field(min_length=1, max_length=512)]
+FrontendPath = Annotated[str, Field(min_length=1, max_length=3968)]
 Content = Annotated[str, Field(max_length=1048576)]
 LongText = Annotated[str, Field(min_length=1, max_length=4096)]
 Observation = Literal["millrace-os-router-call/v1", "millrace-os-router-call/v2"]
@@ -510,6 +511,19 @@ class WriteReplace(Strict):
 
 
 PresentationWrite = Annotated[WriteCompare | WriteReplace, Field(discriminator="mode")]
+
+
+class StockChoice(Strict):
+    kind: Literal["stock"]
+
+
+class LocalChoice(Strict):
+    kind: Literal["local"]
+    path: FrontendPath
+    bundle_sha256: Digest
+
+
+FrontendChoice = Annotated[StockChoice | LocalChoice, Field(discriminator="kind")]
 
 
 class _LifecycleTarget(Strict):
@@ -826,6 +840,21 @@ TOOL_SPECS_V2 = {
             },
         },
     ),
+    # The complete-frontend choice (C1); no home. `reset` is the stock
+    # selection through the same PUT; both name the expected version.
+    "millrace_v2_frontend": _alternatives(
+        "frontend",
+        "operation",
+        {
+            "inspect": {},
+            "validate": {"path": (FrontendPath, ...)},
+            "select": {
+                "expected_version": (Version, ...),
+                "desired": (FrontendChoice, ...),
+            },
+            "reset": {"expected_version": (Version, ...)},
+        },
+    ),
 }
 TOOL_MODELS_V2 = {name: TypeAdapter(spec) for name, spec in TOOL_SPECS_V2.items()}
 
@@ -858,7 +887,7 @@ def admit_arguments_v2(name: str, arguments: object, homes: list[str]) -> dict:
 
 
 def schema_bundle_v2() -> dict:
-    """The full fixed headless v2 bundle; advertisement filters, never edits it."""
+    """The full fixed v2 bundle; advertisement filters, never edits it."""
     tools = [
         {"name": name, "inputSchema": {"type": "object", **adapter.json_schema()}}
         for name, adapter in TOOL_MODELS_V2.items()

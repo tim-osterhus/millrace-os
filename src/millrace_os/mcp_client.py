@@ -34,6 +34,7 @@ ROUTER = "/api/v1/router"
 VIEWS = ROUTER + "/views/instances/{instance_id}"
 RUN_OUTPUTS = ROUTER + "/outputs/instances/{instance_id}/runs/{run_id}"
 PRESENTATION = "/api/v1/client/presentation"
+FRONTEND = "/api/v1/client/frontend"
 READ, WRITE = (
     ("GET", PRESENTATION, "client.presentation.read"),
     ("PUT", PRESENTATION, "client.presentation.write"),
@@ -172,6 +173,12 @@ V2_ROUTES = {
             "import",
         )
     },
+    ("millrace_v2_frontend", "inspect"): (("GET", FRONTEND, "client.frontend.read"),),
+    ("millrace_v2_frontend", "validate"): (
+        ("POST", FRONTEND + "/validate", "client.frontend.validate"),
+    ),
+    ("millrace_v2_frontend", "select"): (("PUT", FRONTEND, "client.frontend.write"),),
+    ("millrace_v2_frontend", "reset"): (("PUT", FRONTEND, "client.frontend.write"),),
 }
 DISCRIMINATORS = {
     "millrace_v2_discover": "kind",
@@ -182,6 +189,7 @@ DISCRIMINATORS = {
     "millrace_v2_draft": "operation",
     "millrace_v2_outputs": "operation",
     "millrace_v2_presentation": "operation",
+    "millrace_v2_frontend": "operation",
 }
 CALL_MEDIA_TYPES = {
     "millrace-os-router-call/v1": "application/vnd.millrace.router-call.v1+json",
@@ -452,6 +460,8 @@ class BackendClient:
             if k not in {field, "observation_contract"}
             and "{" + k + "}" not in template
         }
+        if (name, alternative) == ("millrace_v2_frontend", "reset"):
+            values["desired"] = {"kind": "stock"}  # the same PUT as select stock
         path = template.format(
             **{k: quote(str(v), safe="") for k, v in args.items() if isinstance(v, str)}
         )

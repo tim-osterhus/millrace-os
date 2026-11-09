@@ -17,10 +17,17 @@ millrace-os open --recovery                       # trust/diagnostics only
 ```
 
 `open` mints a one-use 60-second nonce with the bearer credential. It then
-opens `/ui/stock/` with the validated target query and puts the nonce only in
-the URL fragment. Targets follow one grammar on the CLI, the server and the
+opens the effective frontend's exact base (`/ui/stock/` unless a local client is
+selected; see [frontends](frontend.md)) with the validated target query and
+puts the nonce only in the URL fragment. `open --stock` always opens this
+client. Targets follow one grammar on the CLI, the server and the
 client: `home` is an identifier, while `instance` and `run` are 32 lowercase hex
 characters. An instance requires a home and a run requires an instance.
+
+If a selected local frontend is unavailable (its files are missing, changed or
+incompatible), `/` opens this client instead, and it shows a notice with the
+reason and links to the frontend launcher (`/client`) and recovery. The saved
+selection is kept; see [frontends](frontend.md).
 
 ## Routes
 
@@ -28,7 +35,8 @@ characters. An instance requires a home and a run requires an instance.
 | --- | --- |
 | `/ui/stock/` with optional `home`, `instance`, `run` | The shell document only; it contains no operational data. Duplicate or unknown keys and invalid targets answer 422. |
 | `/ui/stock/{path}` | Exactly the files listed in the packaged manifest, with their listed media type. An unlisted path answers 404 JSON. A listed file whose bytes changed or went missing answers 503 `frontend_unavailable`. |
-| `/`, `/ui/stock`, `/instances/{instance}`, `/instances/{instance}/runs/{run}` and the same `instances` forms under `/ui/stock/` | 303 to `/ui/stock/` plus the validated target. The `Location` has no fragment, so the browser keeps the nonce fragment. |
+| `/ui/stock` | 303 to `/ui/stock/` plus the validated target. |
+| `/`, `/instances/{instance}`, `/instances/{instance}/runs/{run}` and the same `instances` forms under a shell base | 303 to the effective frontend's base plus the validated target (`/ui/stock/` unless a local client is selected and available). The `Location` has no fragment, so the browser keeps the nonce fragment. |
 | `/recovery` | The independent recovery shell; it never loads the stock client. |
 
 Every response is `no-store`, `no-referrer`, `nosniff` and `DENY` framed. The

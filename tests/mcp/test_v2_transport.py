@@ -11,6 +11,7 @@ as the bridge wrote them.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import json
 import os
@@ -27,8 +28,10 @@ import uvicorn
 from mcp.types import JSONRPCRequest
 from test_shared_requests import clients
 
+from millrace_os import frontend
 from millrace_os import mcp_contracts as mc
 from millrace_os import presentation as p
+from millrace_os.contracts import schema_artifacts
 from millrace_os.credentials import CredentialStore
 from millrace_os.mcp_auth import HTTPGuard, ResourceVerifier
 from millrace_os.mcp_bridge import Bridge, _Input, _Output
@@ -250,8 +253,8 @@ def test_sdk_peer_carries_a_near_limit_dense_float_write(
                                 "arguments": arguments}]}]
         )
     names = {tool["name"] for tool in result["tools"]}
-    assert "millrace_v2_presentation" in names
-    assert not any("frontend" in n or "demo" in n for n in names)
+    assert {"millrace_v2_presentation", "millrace_v2_frontend"} <= names
+    assert not any("demo" in n for n in names)
     (call,) = result["results"]
     assert not call.get("isError"), call
     structured = call["structuredContent"]
@@ -463,3 +466,108 @@ def test_sdk_peer_carries_maximal_draft_and_output_bodies(
     assert "access_error" not in body, body
     assert published["isError"] and body["http_status"] not in {413, 502}
     assert body["os"]["code"] != "request_too_large"
+
+
+def frontend_bundle(root) -> str:
+    """One complete local closure with explicit modes; returns its key."""
+    files = {"index.html": b"<!doctype html><title>Board</title>"}
+    root.mkdir(mode=0o755)
+    root.chmod(0o755)
+    (root / "index.html").write_bytes(files["index.html"])
+    (root / "index.html").chmod(0o644)
+    digests = {e.contract_id: e.sha256 for e in schema_artifacts()[1].schemas}
+    manifest = {
+        "format": frontend.MANIFEST_FORMAT,
+        "frontend_id": "example.board",
+        "frontend_version": "1.0.0",
+        "entry": "index.html",
+        "assets": [
+            {
+                "path": "index.html",
+                "sha256": hashlib.sha256(files["index.html"]).hexdigest(),
+                "media_type": "text/html; charset=utf-8",
+            }
+        ],
+        "api_version": "v1",
+        "required_contracts": [
+            {"contract_id": "FrontendState", "version": 1,
+             "sha256": digests["FrontendState"]}
+        ],
+        "required_capabilities": ["client.frontend.read"],
+        "presentation_format": None,
+        "default_presentation": None,
+    }
+    (root / frontend.MANIFEST_NAME).write_text(json.dumps(manifest))
+    (root / frontend.MANIFEST_NAME).chmod(0o644)
+    return hashlib.sha256(p.canonical_json_bytes(manifest)).hexdigest()
+
+
+@pytest.mark.parametrize("transport", ["stdio", "streamable-http"])
+def test_sdk_peer_inspects_validates_selects_and_resets_a_frontend(
+    real_os, tmp_path, signing, mcp_port, transport
+):
+    service, config = real_os
+    root = tmp_path / "bundle"
+    bundle_key = frontend_bundle(root)
+    desired = {"kind": "local", "path": str(root), "bundle_sha256": bundle_key}
+
+    def call(**arguments):
+        return {"name": "millrace_v2_frontend", "arguments": arguments}
+
+    with peer_base(transport, config, tmp_path, signing, mcp_port) as base:
+        (first,) = clients(
+            [
+                base
+                | {
+                    "calls": [
+                        call(operation="inspect"),
+                        call(operation="validate", path=str(root)),
+                        call(operation="select", expected_version=None,
+                             desired=desired),
+                    ]
+                }
+            ]
+        )
+        assert "millrace_v2_frontend" in {tool["name"] for tool in first["tools"]}
+        inspected, validated, chosen = (
+            item["structuredContent"] for item in first["results"]
+        )
+        assert not any(item.get("isError") for item in first["results"])
+        version = chosen["os"]["version"]
+        (second,) = clients(
+            [
+                base
+                | {
+                    "calls": [
+                        call(operation="select", expected_version=None,
+                             desired=desired),
+                        call(operation="reset", expected_version=version),
+                        call(operation="inspect"),
+                    ]
+                }
+            ]
+        )
+    assert inspected["os"]["status"] == "absent"
+    assert validated["os"]["bundle_sha256"] == bundle_key
+    assert chosen["os"]["effective"]["base"] == f"/ui/local/{bundle_key}/"
+    stale, reset, final = second["results"]
+    # The stale selection is the backend's own typed refusal, unchanged.
+    assert stale["isError"] is True
+    refused = stale["structuredContent"]
+    assert (refused["http_status"], refused["os"]["code"]) == (409, "frontend_conflict")
+    assert not reset.get("isError") and not final.get("isError")
+    assert reset["structuredContent"]["os"]["desired"] == {"kind": "stock"}
+    state = final["structuredContent"]["os"]
+    token = CredentialStore(service.config.credential_path).ensure()
+    with httpx.Client(
+        base_url=config.os_origin,
+        headers={"Authorization": "Bearer " + token},
+        trust_env=False,
+        timeout=10,
+    ) as api:
+        direct = api.get("/api/v1/client/frontend").json()
+    drop = {"observed_at"}
+    assert {k: v for k, v in state.items() if k not in drop} == {
+        k: v for k, v in direct.items() if k not in drop
+    }
+    assert state["effective"]["base"] == "/ui/stock/"

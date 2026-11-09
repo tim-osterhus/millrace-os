@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Millrace OS frontends</title><script src="/client/client.js" defer></script></head>
+<body><main><h1>Millrace OS frontends</h1>
+<p>These links never depend on the selected frontend.</p>
+<ul>
+<li><a href="/ui/stock/">Open stock frontend</a></li>
+<li><a href="/recovery">Recovery</a> (sign in with <code>millrace-os open --recovery</code>)</li>
+</ul>
+<p id="stock-status" role="status" hidden></p>
+<h2>Selected frontend</h2>
+<p id="status" role="status">Sign in with <code>millrace-os open --client</code> to see the selected frontend.</p>
+<dl id="selection" hidden>
+<dt>Selected</dt><dd id="desired"></dd>
+<dt>In use</dt><dd id="effective"></dd>
+<dt>Selection version</dt><dd id="version"></dd>
+</dl>
+<p id="open" hidden><a id="open-link" href="/ui/stock/">Open the frontend in use</a></p>
+<p>Change the selection with <code>millrace-os frontend select</code> or return to stock with <code>millrace-os frontend reset</code>, or use the same API and MCP operations. A change never reloads or replaces a page that is already open.</p>
+</main></body></html>

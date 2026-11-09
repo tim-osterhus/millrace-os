@@ -21,11 +21,15 @@ from millrace_os.router_client import RouterUnavailable
 from millrace_os.router_workers import RouterWorkers
 
 INSTANCE, RUN, DRAFT, FROZEN, REQUEST, OTHER = (c * 32 for c in "abcdef")
-# OS-G0 7.1, spelled out independently of the implementation's table.
+# OS-G0 7.1 plus the three C1 frontend operations, spelled out independently
+# of the implementation's table.
 EXPECTED_OPERATIONS = [
     "actions.invoke",
     "actions.list",
     "client.capabilities.read",
+    "client.frontend.read",
+    "client.frontend.validate",
+    "client.frontend.write",
     "client.presentation.read",
     "client.presentation.write",
     "contracts.read",
@@ -543,7 +547,7 @@ def test_openapi_documents_parity_reads_and_the_apply_202(tmp_path):
         "DraftManifest",
         "DraftFileRead",
     } <= names
-    assert len(names) == 60
+    assert len(names) == 64  # C1 adds the four frontend documents
 
 
 def run_cli(monkeypatch, tmp_path, *argv):

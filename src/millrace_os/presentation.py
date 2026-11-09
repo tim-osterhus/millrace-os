@@ -9,10 +9,18 @@ OS validates stock payloads and treats custom payloads as finite JSON objects.
 The helpers in `HELPERS` are pure: each takes a GET state and returns either a
 write body for `write_state` or a derived read result. Namespaces are always
 explicit; names are labels and IDs are the only identity.
+
+A selected compatible local frontend (OS-C1) adds its immutable `default` to
+the GET state's `bundled_configs` for its own namespace only, while it is the
+effective frontend. The caller supplies that entry; stored namespaces are
+never changed or inferred from it. The GET's 1 MiB policy covers the store and
+that default together, so both writers decide under this store's one lock
+(`store_lock`).
 """
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import fcntl
 import hashlib
@@ -22,7 +30,7 @@ import os
 import re
 import stat
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -46,6 +54,8 @@ __all__ = [
     "bundled_configs",
     "canonical_json_bytes",
     "read_state",
+    "state_fits",
+    "store_lock",
     "strict_loads",
     "validate_store",
     "write_state",
@@ -369,48 +379,56 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _state(status, version=None, file_sha256=None, store=None) -> dict[str, Any]:
+def _state(
+    status, version=None, file_sha256=None, store=None, bundled=None
+) -> dict[str, Any]:
     return {
         "contract": STATE_CONTRACT,
         "status": status,
         "version": version,
         "file_sha256": file_sha256,
         "store": store,
-        "bundled_configs": bundled_configs(),
+        "bundled_configs": bundled_configs()
+        + ([copy.deepcopy(bundled)] if bundled is not None else []),
         "observed_at": _now(),
     }
 
 
-def _classify(raw: bytes | None, digest: str) -> dict[str, Any]:
+def _classify(
+    raw: bytes | None, digest: str, bundled: dict[str, Any] | None = None
+) -> dict[str, Any]:
     if raw is None:  # larger than any readable store
-        return _state("invalid", file_sha256=digest)
+        return _state("invalid", file_sha256=digest, bundled=bundled)
     try:
         value = strict_loads(raw)
     except ValueError:
-        return _state("invalid", file_sha256=digest)
+        return _state("invalid", file_sha256=digest, bundled=bundled)
     if type(value) is dict and type(value.get("format")) is str:
         newer = _NEWER_STORE.fullmatch(value["format"])
         # The suffix has no leading zero, so every match except 1 and 2 is
         # newer; compared as text, a long suffix needs no integer conversion.
         if newer is not None and newer.group(1) not in {"1", "2"}:
-            return _state("incompatible", file_sha256=digest)
+            return _state("incompatible", file_sha256=digest, bundled=bundled)
     try:
         store = validate_store(value, versioned=True)
     except PresentationError:
-        return _state("invalid", file_sha256=digest)
-    return _state("ready", store["version"], digest, store)
+        return _state("invalid", file_sha256=digest, bundled=bundled)
+    return _state("ready", store["version"], digest, store, bundled)
 
 
-def read_state(config_dir: Path) -> dict[str, Any]:
+def read_state(
+    config_dir: Path, bundled: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """The GET state. No lock, no write; an unsafe target raises `UnsafePathError`.
 
     The file is read through one descriptor, so a concurrent replace yields the
     old or the new whole file. A regular file over the store limit is hashed in
-    chunks and reported invalid without retaining its bytes.
+    chunks and reported invalid without retaining its bytes. `bundled` is the
+    effective local frontend's default bundled config, if any.
     """
     target, exists = validate_file_target(Path(config_dir) / FILE_NAME)
     if not exists:
-        return _state("absent")
+        return _state("absent", bundled=bundled)
     descriptor = os.open(
         target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
     )
@@ -432,7 +450,23 @@ def read_state(config_dir: Path) -> dict[str, Any]:
                     kept = None
     finally:
         os.close(descriptor)
-    return _classify(None if kept is None else bytes(kept), digest.hexdigest())
+    return _classify(
+        None if kept is None else bytes(kept), digest.hexdigest(), bundled
+    )
+
+
+def state_fits(config_dir: Path, bundled: dict[str, Any] | None) -> bool:
+    """Whether the GET state including `bundled` fits the 1 MiB GET policy.
+
+    Call it under `store_lock`, so no store write lands between this check
+    and the caller's commit. An unsafe store target refuses its GET before
+    any body, so it cannot exceed that policy.
+    """
+    try:
+        state = read_state(config_dir, bundled)
+    except UnsafePathError:
+        return True
+    return _encoded_size(state) <= STATE_LIMIT
 
 
 def _encoded_size(value: object) -> int:
@@ -484,24 +518,14 @@ def _admit(mode: str, expected: object, current: dict[str, Any]) -> None:
         raise PresentationError("presentation_conflict")
 
 
-def write_state(config_dir: Path, write: object) -> dict[str, Any]:
-    """PUT a `millrace-os-presentation-write/v1` body and return the new GET state.
+@contextlib.contextmanager
+def store_lock(config_dir: Path) -> Iterator[Path]:
+    """Hold the store's exclusive lock without waiting (`presentation_busy`).
 
-    Before or at `os.replace`, any failure leaves the previous bytes unchanged
-    and removes the temporary file. After the replace, a failed `config_dir`
-    fsync raises `presentation_write_uncertain`: the new store may be visible
-    and is not rolled back. Read and compare before any retry.
+    Every store write holds it to check and replace the file. A frontend
+    selection that adds a bundled default holds it too while it checks the
+    GET size and commits, so neither writer can pair with a stale other half.
     """
-    mode, expected, store = _check_write(write)
-    full = {
-        "format": STORE_FORMAT,
-        "version": uuid.uuid4().hex,
-        "namespaces": copy.deepcopy(store["namespaces"]),
-    }
-    encoded = canonical_json_bytes(full)
-    result = _state("ready", full["version"], _sha256(encoded), full)
-    if _encoded_size(result) > STATE_LIMIT:
-        raise PresentationError("presentation_too_large")
     directory = ensure_directory(config_dir)
     lock, _ = validate_file_target(directory / LOCK_NAME)
     descriptor = os.open(
@@ -512,10 +536,46 @@ def write_state(config_dir: Path, write: object) -> dict[str, Any]:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
             raise PresentationError("presentation_busy") from exc
-        _admit(mode, expected, read_state(directory))
-        _replace(directory, encoded)
+        yield directory
     finally:
         os.close(descriptor)  # also releases the lock
+
+
+def write_state(
+    config_dir: Path,
+    write: object,
+    resolve_bundled: Callable[[], dict[str, Any] | None] | None = None,
+) -> dict[str, Any]:
+    """PUT a `millrace-os-presentation-write/v1` body and return the new GET state.
+
+    Before or at `os.replace`, any failure leaves the previous bytes unchanged
+    and removes the temporary file. After the replace, a failed `config_dir`
+    fsync raises `presentation_write_uncertain`: the new store may be visible
+    and is not rolled back. Read and compare before any retry.
+
+    `resolve_bundled` returns the effective local frontend's default bundled
+    config, if any. It runs under `store_lock`, so the size check counts the
+    exact store and default this write leaves for the GET.
+    """
+    mode, expected, store = _check_write(write)
+    full = {
+        "format": STORE_FORMAT,
+        "version": uuid.uuid4().hex,
+        "namespaces": copy.deepcopy(store["namespaces"]),
+    }
+    encoded = canonical_json_bytes(full)
+    version, digest = full["version"], _sha256(encoded)
+    result = _state("ready", version, digest, full)
+    if _encoded_size(result) > STATE_LIMIT:  # too large even without a default
+        raise PresentationError("presentation_too_large")
+    with store_lock(config_dir) as directory:
+        bundled = None if resolve_bundled is None else resolve_bundled()
+        if bundled is not None:
+            result = _state("ready", version, digest, full, bundled)
+            if _encoded_size(result) > STATE_LIMIT:
+                raise PresentationError("presentation_too_large")
+        _admit(mode, expected, read_state(directory))
+        _replace(directory, encoded)
     return result
 
 

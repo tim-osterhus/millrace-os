@@ -8,23 +8,23 @@
   },
   {
    "media_type": "text/javascript; charset=utf-8",
-   "path": "assets/History-8slXnK80.js",
-   "sha256": "c85b8699affeca264ea011b3e6be3070f68a3082566518c8e91d776ffd72ca6e"
+   "path": "assets/History-owNpYCJy.js",
+   "sha256": "01b33ac233e5d2a9b9ad070c7f2a0decd90eab1154e85e9586d2c1260983f962"
   },
   {
    "media_type": "text/javascript; charset=utf-8",
-   "path": "assets/Report-BG2J1ixZ.js",
-   "sha256": "b32915838b6ed3606cf4ac107a2fdd2e51fccf5fc238defcab2ce00152c9f46e"
+   "path": "assets/Report-CkHzjoV9.js",
+   "sha256": "f24cdf99e558b51640dbf6f7ab9e63a0c8df454066349281b9f18e7357b72a68"
   },
   {
    "media_type": "text/javascript; charset=utf-8",
-   "path": "assets/Revisions-XAdNIZt_.js",
-   "sha256": "594a3d0392360874a394d06ee597cca40712a39bf64f51c297fa0872cf499887"
+   "path": "assets/Revisions-0sWsvylB.js",
+   "sha256": "e093185e26d78c30734d64c92be1757bf57b970550fbc8b9fabe1d9657c79ab3"
   },
   {
    "media_type": "text/javascript; charset=utf-8",
-   "path": "assets/graph-B9kmdOMX.js",
-   "sha256": "c159920dd534c53269e705d7ed54485d867abab49ded7afc954ebc9b863e7f3a"
+   "path": "assets/graph-BQvht-ms.js",
+   "sha256": "b5fdbdac2ad1e0df25426934744223bb587666e92ca88d0319147d6c58ce32b7"
   },
   {
    "media_type": "text/css; charset=utf-8",
@@ -38,8 +38,8 @@
   },
   {
    "media_type": "text/javascript; charset=utf-8",
-   "path": "assets/index-hCMgpl67.js",
-   "sha256": "4d1dbcd14d1913b552b7003bf7812e5259f5fab5a7368244d0a28022b0c44f51"
+   "path": "assets/index-Bh748oMJ.js",
+   "sha256": "f45ccead22c098bb245918587118a58c0fd20bfc524eb8fc9fcebd7853e64b20"
   },
   {
    "media_type": "application/json",
@@ -49,7 +49,7 @@
   {
    "media_type": "text/html; charset=utf-8",
    "path": "index.html",
-   "sha256": "7fe80b8b7268404b48c770063ef3abdb770360b0abb03e289a94bc1116a26d3a"
+   "sha256": "5163f6c736c35ac3a3c7dfb97651d7ea77f286b27639936eed437b3f5ff21ef9"
   }
  ],
  "default_presentation": null,
@@ -60,6 +60,7 @@
  "presentation_format": null,
  "required_capabilities": [
   "client.capabilities.read",
+  "client.frontend.read",
   "client.presentation.read",
   "client.presentation.write"
  ],
@@ -82,6 +83,11 @@
   {
    "contract_id": "ExchangeInput",
    "sha256": "5aae776f5722c80995746ad34eb9400f85338e2e07f1d1a99d7dd53b84efbf3c",
+   "version": 1
+  },
+  {
+   "contract_id": "FrontendState",
+   "sha256": "e23ed7fe46c22a74aa24d4b485ea267c6df26063282102fda9a38c7875cdad42",
    "version": 1
   },
   {

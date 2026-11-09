@@ -107,6 +107,26 @@
       "version": 1
     },
     {
+      "contract_id": "FrontendState",
+      "sha256": "e23ed7fe46c22a74aa24d4b485ea267c6df26063282102fda9a38c7875cdad42",
+      "version": 1
+    },
+    {
+      "contract_id": "FrontendValidateInput",
+      "sha256": "ed79c8c58fec328f62b6dbf32a81c822edb6b6249f55dc98749c0ce894bcbb56",
+      "version": 1
+    },
+    {
+      "contract_id": "FrontendValidation",
+      "sha256": "73ed332cb70f17485e5100e88cd8a57c342566b03106d264d4a130ef3a3c444a",
+      "version": 1
+    },
+    {
+      "contract_id": "FrontendWrite",
+      "sha256": "a97a4da3e70b645d609571514b2d8f0e2a8c9bbf1b5a437a6a84be8ff12905d7",
+      "version": 1
+    },
+    {
       "contract_id": "Health",
       "sha256": "38d5ec0cdccc8c5eab35562b3e9b6e75ef14b3ce9bfd71149dbb422f88b46c02",
       "version": 1

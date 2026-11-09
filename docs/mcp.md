@@ -18,8 +18,8 @@ One configuration file serves either of two fixed tool profiles:
 
 - **`--tools v1`** (the default) serves the seven `millrace_v1_*` tools exactly
   as described below. Its schemas, digest, limits and results are unchanged.
-- **`--tools v2`** serves the separate headless profile: ten `millrace_v2_*`
-  tools with their own limits (see [The v2 profile](#the-v2-profile)).
+- **`--tools v2`** serves the separate profile: eleven `millrace_v2_*` tools
+  with their own limits (see [The v2 profile](#the-v2-profile)).
 
 ```bash
 millrace-os mcp serve --config /absolute/path/to/mcp.json --tools v2
@@ -200,11 +200,11 @@ evidence. Live Paperclip task/account/server proof remains deferred.
 
 ## The v2 profile
 
-The v2 profile serves a fixed, selected set of headless OS operations through
-ten tools. It adds no execution authority beyond the OS API: each call maps to
-the documented routes in [router views](router-views.md),
-[router operation](router-operation.md) and
-[presentation](presentation.md).
+The v2 profile serves a fixed, selected set of OS operations through eleven
+tools. It adds no execution authority beyond the OS API: each call maps to the
+documented routes in [router views](router-views.md),
+[router operation](router-operation.md), [presentation](presentation.md) and
+[frontends](frontend.md).
 
 | Tool | Discriminator and alternatives |
 | --- | --- |
@@ -218,6 +218,7 @@ the documented routes in [router views](router-views.md),
 | `millrace_v2_local_call` | none: one retained OS-local call result |
 | `millrace_v2_outputs` | `operation`: `publish`, `list`, `read` |
 | `millrace_v2_presentation` | `operation`: the fifteen presentation operations |
+| `millrace_v2_frontend` | `operation`: `inspect`, `validate`, `select`, `reset` (the complete-frontend choice; `reset` is the stock selection) |
 
 - **Arguments:** every tool takes a strict discriminated union. Unknown fields,
   coercion and undeclared alternatives refuse before any HTTP. `home` must be
@@ -237,7 +238,7 @@ the documented routes in [router views](router-views.md),
   - The local trust and service exceptions stay outside MCP: browser
     bootstrap, exchange and opening, credential rotation, recovery-only
     sessions, listener start/stop and the always-refusing action shell.
-  - There are no frontend or demo tools.
+  - There are no demo tools.
 
 ### Advertisement
 
@@ -337,6 +338,8 @@ The selected v2 operations include these trusted-operator powers:
 - drafts and Apply publish files into an instance's workflow folder and
   submit a revision;
 - publication repair, output publication and presentation writes;
+- selecting the complete browser frontend, including a local client the
+  operator trusts as their own code;
 - all sixteen request operations, including `recover_run`,
   `reconcile_invocation` and `release_project_hold`.
 

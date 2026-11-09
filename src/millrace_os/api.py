@@ -51,6 +51,10 @@ from .contracts import (
     Error,
     Event,
     ExchangeInput,
+    FrontendState,
+    FrontendValidateInput,
+    FrontendValidation,
+    FrontendWrite,
     Health,
     HomesQuery,
     Identifier,
@@ -122,16 +126,22 @@ RETRYABLE_CODES = frozenset(
 ROUTER = "/api/v1/router"
 VIEWS = ROUTER + "/views/instances"
 RUN_OUTPUTS = ROUTER + "/outputs/instances/{instance_id}/runs/{run_id}"
-# OS-G0 7.1 headless operations: (operation_id, method, path, request contract,
+# OS-G0 7.1 operations: (operation_id, method, path, request contract,
 # response contract, lazily imported components). Availability reflects those
-# import checks only; actions.invoke never runs. Frontend/demo operations are
-# not part of this headless list.
+# import checks only; actions.invoke never runs. C1 adds the three frontend
+# choice operations; demo operations are not part of this list.
 CLIENT_OPERATIONS = (
     ("actions.invoke", "POST", "/api/v1/actions/{action_id}:invoke",
      ActionInput, Error, None),
     ("actions.list", "GET", "/api/v1/actions", None, Read[Page[ActionInfo]], ()),
     ("client.capabilities.read", "GET", "/api/v1/client/capabilities",
      None, ClientCapabilities, ()),
+    ("client.frontend.read", "GET", "/api/v1/client/frontend",
+     None, FrontendState, ()),
+    ("client.frontend.validate", "POST", "/api/v1/client/frontend/validate",
+     FrontendValidateInput, FrontendValidation, ()),
+    ("client.frontend.write", "PUT", "/api/v1/client/frontend",
+     FrontendWrite, FrontendState, ()),
     ("client.presentation.read", "GET", "/api/v1/client/presentation",
      None, PresentationState, ()),
     ("client.presentation.write", "PUT", "/api/v1/client/presentation",
@@ -208,6 +218,28 @@ CLIENT_OPERATIONS = (
     ("version.read", "GET", "/api/v1/version", None, Read[Version], ()),
 )
 CallId = Annotated[str, Path(pattern=r"^[0-9a-f]{32}$", min_length=32, max_length=32)]
+
+
+def requirement_reasons(service):
+    """Lazy import checks of the optional components; no store is read."""
+    reasons = {}
+    for name in ("control", "inspection", "views", "catalog"):
+        try:
+            getattr(service.router_client, "_" + name)()
+            reasons[name] = None
+        except RouterUnavailable as exc:
+            reasons[name] = exc.code
+    return reasons
+
+
+def available_operations(service):
+    """Operation IDs the capability list currently reports available."""
+    reasons = requirement_reasons(service)
+    return [
+        operation_id
+        for operation_id, *_, needs in CLIENT_OPERATIONS
+        if needs is not None and not any(reasons[name] for name in needs)
+    ]
 
 
 def contract_id(model):
@@ -344,6 +376,8 @@ def configure_api(app: FastAPI, service):
                 path
                 in {
                     "/",
+                    frontend.LAUNCHER,
+                    frontend.LAUNCHER + "/client.js",
                     "/recovery",
                     "/recovery/bootstrap.js",
                     "/health",
@@ -430,7 +464,7 @@ def configure_api(app: FastAPI, service):
                 "X-Frame-Options": "DENY",
                 "Content-Security-Policy": (
                     frontend.SHELL_CSP
-                    if request.url.path == frontend.STOCK_BASE
+                    if frontend.is_shell(request.url.path)
                     else DEFAULT_CSP
                 ),
             }
@@ -472,6 +506,9 @@ def configure_api(app: FastAPI, service):
     def asset(name):
         return files("millrace_os").joinpath("assets", name).read_text()
 
+    def asset_bytes(name):
+        return files("millrace_os").joinpath("assets", name).read_bytes()
+
     def recovery_asset(name):
         return files("millrace_os.recovery").joinpath(name).read_text()
 
@@ -483,30 +520,51 @@ def configure_api(app: FastAPI, service):
             operation[0] for operation in CLIENT_OPERATIONS if operation[5] == ()
         ],
     )
+    # The operator-selected local closure is checked against the operations
+    # available now (import checks only), and only while one is selected.
+    local = frontend.LocalFrontend(
+        service.config.config_dir,
+        registry={entry.contract_id: entry.sha256 for entry in registry.schemas},
+        available=lambda: available_operations(service),
+    )
+
+    async def to_effective(request: Request):
+        target = frontend.shell_target(request.query_params.multi_items())
+        base = await asyncio.to_thread(local.base)
+        location = frontend.shell_location(target, base)
+        return RedirectResponse(location, status_code=303)
 
     async def to_stock(request: Request):
         target = frontend.shell_target(request.query_params.multi_items())
         return RedirectResponse(frontend.shell_location(target), status_code=303)
 
-    async def legacy_to_stock(request: Request):
-        # `/instances/...` forms carry the instance/run in the path and `home`
-        # in the query; the redirect keeps no fragment so a nonce survives.
-        instance, run = frontend.legacy_target(request.url.path)
+    async def legacy_to_effective(request: Request):
+        # `/instances/...` and `{base}instances/...` carry the instance/run in
+        # the path and `home` in the query. The redirect goes to the effective
+        # base and keeps no fragment, so a nonce survives.
+        legacy = frontend.legacy_target(request.url.path)
+        if legacy is None:
+            raise frontend.FrontendError("route_not_found", 404)
+        instance, run = legacy
         items = list(request.query_params.multi_items()) + [("instance", instance)]
         if run is not None:
             items.append(("run", run))
         target = frontend.shell_target(items)
-        return RedirectResponse(frontend.shell_location(target), status_code=303)
+        base = await asyncio.to_thread(local.base)
+        location = frontend.shell_location(target, base)
+        return RedirectResponse(location, status_code=303)
 
-    for redirect_path in ("/", "/ui/stock"):
-        app.add_api_route(
-            redirect_path, to_stock, methods=["GET"], include_in_schema=False
-        )
-    for prefix in ("/instances", "/ui/stock/instances"):
+    app.add_api_route("/", to_effective, methods=["GET"], include_in_schema=False)
+    app.add_api_route("/ui/stock", to_stock, methods=["GET"], include_in_schema=False)
+    for prefix in (
+        "/instances",
+        "/ui/stock/instances",
+        frontend.LOCAL_PREFIX + "{bundle_sha256}/instances",
+    ):
         for suffix in ("/{instance_id}", "/{instance_id}/runs/{run_id}"):
             app.add_api_route(
                 prefix + suffix,
-                legacy_to_stock,
+                legacy_to_effective,
                 methods=["GET"],
                 include_in_schema=False,
             )
@@ -520,6 +578,36 @@ def configure_api(app: FastAPI, service):
     async def stock_asset(asset_path: str):
         content, media_type = stock.read(asset_path)
         return Response(content, media_type=media_type)
+
+    # Only the effective local closure serves; any other digest is typed
+    # unavailable, never stock HTML, and its unlisted paths are 404 JSON.
+    @app.get(frontend.LOCAL_PREFIX + "{bundle_sha256}/", include_in_schema=False)
+    async def local_shell(bundle_sha256: str, request: Request):
+        frontend.shell_target(request.query_params.multi_items())
+        content = await asyncio.to_thread(local.shell, bundle_sha256)
+        if content is None:
+            return HTMLResponse(frontend.UNAVAILABLE_PAGE, status_code=503)
+        return Response(content, media_type=frontend.MEDIA_TYPES[".html"])
+
+    @app.get(
+        frontend.LOCAL_PREFIX + "{bundle_sha256}/{asset_path:path}",
+        include_in_schema=False,
+    )
+    async def local_asset(bundle_sha256: str, asset_path: str):
+        content, media_type = await asyncio.to_thread(
+            local.read, bundle_sha256, asset_path
+        )
+        return Response(content, media_type=media_type)
+
+    # The package-owned launcher: independent of every selected closure and of
+    # recovery, so a broken custom client never hides stock or recovery.
+    @app.get(frontend.LAUNCHER, include_in_schema=False)
+    async def launcher():
+        return HTMLResponse(asset("client.html"))
+
+    @app.get(frontend.LAUNCHER + "/client.js", include_in_schema=False)
+    async def launcher_script():
+        return Response(asset_bytes("client.js"), media_type="text/javascript")
 
     @app.get("/recovery", include_in_schema=False)
     async def recovery():
@@ -710,7 +798,7 @@ def configure_api(app: FastAPI, service):
 
         return StreamingResponse(notification(), media_type="text/event-stream")
 
-    configure_router_api(app, service)
+    configure_router_api(app, service, local)
 
     # Document uniform typed refusals without FastAPI's input-echoing 422 schema.
     for route in app.routes:
@@ -721,7 +809,7 @@ def configure_api(app: FastAPI, service):
                 )
 
 
-def configure_router_api(app, service):
+def configure_router_api(app, service, local):
     """Bind the small public router surface to the same owned service calls."""
 
     read_slots = asyncio.Semaphore(8)
@@ -978,36 +1066,53 @@ def configure_router_api(app, service):
     # Shared presentation preferences (P1): one config-dir store of display data
     # for every client of this service. Nothing reads it at startup or recovery,
     # and nothing writes it implicitly; `presentation.py` owns every store rule.
+    # The effective local frontend adds only its own immutable default. A write
+    # resolves it under the store lock, which a selection adding a default also
+    # holds, so the 1 MiB GET check always counts the pair that is committed.
+    def presentation_state(write=None):
+        config_dir = service.config.config_dir
+        if write is None:
+            return read_state(config_dir, local.presentation_default())
+        return write_state(config_dir, write, local.presentation_default)
+
     @app.get("/api/v1/client/presentation", response_model=PresentationState)
     async def presentation_get():
-        state = await asyncio.to_thread(read_state, service.config.config_dir)
+        state = await asyncio.to_thread(presentation_state)
         return bounded(PresentationState.model_validate(state))
 
     @app.put("/api/v1/client/presentation", response_model=PresentationState)
     async def presentation_put(body: PresentationWrite):
         # The trust boundary already refused duplicate keys and NaN/Infinity;
         # every field is required, so the dump is the exact admitted body.
-        state = await asyncio.to_thread(
-            write_state, service.config.config_dir, body.model_dump()
-        )
+        state = await asyncio.to_thread(presentation_state, body.model_dump())
         return bounded(PresentationState.model_validate(state))
+
+    # The complete-frontend choice (C1): operator configuration in
+    # `config_dir/frontend.json`, never a preference. No route sends a Core
+    # request, replaces an open page or replays intent.
+    @app.get("/api/v1/client/frontend", response_model=FrontendState)
+    async def frontend_get():
+        state = await asyncio.to_thread(local.state)
+        return bounded(FrontendState.model_validate(state))
+
+    @app.post("/api/v1/client/frontend/validate", response_model=FrontendValidation)
+    async def frontend_validate(body: FrontendValidateInput):
+        result = await asyncio.to_thread(local.validate, body.path)
+        return bounded(FrontendValidation.model_validate(result))
+
+    @app.put("/api/v1/client/frontend", response_model=FrontendState)
+    async def frontend_put(body: FrontendWrite):
+        values = body.model_dump()
+        state = await asyncio.to_thread(
+            local.write, values["expected_version"], values["desired"]
+        )
+        return bounded(FrontendState.model_validate(state))
 
     # Headless parity reads (M1). Each reads existing OS facts only: no Core
     # fallback, no repair, replay or other side effect.
-    def requirement_reasons():
-        """Lazy import checks of the optional components; no store is read."""
-        reasons = {}
-        for name in ("control", "inspection", "views", "catalog"):
-            try:
-                getattr(service.router_client, "_" + name)()
-                reasons[name] = None
-            except RouterUnavailable as exc:
-                reasons[name] = exc.code
-        return reasons
-
     @app.get("/api/v1/client/capabilities", response_model=ClientCapabilities)
     async def client_capabilities():
-        reasons = await offload(requirement_reasons)
+        reasons = await offload(requirement_reasons, service)
         operations = []
         for operation_id, method, path, request, response, needs in CLIENT_OPERATIONS:
             reason = (

@@ -28,6 +28,7 @@ STOCK_CONTRACTS = {
     "DemoContext",
     "Error",
     "ExchangeInput",
+    "FrontendState",
     "PresentationState",
     "PresentationWrite",
     "RouterCallObservation",
@@ -42,6 +43,7 @@ STOCK_CONTRACTS = {
 }
 STOCK_CAPABILITIES = [
     "client.capabilities.read",
+    "client.frontend.read",
     "client.presentation.read",
     "client.presentation.write",
 ]
@@ -205,12 +207,22 @@ def test_unlisted_paths_are_json_404_and_never_html(tmp_path):
         "/ui/stock/assets/missing.css",
         "/ui/stock/Index.html",
         "/ui/stock/%2e%2e/api/v1/version",
-        "/ui/local/" + "c" * 64 + "/",
     ):
         response = client.get(path)
         assert response.status_code == 404, path
         assert response.headers["content-type"] == "application/json"
         assert response.json()["code"] == "route_not_found"
+    # A local base that is not the effective selection is typed unavailable
+    # (C1), never stock HTML; its assets refuse as JSON.
+    local = "/ui/local/" + "c" * 64 + "/"
+    response = client.get(local)
+    assert response.status_code == 503
+    assert response.headers["content-type"].startswith("text/html")
+    assert b"frontend_unavailable" in response.content
+    assert response.content != _dashboard().joinpath("index.html").read_bytes()
+    response = client.get(local + "assets/a.js")
+    assert response.status_code == 503
+    assert response.json()["code"] == "frontend_unavailable"
 
 
 def test_the_stock_manifest_is_a_complete_compatible_closure():
@@ -596,4 +608,4 @@ def test_exported_contracts_document_session_context_and_match_every_profile(tmp
     registry = json.loads(exported["registry.json"])["schemas"]
     names = {entry["contract_id"] for entry in registry}
     assert {"SessionContext", "DemoContext"} <= names
-    assert len(registry) == 60 <= 64
+    assert len(registry) == 64  # C1 adds the four frontend documents
