@@ -520,6 +520,15 @@ def test_output_code_has_no_domain_specific_branch() -> None:
         "millrace_plus.router.control",
         "millrace_plus.workflow_views",
     }
+    output_targets = {
+        "api.py": {"output_publish", "output_list", "output_read"},
+        "contracts.py": {
+            "OutputReadQuery", "WorkflowOutputPublishInput", "OutputReference",
+            "OutputProducer", "OutputInvocation", "OutputRepresentationInfo",
+            "OutputRepresentations", "WorkflowOutputItem", "WorkflowOutputs",
+            "WorkflowOutputPublication", "OutputRepresentation", "WorkflowOutput",
+        },
+    }
     for name in ("api.py", "router_client.py", "contracts.py", "cli.py"):
         tree = ast.parse((source / name).read_text())
         texts = [
@@ -527,7 +536,23 @@ def test_output_code_has_no_domain_specific_branch() -> None:
             for node in ast.walk(tree)
             if isinstance(node, ast.Constant) and isinstance(node.value, str)
         ]
-        assert not [text for text in texts if pattern.search(text)], name
+        domain_texts = texts
+        if name in output_targets:
+            expected = output_targets[name]
+            node_type = ast.AsyncFunctionDef if name == "api.py" else ast.ClassDef
+            targets = [
+                node for node in ast.walk(tree)
+                if isinstance(node, node_type) and node.name in expected
+            ]
+            assert targets and {node.name for node in targets} == expected, name
+            assert len(targets) == len(expected), name
+            domain_texts = [
+                node.value
+                for target in targets
+                for node in ast.walk(target)
+                if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            ]
+        assert not [text for text in domain_texts if pattern.search(text)], name
         modules = {
             text for text in texts if text.startswith(("millrace.", "millrace_"))
         }

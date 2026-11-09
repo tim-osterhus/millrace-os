@@ -5,7 +5,8 @@
 // the reconcile attestation are deliberate inputs, never preselected. Disabled
 // controls are hints only: Core and Plus enforce applicability. The request
 // area lists every request of this tab, with exact Observe, Replay, Export and
-// Retire; nothing leaves it except by an explicit Retire.
+// Retire; nothing leaves it except by an explicit Retire. A form tells its
+// parent while it holds an unsent review, so leaving the page waits for it.
 
 import { useEffect, useState } from "react";
 
@@ -15,6 +16,7 @@ import {
   envelopeOf,
   exportText,
   keyOf,
+  newEntry,
   newRequestId,
   OPERATION_LABELS,
   OPERATIONS,
@@ -46,6 +48,13 @@ export type SendResult = { sent: true } | { sent: false; reason: string; unprote
 
 type Reviewed = Extract<Built, { ok: true }>;
 
+/** An unsent review in the request export format: exact bytes, never sent. */
+function reviewedText(home: string, reviewed: Reviewed): string {
+  // `exportText` reads only the intent and its conflicting bodies.
+  const intent = { home, requestId: reviewed.envelope.request_id, body: reviewed.body, sent: false, binding: null };
+  return exportText(newEntry(intent, "sending"));
+}
+
 function initialOperation(target: ControlTarget): Operation {
   return target.runId === null ? "start_run" : "pause_run";
 }
@@ -56,6 +65,7 @@ export function ControlForm({
   outstanding,
   onNeedGraph,
   onSend,
+  onReviewChange,
 }: {
   target: ControlTarget;
   /** Why no request may be sent now (trust, context, availability, capacity), or null. */
@@ -64,6 +74,8 @@ export function ControlForm({
   outstanding: (operation: Operation) => string | null;
   onNeedGraph: () => void;
   onSend: (reviewed: Reviewed, unprotected: boolean) => Promise<SendResult>;
+  /** Whether this form holds an unsent reviewed request (a stable callback). */
+  onReviewChange: (pending: boolean) => void;
 }) {
   const operations = OPERATIONS.filter((operation) => (target.runId === null) === (operation === "start_run"));
   const [operation, setOperation] = useState<Operation>(() => initialOperation(target));
@@ -88,6 +100,13 @@ export function ControlForm({
   const nodeId = nodeChoice !== null && nodeChoice.key === nodeKey ? nodeChoice.node : "";
   const attestation = `${operation}\n${plane}\n${invocationId.trim()}`;
   const stopped = attested === attestation;
+  // The parent keeps full-document exits while a review is unsent; an unmounted
+  // form holds none.
+  useEffect(() => {
+    onReviewChange(review !== null);
+    return () => onReviewChange(false);
+  }, [review, onReviewChange]);
+
   // Redirect needs the active revision's captured nodes: read that graph once,
   // through the same coordinator, only when Redirect is chosen.
   useEffect(() => {
@@ -321,6 +340,12 @@ export function ControlForm({
                   Send without reload protection
                 </button>
               ) : null}
+              <button
+                type="button"
+                onClick={() => saveText(reviewedText(target.home, review), `${review.envelope.request_id}-request.json`)}
+              >
+                Export reviewed request JSON
+              </button>
               <button type="button" disabled={sending} onClick={() => setReview(null)}>
                 Discard
               </button>
@@ -523,7 +548,8 @@ function RequestItem({
       {retiring ? (
         <div className="confirm">
           This request is unresolved. Retiring forgets it in this tab; export it first if you may need it.{" "}
-          <button type="button" onClick={() => actions.retire(key)}>
+          {/* Like Retire itself, the confirmation waits for a send or read in flight. */}
+          <button type="button" disabled={busy} onClick={() => actions.retire(key)}>
             Retire unresolved request
           </button>{" "}
           <button type="button" onClick={() => setRetiring(false)}>

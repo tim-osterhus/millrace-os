@@ -47,6 +47,23 @@ jobs:
           assert versions == {"millrace-ai": "0.23.1", "millrace-plus": "0.23.1", "millrace-os": "0.23.1"}
           PYCODE
           uv sync --frozen --no-editable --extra dev --extra router --python 3.12
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.20.0'
+          package-manager-cache: false
+      - name: Verify pinned stock frontend and committed export
+        shell: bash
+        run: |
+          test "$(node --version)" = "v24.20.0"
+          test "$(npm --version)" = "11.19.0"
+          npm --prefix frontend ci --ignore-scripts --no-audit --no-fund
+          npm --prefix frontend run typecheck
+          (
+            cd frontend
+            node --test --test-concurrency=1 src/preferences.test.ts src/presets.test.ts src/layout.test.ts src/links.test.ts src/requests.test.ts
+          )
+          npm --prefix frontend run build
+          .venv/bin/python -I scripts/export_dashboard.py --check
       - name: Verify selected installed identities outside checkout
         shell: bash
         run: |

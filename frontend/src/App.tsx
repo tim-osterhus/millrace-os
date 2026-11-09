@@ -10,7 +10,17 @@
 // one lexical intent set carried by this tab's history entries; one finite
 // selected-target coordinator observes the summary and unresolved requests.
 
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 import { Group, Panel, Separator, type GroupImperativeHandle } from "react-resizable-panels";
 
 import {
@@ -293,6 +303,11 @@ export function App() {
   /** The delay of the coordinator's armed next read, set where it is armed. */
   const [armed, setArmed] = useState<number | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
+  /** The control form holds an unsent reviewed request (the ref decides exits). */
+  const [reviewPending, setReviewPending] = useState(false);
+  const reviewPendingRef = useRef(false);
+  /** An ordinary activation of a full-document exit was held back. */
+  const [exitHeld, setExitHeld] = useState(false);
   const [monitor, setMonitor] = useState<Monitor>(freshMonitor);
   const [hidden, setHidden] = useState(() => document.visibilityState !== "visible");
   // In-flight ownership shared by automatic and manual reads, held until each
@@ -702,6 +717,30 @@ export function App() {
     [commitIntents, dispatch],
   );
 
+  // ---- leaving for the launcher or recovery ----------------------------------------
+
+  // Those links replace this document, and its requests exist only in this tab.
+  // An ordinary same-window activation stays here while a reviewed request is
+  // unsent or a retained request is unresolved or in flight, until the operator
+  // exports and then discards, resolves or retires each one. A later receipt or
+  // retire never navigates by itself; leaving sends nothing.
+  const holding = (items: Entry[]) =>
+    items.filter((entry) => !resolved(entry) || busy.has(keyOf(entry.intent))).map((entry) => entry.intent.requestId);
+  const exitRequests = holding(entries);
+  const reviewChanged = useCallback((pending: boolean) => {
+    reviewPendingRef.current = pending;
+    setReviewPending(pending);
+  }, []);
+  const leave = (event: ReactMouseEvent<HTMLAnchorElement>) => {
+    // A modified or non-primary activation opens another tab or window and
+    // keeps this document, so it is never held.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    // Decide from the synchronously kept set and review, not a pending render.
+    if (!reviewPendingRef.current && holding(intentsRef.current).length === 0) return;
+    event.preventDefault();
+    setExitHeld(true);
+  };
+
   const requestActions = useMemo(
     () => ({
       observe: (key: string) => void observe(key),
@@ -883,6 +922,7 @@ export function App() {
         outstanding={outstandingFor}
         onNeedGraph={needActiveGraph}
         onSend={sendReviewed}
+        onReviewChange={reviewChanged}
       />
     );
 
@@ -1139,6 +1179,8 @@ export function App() {
           target={target}
           unavailable={unavailable}
           frontend={frontend}
+          exit={{ held: exitHeld, review: reviewPending, requests: exitRequests }}
+          onLeave={leave}
         />
         <MonitorStatus state={monitorState} onContinue={() => setMonitor(freshMonitor())} />
         <RequestArea
@@ -1244,6 +1286,8 @@ function Notices({
   target,
   unavailable,
   frontend,
+  exit,
+  onLeave,
 }: {
   trust: Trust;
   demo: DemoMode | null;
@@ -1252,6 +1296,10 @@ function Notices({
   target: Target;
   unavailable: Capability[];
   frontend: FrontendChoice | null;
+  /** A held full-document exit and what this tab still holds. */
+  exit: { held: boolean; review: boolean; requests: string[] };
+  /** Activation of a link that replaces this document. */
+  onLeave: (event: ReactMouseEvent<HTMLAnchorElement>) => void;
 }) {
   const items: { tone: "info" | "warn" | "error"; content: ReactNode }[] = [];
   if (frontend !== null && frontend.reason !== null) {
@@ -1263,8 +1311,40 @@ function Notices({
       content: (
         <>
           {selected} (<code>{frontend.reason}</code>), so this stock frontend is in use. The selection is kept. See the{" "}
-          <a href="/client">frontend launcher</a> for details, or open <a href="/recovery">Recovery</a>.
+          <a href="/client" onClick={onLeave}>
+            frontend launcher
+          </a>{" "}
+          for details, or open{" "}
+          <a href="/recovery" onClick={onLeave}>
+            Recovery
+          </a>
+          .
         </>
+      ),
+    });
+  }
+  if (exit.held) {
+    const pending = exit.review || exit.requests.length > 0;
+    items.push({
+      tone: pending ? "warn" : "info",
+      content: pending ? (
+        <>
+          This page stayed open. Leaving now would abandon what exists only in this tab:{" "}
+          {exit.review ? "an unsent reviewed request" : null}
+          {exit.review && exit.requests.length > 0 ? " and " : null}
+          {exit.requests.length > 0 ? (exit.requests.length === 1 ? "the unresolved request " : "the unresolved requests ") : null}
+          {exit.requests.map((id, index) => (
+            <span key={id}>
+              {index > 0 ? ", " : null}
+              <code className="id">{id}</code>
+            </span>
+          ))}
+          . Export each one first. Then Discard a reviewed request, and Observe each request until Core's receipt resolves it or
+          Retire it (Retire only forgets it in this tab; it stops nothing in Core). Choose the link again afterwards. Leaving sends
+          nothing.
+        </>
+      ) : (
+        "Nothing in this tab is unsent or unresolved now. Choose the link again to leave."
       ),
     });
   }

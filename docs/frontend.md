@@ -295,6 +295,32 @@ the target and a one-use nonce in the fragment. `--recovery`, `--stock` and
 `--client` cannot be combined, and the launcher and recovery take no target.
 Invalid arguments are refused before the service is contacted.
 
+### Leaving the stock client
+
+The stock client's own links to the launcher and recovery, in its fallback
+notice, replace the page. A request it holds exists only in that tab. So an
+ordinary click on one of those links keeps the page open while the tab holds an
+unsent reviewed request, or a request that is unresolved or still being sent or
+observed. The notice then names what is held:
+
+1. Export it first: **Export reviewed request JSON** beside **Discard**, or
+   **Export request JSON** on the request. Both use the same request export
+   format, with the exact bytes and request ID. An unsent review is exported
+   with `sent: false`.
+2. Then **Discard** the review, **Observe** the request until Core's receipt
+   resolves it, or **Retire** it after confirming. Retiring only forgets the
+   request in this tab; it stops or undoes nothing in Core.
+3. Choose the link again. The page never leaves by itself when a receipt
+   arrives or a request is retired, and leaving sends nothing.
+
+Export, Discard and Retire work without browser trust or a usable service; only
+Discard and Retire wait for a send or read already in flight to end. So
+recovery is never out of reach. A click with a modifier key, or one that opens
+a new tab or window, keeps this page and is not held. This is not a general
+unload prompt: closing the tab, typing an address or other browser navigation
+is not intercepted. Reload, Back and Forward within the stock client keep the
+tab's requests in its history and restore them observe-only, as before.
+
 ## Presentation
 
 A bundle may carry one immutable presentation default. `presentation_format`

@@ -4,7 +4,9 @@ The clients are plain HTML and JavaScript modules with a stylesheet, a
 self-hosted font and an image, all document-relative. They follow the public
 trust contract (fragment nonce, exchange, session-context reload). The stock
 client, the package launcher and recovery stay reachable throughout, and a
-broken custom client is replaced only through the public selection API.
+broken custom client is replaced only through the public selection API. The
+stock client's own exits to the launcher and recovery wait for its unsent and
+unresolved requests to be exported and then disposed of or resolved.
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
+import time
 import zlib
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -27,6 +30,11 @@ expect = pytest.importorskip(
 ).expect
 
 FRONTEND = "/api/v1/client/frontend"
+POSTS = "**/api/v1/router/requests"
+STRICT = "/api/v1/router/views/requests/"
+# A fixed fake start, as in the UI3 control journeys: with the page clock
+# paused, time moves only if a case advances it, so no automatic read starts.
+CLOCK_START = 1_900_000_000_000
 TRUST = b"""const same = {
   mode: "same-origin", credentials: "same-origin", redirect: "error", cache: "no-store",
 };
@@ -328,3 +336,175 @@ def test_fallback_launcher_stock_recovery_and_a_broken_client_reset(
     assert page.url == service.base + f"/ui/local/{a}/"
     ready(page, "session-context")
     assert service.http.get(FRONTEND).json()["version"] == version
+
+
+def drop_posts(route):
+    """Abort request POSTs in the browser, so none reaches the service."""
+    if route.request.method == "POST":
+        route.abort()
+    else:
+        route.continue_()
+
+
+def review(form) -> str:
+    """Review the form's request; return its exact reviewed bytes."""
+    form.get_by_role("button", name="Review request").click()
+    body = form.locator(".request-body")
+    expect(body).to_be_visible()
+    return body.inner_text()
+
+
+def exported(page, button) -> dict:
+    with page.expect_download() as download:
+        button.click()
+    return json.loads(Path(download.value.path()).read_text(encoding="utf-8"))
+
+
+def until_held(page, held, count):
+    """The UI3 journeys' bounded wait for a routed request to reach its hold."""
+    deadline = time.monotonic() + 4
+    while len(held) < count:
+        assert time.monotonic() < deadline, "the held request was never issued"
+        page.wait_for_timeout(10)
+
+
+def test_stock_exits_wait_for_unsent_and_unresolved_requests(
+    live, page, evidence, review_gate
+):
+    service = live("leaving")
+    instance = service.create(review_gate, workspaces=("main", "side"))
+    a_root = service.root / "client-a"
+    a = write_client(a_root, CLIENT_A, "example.a")
+    choose(service, local(a_root, a), None)
+    (a_root / "fonts" / "body.woff2").unlink()  # unavailable before stock boots
+    posted: list[str | None] = []
+    page.on(
+        "request",
+        lambda sent: posted.append(sent.post_data)
+        if sent.method == "POST" and urlsplit(sent.url).path == POSTS[2:]
+        else None,
+    )
+    stock = service.base + f"/ui/stock/?home=default&instance={instance}"
+    # The request monitor never reads on its own here: the only receipt read
+    # below is the operator's Observe.
+    page.clock.install(time=CLOCK_START)
+    page.clock.pause_at(CLOCK_START + 1_000)
+    page.goto(service.base + f"/?home=default&instance={instance}#" + service.nonce())
+    assert page.url == stock
+    notices = page.get_by_role("status").filter(has_text="is not available")
+    expect(notices).to_contain_text("The selected frontend example.a is not available")
+    launcher = notices.get_by_role("link", name="frontend launcher")
+    recovery = notices.get_by_role("link", name="Recovery")
+    form = page.get_by_role("region", name="Start a run")
+
+    # An unsent reviewed Start holds both exits; its ID and bytes stay as shown.
+    first = review(form)
+    unsent = json.loads(first)["request"]
+    for link in (launcher, recovery):
+        link.click()
+        expect(notices).to_contain_text("This page stayed open")
+        expect(notices).to_contain_text("an unsent reviewed request")
+        assert page.url == stock
+    expect(form.locator(".request-body")).to_have_text(first)
+    document = exported(
+        page, form.get_by_role("button", name="Export reviewed request JSON")
+    )
+    assert document == {
+        "format": "millrace-os-stock-request-intent/v1",
+        "home": "default",
+        "request_id": unsent["request_id"],
+        "body": first,
+        "sent": False,
+        "binding": None,
+        "conflicting_bodies": [],
+    }
+    form.get_by_role("button", name="Discard", exact=True).click()
+    expect(form.locator(".request-body")).to_have_count(0)
+    expect(notices).to_contain_text("Nothing in this tab is unsent or unresolved now")
+    assert page.url == stock and posted == []
+
+    # A Start whose POST is dropped before admission stays retained and unknown.
+    second = review(form)
+    retained = json.loads(second)["request"]
+    assert retained["request_id"] != unsent["request_id"]
+    page.route(POSTS, drop_posts)
+    try:
+        form.get_by_role("button", name="Send", exact=True).click()
+        requests = page.get_by_role("region", name="Requests in this tab")
+        entry = requests.get_by_role("listitem").filter(has_text=retained["request_id"])
+        expect(entry).to_contain_text("Delivery unknown")
+    finally:
+        page.unroute(POSTS, drop_posts)
+    assert posted == [second]
+    strict = service.http.get(
+        STRICT + retained["request_id"],
+        params={"home": "default", "instance_id": instance},
+    )
+    assert strict.status_code == 404  # Core never received it; no run started
+
+    launcher.click()
+    expect(notices).to_contain_text("the unresolved request " + retained["request_id"])
+    assert page.url == stock
+    # A modified click opens another tab and is never held.
+    with page.context.expect_page() as opened:
+        launcher.click(modifiers=["ControlOrMeta"])
+    try:
+        opened.value.wait_for_load_state()
+        assert urlsplit(opened.value.url).path == "/client"
+    finally:
+        opened.value.close()
+    assert page.url == stock
+    document = exported(page, entry.get_by_role("button", name="Export request JSON"))
+    assert (document["request_id"], document["body"], document["sent"]) == (
+        retained["request_id"],
+        second,
+        True,
+    )
+    # With Retire's confirmation open, an Observe read in flight disables it and
+    # keeps both exits held; the read is held in the browser, so it sends nothing.
+    entry.get_by_role("button", name="Retire", exact=True).click()
+    confirm = entry.get_by_role("button", name="Retire unresolved request")
+    expect(confirm).to_be_enabled()
+    reads = "**" + STRICT + retained["request_id"] + "*"
+    held: list = []
+
+    def hold(route):
+        held.append(route)
+
+    page.route(reads, hold)
+    try:
+        entry.get_by_role("button", name="Observe").click()
+        until_held(page, held, 1)
+        expect(confirm).to_be_disabled()
+        for link in (launcher, recovery):
+            link.click()
+            expect(notices).to_contain_text(retained["request_id"])
+            assert page.url == stock
+        held.pop().continue_()  # the service's typed 404: still unknown
+        expect(entry).to_contain_text("No observation is available (HTTP 404)")
+        expect(confirm).to_be_enabled()
+    finally:
+        page.unroute(reads, hold)
+        for route in held:
+            route.abort()
+    # Cancelling Retire keeps the exact retained request, and the exit stays held.
+    entry.get_by_role("button", name="Cancel", exact=True).click()
+    intents = page.evaluate("history.state")["millrace_os_intents"]["intents"]
+    assert [item["body"] for item in intents] == [second]
+    expect(entry).to_contain_text("Delivery unknown")
+    recovery.click()
+    expect(notices).to_contain_text(retained["request_id"])
+    assert page.url == stock
+    page.screenshot(path=str(evidence / "frontend-exit-held.png"), full_page=True)
+
+    # A confirmed Retire forgets it here only; the page still waits to be asked.
+    entry.get_by_role("button", name="Retire", exact=True).click()
+    entry.get_by_role("button", name="Retire unresolved request").click()
+    expect(entry).to_have_count(0)
+    expect(notices).to_contain_text("Nothing in this tab is unsent or unresolved now")
+    assert page.url == stock
+    # Another deliberate activation leaves, and leaving sends nothing.
+    launcher.click()
+    page.wait_for_url(service.base + "/client")
+    expect(page.locator("#status")).to_contain_text("is not available")
+    assert posted == [second]

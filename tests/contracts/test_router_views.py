@@ -191,8 +191,29 @@ def test_query_allowlist_reproduces_every_preexisting_route_and_adds_views(tmp_p
     assert "/api/v1/router/requests/x" in preexisting
     assert "/api/v1/router/instances/x/runs/x" in preexisting
     assert set(VIEW_GRANTS) <= routes  # every view grant is a real route
+    frontend_grants = {
+        "/": {"home", "instance", "run"},
+        "/ui/stock": {"home", "instance", "run"},
+        "/ui/stock/": {"home", "instance", "run"},
+    }
+    # Independent lexical legacy forms; target values are checked by handlers.
+    legacy_frontend = re.compile(
+        r"(?:/instances/|/ui/stock/instances/|"
+        r"/ui/local/[0-9a-f]{64}/instances/)[^/]*(?:/runs/[^/]*)?"
+    )
     for path in corpus:
+        if legacy_frontend.fullmatch(path):
+            frontend_grants[path] = {"home"}
         for method in METHODS:
+            if method == "GET" and path in frontend_grants:
+                allowed = frontend_grants[path]
+                assert api.query_allowlist(path, method) == frozenset(allowed), path
+                for keys in KEY_SAMPLES:
+                    expected = len(keys) != len(set(keys)) or bool(set(keys) - allowed)
+                    assert table_refuses(path, method, keys) == expected, (
+                        path, method, keys
+                    )
+                continue
             if method == "GET" and path in VIEW_GRANTS:
                 assert api.query_allowlist(path, method) == frozenset(
                     VIEW_GRANTS[path]
