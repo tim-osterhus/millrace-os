@@ -14,11 +14,17 @@ import {
   type CoreView,
   type Json,
 } from "../api.ts";
-import { FailureNote, type Paged } from "./Inventory.tsx";
+import { FailureNote, stateClass, type Paged } from "./Inventory.tsx";
 
 export type Selection =
   | { kind: "node"; planeId: string; nodeId: string; revisionId: string | null }
   | { kind: "invocation"; invocationId: string };
+
+export interface InvocationSnapshot {
+  row: Json;
+  observedAt: string;
+  provenance: "History snapshot" | "Invocation read";
+}
 
 function action(value: CapturedAction | null): string {
   if (value === null || value.kind === null) return "none";
@@ -127,6 +133,16 @@ function NodeFacts({ selection, graph }: { selection: Extract<Selection, { kind:
   );
 }
 
+/** Contract epoch seconds, with raw values retained and no guessed string parsing. */
+function EpochTime({ value }: { value: unknown }) {
+  const date = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1000) : null;
+  const stamp = date !== null && Number.isFinite(date.getTime()) ? date.toISOString() : null;
+  return stamp === null ? <>{value === null ? "none" : display(value)}</> : <>
+    <time dateTime={stamp}>{stamp.replace("T", " ").replace("Z", " UTC")}</time>
+    <details className="epoch-raw"><summary>Epoch seconds</summary><code>{display(value)}</code></details>
+  </>;
+}
+
 function InvocationFacts({ row }: { row: Json }) {
   const writer = record(row.writer);
   const completion = record(row.completion);
@@ -155,7 +171,7 @@ function InvocationFacts({ row }: { row: Json }) {
         ).map(([key, label]) => (
           <div key={key}>
             <dt>{label}</dt>
-            <dd>{key.endsWith("_id") ? <code className="id">{recorded(row, key)}</code> : recorded(row, key)}</dd>
+            <dd>{key === "created_at" || key === "deadline" || key === "run_deadline" ? <EpochTime value={row[key]} /> : key.endsWith("_id") ? <code className="id">{recorded(row, key)}</code> : recorded(row, key)}</dd>
           </div>
         ))}
       </dl>
@@ -164,13 +180,13 @@ function InvocationFacts({ row }: { row: Json }) {
         <div>
           <dt>Original (completion)</dt>
           <dd>
-            <span className="state">{recorded(writer, "original")}</span>
+            <span className={stateClass(writer?.original)}>{recorded(writer, "original")}</span>
           </dd>
         </div>
         <div>
           <dt>Effective</dt>
           <dd>
-            <span className="state">{recorded(writer, "effective")}</span>
+            <span className={stateClass(writer?.effective)}>{recorded(writer, "effective")}</span>
           </dd>
         </div>
       </dl>
@@ -181,7 +197,7 @@ function InvocationFacts({ row }: { row: Json }) {
         <dl className="facts">
           {(["transport", "exit_code", "classification", "outcome", "diagnostic"] as const).map((key) => (
             <div key={key}>
-              <dt>{key.replace("_", " ")}</dt>
+              <dt>{key.replace("_", " ").replace(/^./, (letter) => letter.toUpperCase())}</dt>
               <dd>{recorded(completion, key)}</dd>
             </div>
           ))}
@@ -221,51 +237,55 @@ export function Inspector({
   selection,
   graph,
   invocation,
-  pageRows,
+  snapshot,
   onClear,
 }: {
   selection: Selection | null;
   graph: CapturedGraph | null;
   invocation: Paged<CoreView> | null;
-  /** Invocation rows already loaded by History, searched before an exact read. */
-  pageRows: Json[];
+  /** The exact selected snapshot keeps its successful read time and provenance. */
+  snapshot: InvocationSnapshot | null;
   onClear: () => void;
 }) {
+  const selectedInvocation = selection?.kind === "invocation" && snapshot?.row.invocation_id === selection.invocationId ? snapshot : null;
   let body: ReactNode;
   if (selection === null) {
-    body = <p className="muted">Select a node in Graph or a row in Planes, Status or History.</p>;
+    body = <div className="inspector-empty"><p className="eyebrow">Nothing selected</p><h3>Inspect one exact object</h3><p className="muted">Select a node in Graph, or a plane’s node or an invocation in Overview or Activity. Its captured definition or recorded invocation appears here.</p></div>;
   } else if (selection.kind === "node") {
     body = <NodeFacts selection={selection} graph={graph} />;
   } else {
-    const loaded = pageRows.find((row) => row.invocation_id === selection.invocationId) ?? null;
     const observation = invocation?.observation ?? null;
-    if (loaded !== null) {
-      body = <InvocationFacts row={loaded} />;
-    } else if (observation === null) {
-      body = <p className="muted" role="status">Reading invocation {selection.invocationId}…</p>;
-    } else if (!observation.ok) {
-      body = <FailureNote failure={observation} what="Invocation" />;
-    } else {
-      const row = record(observation.value.items[0]);
-      // Render only the exact selected identity, never another invocation's row.
-      body =
-        row === null || row.invocation_id !== selection.invocationId ? (
-          <p className="notice notice--warn">No invocation with this exact ID is recorded in this run.</p>
-        ) : (
-          <InvocationFacts row={row} />
-        );
-    }
+    const exact = observation?.ok ? record(observation.value.items[0]) : null;
+    body = <>
+      {invocation?.loading ? <p className="muted" role="status">Reading selected invocation…</p> : null}
+      {observation !== null && !observation.ok ? <>
+        <FailureNote failure={observation} what="Invocation" />
+        <p className="observation">Read failed at <time dateTime={new Date(observation.receivedAt).toISOString()}>{new Date(observation.receivedAt).toISOString()}</time>. {selectedInvocation === null ? "No invocation snapshot is available." : "The earlier snapshot below is retained; it is not a new observation."}</p>
+      </> : null}
+      {observation?.ok && (exact === null || exact.invocation_id !== selection.invocationId) ? <p className="notice notice--warn">No invocation with this exact ID was returned. {selectedInvocation === null ? "" : "The earlier snapshot below is retained."}</p> : null}
+      {selectedInvocation === null ? observation === null && !invocation?.loading ? <p className="muted">No invocation snapshot observed.</p> : null : <>
+        <p className="invocation-observation observation">{selectedInvocation.provenance} · read at <time dateTime={selectedInvocation.observedAt}>{selectedInvocation.observedAt}</time>. The page-header Refresh explicitly re-reads this invocation; summary monitoring does not update this snapshot.</p>
+        <InvocationFacts row={selectedInvocation.row} />
+      </>}
+    </>;
   }
   return (
-    <section className="region" aria-labelledby="inspector-heading">
+    <section className="region inspector-panel" aria-labelledby="inspector-heading">
       <div className="region__head">
-        <h2 id="inspector-heading">Inspector</h2>
+        <h2 id="inspector-heading" tabIndex={-1}>Inspector</h2>
         {selection !== null ? (
           <button type="button" onClick={onClear}>
             Clear selection
           </button>
         ) : null}
       </div>
+      {selection === null ? null : <div className="inspector-identity">
+        <strong>{selection.kind === "node" ? "Selected captured node" : "Selected recorded invocation"}</strong>
+        {selection.kind === "node" ? <code>{selection.planeId} / {selection.nodeId}</code> : <>
+          <code>{selection.invocationId}</code>
+          {selectedInvocation === null ? null : <span>Plane <code>{recorded(selectedInvocation.row, "plane_id")}</code> · node <code>{recorded(selectedInvocation.row, "node_id")}</code></span>}
+        </>}
+      </div>}
       {body}
     </section>
   );

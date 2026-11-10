@@ -28,6 +28,13 @@ def heading(page, name):
     return page.get_by_role("heading", name=name, level=1)
 
 
+def open_view(page, name):
+    """Open one run view (Overview, Graph, Activity, Reports or Control)."""
+    page.get_by_role("navigation", name="Run views").get_by_role(
+        "button", name=name, exact=True
+    ).click()
+
+
 def posts(page) -> list[dict]:
     return [
         item
@@ -49,8 +56,11 @@ def paused_run(service, review_gate):
 
 def review(form, operation=None):
     """Review one request and return its exact reviewed bytes."""
+    choice = form.get_by_role("combobox", name="Request")
     if operation is not None:
-        form.get_by_role("combobox", name="Request").select_option(operation)
+        choice.select_option(operation)
+    elif choice.count() and choice.input_value() == "":
+        choice.select_option("pause_run")
     form.get_by_role("button", name="Review request").click()
     body = form.locator(".request-body")
     expect(body).to_be_visible()
@@ -61,7 +71,8 @@ def send(page, form) -> str:
     with page.expect_request(
         lambda request: request.method == "POST" and request.url.endswith(POSTS[2:])
     ) as sent:
-        form.get_by_role("button", name="Send", exact=True).click()
+        label = form.locator(".review__heading h3").inner_text().lower()
+        form.get_by_role("button", name=f"Send {label} request", exact=True).click()
     return sent.value.post_data
 
 
@@ -144,6 +155,7 @@ def test_a_stale_reviewed_request_is_refused_and_never_replaced(
     instance, run = paused_run(service, review_gate)
     try:
         page.goto(service.url(target(instance, run), nonce=service.nonce()))
+        open_view(page, "Control")
         form = page.get_by_role("region", name="Control this run")
         reviewed = review(form, "resume_run")
         request = json.loads(reviewed)["request"]
@@ -195,6 +207,7 @@ def test_an_answer_lost_after_admission_is_observed_and_replayed_exactly(
 
     try:
         page.goto(service.url(target(instance, run), nonce=service.nonce()))
+        open_view(page, "Control")
         form = page.get_by_role("region", name="Control this run")
         page.route(POSTS, lose_answer)
         try:
@@ -245,6 +258,7 @@ def test_unknown_requests_survive_presets_navigation_back_and_reload(
     try:
         page.goto(service.url(target(instance, run), nonce=service.nonce()))
         page.route(POSTS, never_delivered)
+        open_view(page, "Control")
         form = page.get_by_role("region", name="Control this run")
         pause = review(form, "pause_run")
         assert send(page, form) == pause
@@ -321,7 +335,7 @@ def test_reconcile_needs_attestation_and_redirect_reads_the_hidden_graph_once(
             "bundled:command"
         )
         page.locator("details.layout-menu summary").click()
-        page.get_by_role("link", name=run, exact=True).click()
+        page.get_by_role("link", name=run).click()
 
         def graph_reads():
             fetched = page.evaluate("window.__fetches")
@@ -329,6 +343,7 @@ def test_reconcile_needs_attestation_and_redirect_reads_the_hidden_graph_once(
 
         assert graph_reads() == []  # Graph is hidden
 
+        open_view(page, "Control")
         form = page.get_by_role("region", name="Control this run")
         form.get_by_role("combobox", name="Request").select_option(
             "reconcile_invocation"
@@ -454,7 +469,9 @@ def test_failed_reads_back_off_5_15_30_seconds_then_stop_with_retry(
         assert summary_reads(page, run, "crowded") == count  # still backing off
         page.clock.run_for(100)
         wait_reads(page, run, count + 1, "crowded")
-    stopped = page.get_by_text("Automatic reads stopped after repeated failures.")
+    stopped = page.locator(".monitor").filter(
+        has_text="Automatic reads stopped after repeated failures."
+    )
     expect(stopped).to_be_visible()
     count = summary_reads(page, run, "crowded")
     page.clock.run_for(120_000)
@@ -482,6 +499,7 @@ def test_attestations_and_node_choices_never_outlive_their_identity(
         assert listing.status_code == 200, listing.text
         recorded_row = listing.json()["data"]["items"][0]
         page.goto(service.url(target(instance, run), nonce=service.nonce()))
+        open_view(page, "Control")
         form = page.get_by_role("region", name="Control this run")
         form.get_by_role("combobox", name="Request").select_option(
             "reconcile_invocation"
@@ -491,17 +509,21 @@ def test_attestations_and_node_choices_never_outlive_their_identity(
         invocation.fill("c" * 32)
         attest.check()
         page.get_by_role("button", name="Refresh").click()
+        open_view(page, "Overview")
         expect(page.get_by_role("region", name="Status")).to_contain_text(run)
+        open_view(page, "Control")
         expect(attest).to_be_checked()  # an unchanged summary read keeps it
         invocation.fill("d" * 32)
         expect(attest).not_to_be_checked()  # B never inherits A's attestation
         attest.check()
 
+        open_view(page, "Activity")
         page.get_by_role("button", name="Invocations").click()
         rows = page.get_by_role("table", name="Invocations, newest attempt first")
         rows.get_by_role(
             "button", name=recorded_row["invocation_id"], exact=True
         ).click()
+        open_view(page, "Control")
         form.get_by_role("button", name="Use selected invocation").click()
         expect(invocation).to_have_value(recorded_row["invocation_id"])
         expect(attest).not_to_be_checked()
@@ -608,6 +630,7 @@ def abort_posts(route):
 
 def unknown_pause(page):
     """Send one reviewed pause request whose delivery stays unknown."""
+    open_view(page, "Control")
     form = page.get_by_role("region", name="Control this run")
     page.route(POSTS, abort_posts)
     try:
@@ -620,7 +643,7 @@ def unknown_pause(page):
 
 
 def test_one_summary_read_per_target_is_shared_and_still_shown(
-    live, page, review_gate
+    live, page, review_gate, evidence
 ):
     service = live("shared-summary")
     instance, run = paused_run(service, review_gate)
@@ -637,6 +660,15 @@ def test_one_summary_read_per_target_is_shared_and_still_shown(
             until_held(page, held, 1)
             status = page.get_by_role("region", name="Status")
             expect(status).to_contain_text("Reading run summary")
+            fact = status.locator(".state--large")
+            expect(fact).to_have_text("Not observed")
+            expect(fact).to_have_class("state state--uncertain state--large")
+            expect(fact).to_have_css("border-left-style", "dashed")
+            expect(fact).to_have_css("color", status.evaluate(
+                "node => getComputedStyle(node).color"
+            ))
+            page.screenshot(path=str(evidence / "status-not-observed-uncertain.png"),
+                            full_page=True)
             # Refresh, then leave this run and come back while the read is held.
             page.get_by_role("button", name="Refresh").click()
             page.get_by_role("navigation", name="Target").get_by_role(
@@ -698,12 +730,19 @@ def test_a_reply_for_another_target_never_restarts_its_monitoring(
     start = page.get_by_role("region", name="Start a run")
     with paused_requests(page, POSTS, lambda sent: sent.method == "POST") as held:
         request = json.loads(review(start))["request"]
-        start.get_by_role("button", name="Send", exact=True).click()
+        start.get_by_role("button", name="Send start run request", exact=True).click()
         until_held(page, held, 1)
         # Select another target (this instance's run) while Start's answer waits.
-        page.get_by_role("link", name=run, exact=True).click()
+        page.get_by_role("link", name=run).click()
         expect(heading(page, "Run")).to_be_visible()
         armed(page, 2)
+        contextual = page.locator(".attention__actions .button--review").first
+        expect(contextual).to_be_disabled()
+        expect(contextual.locator("..").locator(".review-block-reason")).to_have_text(
+            "Wait for the current request."
+        )
+        page.screenshot(path=str(evidence / "review-disabled-current-request.png"),
+                        full_page=True)
         fake_router.summary_budget = True
         page.clock.run_for(2_000)
         retry = page.get_by_role("button", name="Retry")
@@ -711,6 +750,10 @@ def test_a_reply_for_another_target_never_restarts_its_monitoring(
         reads = summary_reads(page, run, "crowded")
         held.drop(0)  # Start's answer is lost now, for the instance target
         expect(item(page, request["request_id"])).to_contain_text("Delivery unknown")
+        expect(contextual).to_be_enabled()
+        expect(
+            contextual.locator("..").locator(".review-block-reason")
+        ).to_have_count(0)
         expect(retry).to_be_visible()  # that reply restarted nothing here
         page.clock.run_for(20_000)
         assert summary_reads(page, run, "crowded") == reads
@@ -730,10 +773,107 @@ def test_a_summary_budget_refusal_stops_before_any_receipt_read(
     armed(page, 1)  # the batch would read the summary, then this receipt
     fake_router.summary_budget = True
     page.clock.run_for(1_000)
-    refused = page.get_by_text("the bounded view refused this target")
+    refused = page.locator(".monitor").filter(
+        has_text="the bounded view refused this target"
+    )
     expect(refused).to_be_visible()
     assert strict_reads(page, request["request_id"]) == 0  # no receipt read followed
     reads = summary_reads(page, run, "crowded")
     page.clock.run_for(60_000)
     assert summary_reads(page, run, "crowded") == reads  # never retried by itself
     assert strict_reads(page, request["request_id"]) == 0
+
+
+def test_contextual_review_has_readable_exact_target_and_all_requests_stay_reachable(
+    live, page, review_gate, evidence
+):
+    service = live("review-context")
+    instance, run = paused_run(service, review_gate)
+    try:
+        page.goto(service.url(target(instance, run), nonce=service.nonce()))
+        open_view(page, "Control")
+        form = page.get_by_role("region", name="Control this run")
+        choice = form.get_by_role("combobox", name="Request", exact=True)
+        expect(choice).to_have_value("")
+        expect(form.locator(".notice--warn")).to_have_count(0)
+        expect(form.locator(".section-intro")).to_contain_text("Choose a request")
+        expect(form.locator(".review-block-reason")).to_have_text(
+            "Choose a request to see its scope and review the exact target."
+        )
+        disabled_review = form.get_by_role("button", name="Review request", exact=True)
+        expect(disabled_review).to_have_css("border-top-style", "dashed")
+        expect(disabled_review).to_have_css("font-weight", "400")
+        expect(disabled_review).to_have_css("opacity", "1")
+        page.screenshot(path=str(evidence / "review-disabled-before-choice.png"),
+                        full_page=True)
+        expect(
+            form.get_by_role("button", name="Review request", exact=True)
+        ).to_be_disabled()
+        expect(form.get_by_role(
+            "button", name="Review request", exact=True
+        )).to_have_css("background-color", "rgba(0, 0, 0, 0)")
+        # Context fills the exact plane, but does not review or send anything.
+        open_view(page, "Overview")
+        page.get_by_role("button", name="Review resume plane main", exact=True).click()
+        expect(page.locator("#destination-controls")).to_be_focused()
+        expect(choice).to_have_value("resume_plane")
+        expect(
+            form.get_by_role("combobox", name="Plane", exact=True)
+        ).to_have_value("main")
+        raw = review(form)
+        envelope = json.loads(raw)["request"]
+        reviewed = form.locator(".review")
+        for exact in ("default", instance, run, "main"):
+            expect(
+                reviewed.locator(".review-target").get_by_text(exact, exact=True)
+            ).to_be_visible()
+        expect(reviewed.get_by_role(
+            "button", name="Send resume plane request", exact=True
+        )).to_be_visible()
+        expect(form.get_by_role(
+            "button", name="Review request", exact=True
+        )).not_to_have_class("button--primary")
+        expect(form.locator("button.button--primary")).to_have_count(1)
+        assert envelope["instance_id"] == instance
+        assert envelope["run_id"] == run and envelope["plane_id"] == "main"
+        assert posts(page) == []
+        open_view(page, "Overview")
+        contextual = page.get_by_role(
+            "button", name="Review resume plane main", exact=True
+        )
+        expect(contextual).to_be_disabled()
+        expect(contextual.locator("..").locator(".review-block-reason")).to_have_text(
+            "Finish or discard the open review."
+        )
+        page.screenshot(path=str(evidence / "review-disabled-open-review.png"),
+                        full_page=True)
+        open_view(page, "Control")
+        form.get_by_role("button", name="Discard", exact=True).click()
+        open_view(page, "Overview")
+        expect(contextual).to_be_enabled()
+        expect(
+            contextual.locator("..").locator(".review-block-reason")
+        ).to_have_count(0)
+        open_view(page, "Control")
+        operations = [
+            "pause_run", "cancel_run", "resume_run", "recover_run", "pause_plane",
+            "cancel_plane", "resume_plane", "retry_invocation", "redirect_plane",
+            "submit_revision", "accept_revision", "reconcile_invocation",
+        ]
+        assert choice.locator("option").evaluate_all(
+            "items => items.map(item => item.value)"
+        ) == ["", *operations]
+        for operation in operations:
+            choice.select_option(operation)
+            expect(form.locator(".operation-effect")).to_be_visible()
+        assert posts(page) == []
+        page.get_by_role("navigation", name="Target").get_by_role(
+            "link", name=instance
+        ).click()
+        start = page.get_by_role("region", name="Start a run")
+        expect(
+            start.get_by_role("button", name="Review request", exact=True)
+        ).to_be_visible()
+        assert posts(page) == []  # thirteenth operation is still explicitly reviewed
+    finally:
+        service.cancel(instance, run)

@@ -2,7 +2,7 @@
 // section is chosen; each page is one bounded read of at most 50 rows.
 
 import { display, record, recorded, text, type CoreView, type HistorySection, type Json } from "../api.ts";
-import { FailureNote, Pager, type Paged } from "./Inventory.tsx";
+import { stateClass, FailureNote, Pager, type Paged } from "./Inventory.tsx";
 
 const SECTIONS: [HistorySection, string][] = [
   ["invocations", "Invocations"],
@@ -45,7 +45,7 @@ function InvocationRows({ rows, onSelect }: { rows: Json[]; onSelect: (id: strin
                 <code>{recorded(row, "plane_id")}</code> / <code>{recorded(row, "node_id")}</code>
               </td>
               <td>
-                <span className="state">{recorded(row, "status")}</span>
+                <span className={stateClass(row.status)}>{recorded(row, "status")}</span>
               </td>
               <td>
                 <span className="state">{recorded(writer, "original")}</span> /{" "}
@@ -125,7 +125,7 @@ function ControlRows({ rows }: { rows: Json[] }) {
             </th>
             <td>{recorded(row, "operation")}</td>
             <td>
-              <span className="state">{recorded(row, "status")}</span>
+              <span className={stateClass(row.status)}>{recorded(row, "status")}</span>
             </td>
             <td>{"code" in row ? recorded(row, "code") : "none"}</td>
             <td>{recorded(row, "plane_id")}</td>
@@ -154,8 +154,8 @@ export default function History({
   const observation = page.observation;
   const rows = observation?.ok ? observation.value.items.map((item) => record(item) ?? {}) : [];
   return (
-    <section className="region" aria-labelledby="history-heading">
-      <h2 id="history-heading">History</h2>
+    <section className="region history-panel" aria-labelledby="history-heading">
+      <h2 id="history-heading" tabIndex={-1}>History</h2>
       <div className="toolbar" role="group" aria-label="History section">
         {SECTIONS.map(([value, label]) => (
           <button key={value} type="button" aria-pressed={section === value} onClick={() => onSection(value)}>
@@ -174,7 +174,7 @@ export default function History({
       ) : rows.length === 0 && page.page === 0 ? (
         <p className="empty">Nothing is recorded in this section yet.</p>
       ) : (
-        <div className="table-scroll">
+        <><p className="table-scroll-hint">Scroll horizontally when needed for all recorded columns.</p><div className="table-scroll">
           {section === "invocations" ? (
             <InvocationRows rows={rows} onSelect={onSelectInvocation} />
           ) : section === "transitions" ? (
@@ -182,7 +182,7 @@ export default function History({
           ) : (
             <ControlRows rows={rows} />
           )}
-        </div>
+        </div></>
       )}
       {section !== null && observation?.ok ? (
         <Pager

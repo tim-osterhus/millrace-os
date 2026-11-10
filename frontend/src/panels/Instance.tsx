@@ -1,7 +1,7 @@
 // One instance: identity, common settings with provenance, and its runs.
 
 import { display, record, recorded, text, type CoreView, type Target } from "../api.ts";
-import { FailureNote, Pager, TargetLink, type Paged } from "./Inventory.tsx";
+import { ExactValue, FailureNote, Pager, pathLabel, shortId, stateClass, TargetLink, type Paged } from "./Inventory.tsx";
 
 function settingRows(value: unknown, keys: [string, string][]) {
   const settings = record(value);
@@ -37,11 +37,69 @@ export function Instance({
   const runs = observation.value.items.map((item) => record(item) ?? {});
   return (
     <>
-      <section className="region" aria-labelledby="instance-heading">
+      <section className="region" aria-labelledby="runs-heading">
+        <div className="region__head"><div><p className="eyebrow">Instance</p><h2 id="runs-heading">{pathLabel(data.project_root)}</h2></div><ExactValue value={target.instance ?? "unknown"} label="Instance ID" /></div>
+        <p className="section-intro">Runs, newest first. Open a run to inspect its state and decide what to do next.</p>
+        {runs.length === 0 && page.page === 0 ? (
+          <p className="empty">This instance has no runs yet. A run begins only with an explicit Start request.</p>
+        ) : (
+          <><p className="table-scroll-hint">Scroll horizontally when needed · identity stays on the left.</p><div className="table-scroll"><table className="identity-table">
+            <caption className="visually-hidden">Runs of instance {target.instance}</caption>
+            <thead>
+              <tr>
+                <th scope="col">Run</th>
+                <th scope="col">Status</th>
+                <th scope="col">Edit mode</th>
+                <th scope="col">State version</th>
+                <th scope="col">Active revision</th>
+                <th scope="col">Pause reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {runs.map((run, index) => {
+                const id = text(run.run_id);
+                return (
+                  <tr key={id ?? index}>
+                    <th scope="row">
+                      {id === null || target.home === null ? (
+                        "unknown"
+                      ) : (
+                        <TargetLink target={{ home: target.home, instance: target.instance, run: id }} navigate={navigate} label={`Open run ${id}`}>
+                          <span className="item-name">{shortId(id)}</span>
+                        </TargetLink>
+                      )}
+                      {id === null ? null : <ExactValue value={id} label="Run ID" />}
+                    </th>
+                    <td>
+                      <span className={stateClass(run.status)}>{recorded(run, "status")}</span>
+                    </td>
+                    <td>{recorded(run, "mode")}</td>
+                    <td>{recorded(run, "state_version")}</td>
+                    <td>
+                      <ExactValue value={recorded(run, "active_revision_id")} label="Active revision" />
+                    </td>
+                    <td>{recorded(run, "pause_reason")}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table></div></>
+        )}
+        <Pager
+          label="Runs"
+          page={page.page}
+          hasNext={observation.value.nextCursor !== null}
+          loading={page.loading}
+          onPage={onPage}
+        />
+      </section>
+      <details className="region settings-details">
+        <summary>Instance settings and exact paths</summary>
+        <div className="details-body">
         <h2 id="instance-heading">Instance settings</h2>
         <dl className="facts">
           <div>
-            <dt>Project root</dt>
+            <dt>Project folder</dt>
             <dd className="path">{display(data.project_root)}</dd>
           </div>
           <div>
@@ -67,61 +125,8 @@ export function Instance({
             ["timeout_ceiling_seconds", "Timeout ceiling (s)"],
           ])}
         </dl>
-      </section>
-      <section className="region" aria-labelledby="runs-heading">
-        <h2 id="runs-heading">Runs, newest first</h2>
-        {runs.length === 0 && page.page === 0 ? (
-          <p className="empty">This instance has no runs yet. A run begins only with an explicit Start request.</p>
-        ) : (
-          <table>
-            <caption className="visually-hidden">Runs of instance {target.instance}</caption>
-            <thead>
-              <tr>
-                <th scope="col">Run</th>
-                <th scope="col">Status</th>
-                <th scope="col">Edit mode</th>
-                <th scope="col">State version</th>
-                <th scope="col">Active revision</th>
-                <th scope="col">Pause reason</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((run, index) => {
-                const id = text(run.run_id);
-                return (
-                  <tr key={id ?? index}>
-                    <th scope="row">
-                      {id === null || target.home === null ? (
-                        "unknown"
-                      ) : (
-                        <TargetLink target={{ home: target.home, instance: target.instance, run: id }} navigate={navigate}>
-                          <code className="id">{id}</code>
-                        </TargetLink>
-                      )}
-                    </th>
-                    <td>
-                      <span className="state">{recorded(run, "status")}</span>
-                    </td>
-                    <td>{recorded(run, "mode")}</td>
-                    <td>{recorded(run, "state_version")}</td>
-                    <td>
-                      <code className="id">{recorded(run, "active_revision_id")}</code>
-                    </td>
-                    <td>{recorded(run, "pause_reason")}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-        <Pager
-          label="Runs"
-          page={page.page}
-          hasNext={observation.value.nextCursor !== null}
-          loading={page.loading}
-          onPage={onPage}
-        />
-      </section>
+        </div>
+      </details>
     </>
   );
 }

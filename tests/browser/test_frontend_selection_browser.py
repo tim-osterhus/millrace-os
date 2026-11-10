@@ -348,6 +348,9 @@ def drop_posts(route):
 
 def review(form) -> str:
     """Review the form's request; return its exact reviewed bytes."""
+    choice = form.get_by_role("combobox", name="Request")
+    if choice.count() and choice.input_value() == "":
+        choice.select_option("pause_run")
     form.get_by_role("button", name="Review request").click()
     body = form.locator(".request-body")
     expect(body).to_be_visible()
@@ -429,7 +432,7 @@ def test_stock_exits_wait_for_unsent_and_unresolved_requests(
     assert retained["request_id"] != unsent["request_id"]
     page.route(POSTS, drop_posts)
     try:
-        form.get_by_role("button", name="Send", exact=True).click()
+        form.get_by_role("button", name="Send start run request", exact=True).click()
         requests = page.get_by_role("region", name="Requests in this tab")
         entry = requests.get_by_role("listitem").filter(has_text=retained["request_id"])
         expect(entry).to_contain_text("Delivery unknown")

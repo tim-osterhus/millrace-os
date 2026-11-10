@@ -12,6 +12,7 @@ import {
   output,
   outputs,
   saveText,
+  targetHref,
   type Failure,
   type Observed,
   type OutputItem,
@@ -184,26 +185,50 @@ function Evidence({ value }: { value: OutputRead }) {
   );
 }
 
+/**
+ * The outputs listing with the exact target and page it was read for. `stale`
+ * is a failed re-read of that same page: its last successful listing stays,
+ * labelled, until a later read succeeds.
+ */
+type Listing = Paged<OutputsPage> & { key: string | null; stale: Failure | null };
+
 export default function Report({ target }: { target: Target }) {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
-  const [listing, setListing] = useState<Paged<OutputsPage>>({ observation: null, loading: true, page: 0 });
+  const [listing, setListing] = useState<Listing>({ observation: null, loading: true, page: 0, key: null, stale: null });
+  // Bumped only by the operator's Refresh outputs: nothing re-reads on a timer.
+  const [listingRead, setListingRead] = useState(0);
   const [selected, setSelected] = useState<OutputItem | null>(null);
   // A report read is kept with the exact output it was issued for.
   const [read, setRead] = useState<{ key: string; result: Observed<OutputRead> } | null>(null);
   const chosen = useRef<string | null>(null);
   const [download, setDownload] = useState<{ reading: boolean; failure: Failure | null }>({ reading: false, failure: null });
   const cursor = cursors[cursors.length - 1];
+  const listingKey = `${targetHref(target)}|${cursors.length - 1}|${cursor ?? ""}`;
 
+  // One listing read per target, page and explicit Refresh outputs. A reply is
+  // shown only while its own read is still the current one, so a superseded
+  // target, page or refresh never replaces what is shown. The selected output
+  // and its report read are separate state and are left untouched.
   useEffect(() => {
     let current = true;
-    setListing((previous) => ({ ...previous, loading: true }));
+    setListing((previous) => ({ ...previous, loading: true, stale: previous.key === listingKey ? previous.stale : null }));
     void outputs(target, cursor).then((observation) => {
-      if (current) setListing({ observation, loading: false, page: cursors.length - 1 });
+      if (!current) return;
+      setListing((previous) =>
+        !observation.ok && previous.observation?.ok === true && previous.key === listingKey
+          ? { ...previous, loading: false, stale: observation }
+          : { observation, loading: false, page: cursors.length - 1, key: listingKey, stale: null },
+      );
     });
     return () => {
       current = false;
     };
-  }, [target, cursor, cursors.length]);
+  }, [target, cursor, cursors.length, listingKey, listingRead]);
+
+  /** Re-read this page of the listing; a read already in flight is not repeated. */
+  const refreshOutputs = () => {
+    if (!listing.loading) setListingRead((count) => count + 1);
+  };
 
   const outputKey = (item: OutputItem) => `${item.outputId}|${item.recordSha256}`;
 
@@ -244,12 +269,31 @@ export default function Report({ target }: { target: Target }) {
       : null
     : null;
   return (
-    <section className="region" aria-labelledby="reports-heading">
-      <h2 id="reports-heading">Reports</h2>
+    <section className="report-panel" aria-labelledby="reports-heading">
+      <h2 id="reports-heading" tabIndex={-1}>Reports</h2>
       <p className="muted">
         Workflow-produced evidence. A report proves no task success, writer closure, ownership or join; read execution
-        facts in Status, Planes and History.
+        facts in Overview and Activity.
       </p>
+      <div className="toolbar report-listing-actions">
+        <button type="button" onClick={refreshOutputs}>
+          Refresh outputs
+        </button>
+        {listing.loading && observation !== null ? (
+          <span className="muted" role="status">
+            Reading published outputs…
+          </span>
+        ) : null}
+      </div>
+      {listing.stale !== null && observation?.ok === true ? (
+        <>
+          <FailureNote failure={listing.stale} what="Published outputs" />
+          <p className="observation">
+            The listing below is the last successful read, at <time dateTime={observation.observedAt}>{observation.observedAt}</time>; it is
+            not a new observation.
+          </p>
+        </>
+      ) : null}
       {observation === null ? (
         <p className="muted" role="status">
           Reading published outputs…
@@ -274,7 +318,7 @@ export default function Report({ target }: { target: Target }) {
             </thead>
             <tbody>
               {observation.value.items.map((item) => (
-                <tr key={item.outputId} aria-current={selected?.outputId === item.outputId ? "true" : undefined}>
+                <tr key={item.outputId} aria-current={selected !== null && outputKey(selected) === outputKey(item) ? "true" : undefined}>
                   <th scope="row">
                     <button type="button" className="link" onClick={() => void choose(item)}>
                       <code>{item.outputId}</code>
@@ -314,7 +358,7 @@ export default function Report({ target }: { target: Target }) {
             <FailureNote failure={report} what="Report" />
           ) : (
             <>
-              <Evidence value={report.value} />
+              <p className="report-byline">Producer (claimed): <strong>{report.value.producer.id}</strong> {report.value.producer.version}<span>Published {report.value.publishedAt}</span></p>
               {report.value.representation.format !== REPORT_FORMAT ? (
                 <p className="notice notice--warn">
                   Report format <code>{report.value.representation.format}</code> is not {REPORT_FORMAT}; it is not rendered.
@@ -324,6 +368,7 @@ export default function Report({ target }: { target: Target }) {
               ) : (
                 <RenderedReport report={rendered} />
               )}
+              <details className="report-evidence"><summary>Exact output provenance</summary><Evidence value={report.value} /></details>
               <div className="toolbar">
                 <button type="button" disabled={download.reading} onClick={() => void saveEnvelope(selected, "report")}>
                   Download report (API response)
@@ -336,7 +381,7 @@ export default function Report({ target }: { target: Target }) {
               </div>
               <p className="muted">
                 Downloads are the exact API response envelope. Their file bytes are not the canonical bytes behind the
-                representation SHA-256 shown above.
+                representation SHA-256 in Exact output provenance.
               </p>
               {download.failure !== null ? <FailureNote failure={download.failure} what="Download" /> : null}
             </>

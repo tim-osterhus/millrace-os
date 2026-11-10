@@ -93,8 +93,8 @@ export default function Revisions({
     ["Active routing", text(summary.active_revision_id)],
   ];
   return (
-    <section className="region" aria-labelledby="revisions-heading">
-      <h2 id="revisions-heading">Revisions</h2>
+    <section className="region revisions-panel" aria-labelledby="revisions-heading">
+      <h2 id="revisions-heading" tabIndex={-1}>Revisions</h2>
       <table>
         <caption className="visually-hidden">Recorded revisions of this run</caption>
         <thead>

@@ -84,21 +84,120 @@ failed or unreadable context is shown, and no control may treat it as ordinary.
 Until an ordinary or a bound demo context is observed, presentation saves and
 every control stay disabled; a transport failure is not an ordinary service.
 
+## Workbench layout
+
+The stock client follows one operator journey: choose a home and instance,
+open a run, read its state, inspect what needs attention, then review a
+deliberate control. A run shows one view at a time:
+
+- **Overview** (always first): the recorded status, one plain sentence built
+  only from recorded facts (what is finished, uncertain, held, paused or working
+  and where to look next), any recorded run-level pause, gate, cancellation or
+  pending candidate, and the planes that need attention with **Inspect node**
+  and **Review resume**. **Run reports** is the lead button only when the
+  sentence points at Reports; otherwise it is a link beside the observation
+  time, and the Reports view is always one choice away.
+- **Graph**: the read-only Directed/Grid graph with its tables, the Inspector
+  and Revisions.
+- **Activity**: Current work and blockers, the full Planes table and History.
+  Current work groups its recorded facts under **Run** and under each plane
+  that records one; a plane's ID is stated once, by its group, and a long ID
+  keeps its full value one **Show full value** disclosure away.
+- **Reports**: published outputs with their provenance. Opening the view reads
+  the output list; nothing is read before. **Refresh outputs** re-reads the
+  current page of that list on request (see [Reports](#reports)).
+- **Control**: the exact request form, review and Send.
+
+A view's panels mount and read only after that view is first opened for the
+selected run, and stay mounted afterwards so a review, selection, zoom or
+History section survives switching views. Away from Overview, the view bar
+keeps the recorded run status, and says when the observation is stale. One
+run announcement for assistive technology (status, any recorded run-level
+pause reason, gate or cancellation request, plane blockers, or a failed read
+with stale facts) sits outside the views and is exposed on every view; it
+carries no clock or read time, so it changes only with those facts. A requested
+cancellation is announced as requested, never as stopped work.
+Choosing a view in **Run views** moves keyboard focus to that view's own
+container, which the chosen button names and controls (`aria-controls`); the
+view bar does not scroll away. Inspecting a node or invocation from any view
+opens the Graph view's Inspector and focuses it; **Review resume** opens and
+focuses Control; **Run reports** opens and focuses Reports.
+The same node name in another plane or revision is never highlighted as the
+selected object.
+
+Overview leads with observed state, freshness and recorded plane blockers. The
+lead sentence resolves run-level facts first: an unknown or missing run status
+(no next step is inferred), a terminal status (finished only when Core is
+quiescent with every recorded and effective writer stopped and nothing in
+flight; otherwise the status with "writer closure is not confirmed"), a
+requested cancellation that is not yet recorded complete, then a run-level
+pause or gate. Only an otherwise ordinary run reads its paused planes as
+waiting on a resume decision. Paused planes appear in the sentence as a count
+that points at their rows under Plane activity; every exact plane ID stays in
+its row. A paused plane may record no node to inspect, so the sentence asks for
+that only where a node is shown. The sentence is wording only: it enables or
+disables no operation, and the service still decides whether a request applies.
+**Review resume** is drawn with review emphasis only while a fresh observation's
+sentence recommends reviewing a plane resume. For an unknown, terminal,
+cancelling or stale observation the same button is an ordinary secondary one:
+equally reachable, with the same busy and trust conditions, and no claim about
+whether the request will apply. When the latest read
+fails, a separate statement under the status says so in ordinary text, and the
+facts and sentence below it are the last successful observation, not the
+current state. The
+resume link fills the plane and operation only: it does not establish
+applicability, create a request or send one. An existing unsent review or busy
+request is not replaced by that link. Run terminal status, Core quiescence and
+recorded/effective writer facts remain separate. When Core is quiescent, every
+recorded and effective writer is stopped and nothing is in flight, the writer
+counts move under **Exact target and run details**; in every other case the
+writer and in-flight facts stay open on Overview. Exact target IDs, edit mode,
+state version and supporting run facts are under the same disclosure.
+Requests sent from this tab, and every notice, stay above the views on every
+view until resolved or retired.
+
+This layout supersedes the earlier single stacked page and its Jump to section
+list. The preset payload, panel visibility, split ratios and explicit
+save/version semantics are unchanged, and no saved presentation is rewritten.
+What changed is only how a saved arrangement is shown: it no longer orders one
+long page. It still names the pair that shares the resizable row (Graph and
+Inspector in the Graph view for Detail split and Graph split; Planes and
+History in the Activity view for Status stack). A hidden optional panel stays
+hidden and unread; its view offers **Show** for it, in memory only. Status,
+notices, unresolved requests, Reports and Control never become hideable
+presentation data.
+
+
+Inventory display labels come only from the displayed project and workflow
+path basenames; they are not new stored names. After an instance has been
+opened, the instance breadcrumb shows that project folder basename while a run
+of the same home and instance is open; the exact instance ID stays in the
+link's name and title. A run opened directly, or another home or instance,
+shows the instance ID: no extra read fills the name in. **Show full value** disclosures
+retain selectable exact identifiers and paths. Instance runs precede the
+settings and exact-path disclosure. Neither compact labels nor layout changes
+alter the validated target query or history.
+
+Observation ages and monitoring countdowns are ordinary accessible text.
+Dedicated live messages describe meaningful observed-state, freshness failure
+and monitoring transitions; the cosmetic clock does not announce every tick.
+
 ## What it shows
 
 - **Homes and instances.** The client shows configured homes, then a home's
   instances. Empty, unavailable and integrity-refused instances are shown
   separately. Paging is explicit Next/Previous over pages of at most 50 rows.
 - **Instance.** The instance's identity, its common runtime defaults and
-  operator policy (an absent key shows "not set"), and its runs, newest first.
+  operator policy (an absent key shows "not set"), with runs newest first and
+  settings in a separate disclosure.
 - **Run.**
-  - *Status* cannot be hidden. It shows the exact target with full IDs, run
+  - *Status* (the Overview view) cannot be hidden. Its exact-target disclosure retains full IDs, run
     status, edit mode, state version, run gate, pause reason, cancellation and
     Core quiescence, meaning every invocation's effective writer is stopped.
     It shows recorded and effective writer counts separately, in-flight
     invocations, each plane's recorded pause or terminal-dependency blocker,
     revisions and the observation time, even when *Planes* is hidden. A failed
-    refresh keeps the last observation, labelled stale. `may_live`, `unknown`,
+    refresh keeps the last observation, labelled stale under the status. `may_live`, `unknown`,
     `running` and `stopped` are never merged. Quiescence never claims an OS
     caller or holder closure.
   - *Planes* and *Current work* list recorded facts only.
@@ -106,7 +205,12 @@ every control stay disabled; a transport failure is not an ordinary service.
     always-present equivalent node, route and seam tables. Selecting a node or a
     table row opens *Inspector* for that exact identity. Layout is directed
     (Dagre) or a deterministic grid, with grid fallback if the directed layout
-    fails. Positions are never saved.
+    fails. The initial canvas favors readable labels; **Fit all** shows the
+    complete topology and **Readable size (100%)** returns to reading scale,
+    centered on the recorded cursor when it is in the displayed graph,
+    otherwise the Inspector's node or the start node.
+    Long canvas labels also have a full-value title and a whole identifier in
+    the equivalent tables. Positions are never saved.
   - *History* reads one section page (invocations, transitions and moves, or
     control receipts) only after the section is chosen.
   - *Revisions* shows the startup, active and pending revisions. An invalid
@@ -127,7 +231,7 @@ seconds. Each observation window is five minutes, then **Continue monitoring**
 offers another. A hidden tab reads nothing. Failures back off to 5, 15 and 30
 seconds, then stop with **Retry**. A bounded-view budget refusal stops automatic
 reads at once; there is no fallback to a full read. A terminal, quiescent run
-stops fast refresh, which still proves no holder closure. **Refresh** reads once
+stops fast refresh; holder closure is not established. **Refresh** reads once
 on demand.
 
 ## Control requests
@@ -136,7 +240,11 @@ The instance screen offers **Start**; the run screen offers pause, cancel,
 resume and recover for the run; pause, cancel and resume for a plane; retry,
 redirect and reconcile; and submit and accept for revisions. Each form shows the
 exact target, operation, payload, expected state version and a new request ID
-before **Send**.
+before **Send**. A run starts with **Choose a request**, rather than assuming
+that Pause is the next action. Each of the thirteen operations has a scope and
+effect description. Review displays the full home, instance, run and plane
+beside the retained raw bytes. The primary send button names the reviewed
+operation; export and discard remain separate actions.
 
 - **Envelope.** Each form builds one `millrace-router-request/v2` envelope with
   all eight fields and explicit nulls, wrapped as `{home, request}` for
@@ -189,6 +297,21 @@ never in storage or preferences, and never with trust material:
 
 ## Reports
 
+Reports show a document title, producer/published byline and content before
+**Exact output provenance**. That disclosure retains invocation, revision,
+producer claims and both full digests. The execution-authority warning and
+exact-envelope downloads remain separate from the report's claims.
+
+The output list is read when Reports is first opened and when its page
+changes. Nothing re-reads it automatically, and the page-header **Refresh**
+re-reads the run summary, not this list. **Refresh outputs** re-reads the
+current page for the selected run: it finds outputs published since the last
+read and retries a list read that failed. A successful read clears the earlier
+failure. If a re-read fails after a successful one, the last successful list
+stays, labelled with its read time. The selected report, its content and its
+exact provenance are kept through a list refresh; a row is marked selected only
+while it names the same output ID and record digest.
+
 Reports list the run's generic workflow outputs and render only the
 `millrace-report-display/v1` representation, using fixed elements:
 
@@ -215,8 +338,8 @@ The three bundled presets share every region and inspect action:
 - **Studio**: graph-focused split.
 
 Theme, density, arrangement, optional panels and the split ratio are separate
-choices. Status, notices and the Actions navigation are never hidden. Every
-optional panel stays reachable from Actions. Selecting a node reveals a hidden
+choices. Overview, notices and the view bar are never hidden. Every hidden
+optional panel stays reachable from **Show** in its view. Selecting a node reveals a hidden
 Inspector in memory. A presentation change never changes the target,
 selection, trust or any request.
 
@@ -229,6 +352,50 @@ pending stay unsaved, and a reply never changes a presentation chosen since.
 Nothing is retried automatically. If the store is unreadable or newer, the
 client keeps its bytes and shows Precision in memory with the reason; replacing
 it is a separate confirmed action.
+
+The Run overview labels stale observations beside the recorded status. Plane
+activity lists recorded blockers and pending routing first, followed by the other
+planes; it does not classify every plane as waiting. Reports is a run-level action.
+The compact graph legend distinguishes the recorded cursor from a selected captured node,
+and the Inspector foregrounds the exact object it is showing. Beside the graph the
+Inspector is as tall as its content and starts at the top of its side of the split;
+resizing, Widen and the saved ratios are unchanged. Confirmed quiescence,
+stopped writer counts and no in-flight work use a compact summary under **Exact
+target and run details**; uncertain or active writer facts remain fully labeled
+on Overview above the plane list. Graph
+help explains the marks and overview scale in a secondary disclosure. Exact targets and the meaning of quiescence remain
+available in run details.
+
+Run-level gate, pause, requested cancellation and pending-change facts remain
+visible in Overview's Status, including when secondary panels are hidden; edit mode is
+listed under **Exact target and run details**. A pending
+candidate is a recorded pending change, not automatically a blocker for the current
+run. Recorded running work, active invocation links and unknown-cursor work stay
+expanded alongside recorded plane attention; Other plane activity
+is available in a counted disclosure without a row cap. Writer uncertainty remains
+above both groups. In-flight presence remains visible with exact invocation links
+in a secondary disclosure.
+
+A new captured topology opens at a reading scale around its exact recorded cursor,
+then an exact selected node or the start node when no cursor matches. Routine reads
+do not reset a manual pan or zoom. Fit all still shows the complete topology, including
+action endpoints; the initial current-work view may crop its neighbors. Fit all
+and Readable size (100%) are named toolbar controls outside the drawing. Readable size is the
+deliberate way back to current work, for example after the window was resized
+while another view was open: it sets 100% and centers the exact recorded cursor
+of the displayed plane and revision, otherwise the Inspector's node there, otherwise
+the start node. It selects nothing and changes no run state. No read, resize or
+view switch recenters the graph. Switching views changes no saved presentation.
+
+At narrow widths, populated Inventory and Instance run tables scroll locally so
+all columns, links and exact-value disclosures stay available without widening
+the page. Refresh stays beside the Run title; target breadcrumbs wrap at segment
+boundaries and the view bar scrolls in one row; the compact Layout label retains the presentation name in its accessible name and menu. Fit all and Readable size stay together outside
+the drawing. Inspect selection appears when the Inspector is not adjacent.
+
+State chips share a common UI face, border and shape. Paused uses warning colors,
+failed uses error colors, and unknown, cancelled and succeeded remain neutral.
+Stale observation is a separate qualification of the read, not a Core run status.
 
 ## Building the client (maintainers)
 
@@ -274,3 +441,27 @@ validation. It refuses:
 Notices and the dependency inventory come from the actual lock and the emitted
 module closure. The sdist also carries `frontend/` sources, the lock and the
 exporter, without `node_modules` or build staging.
+
+Invocation Inspector shows the successful snapshot's read time separately from
+Created. A reused History row is labelled History snapshot. Manual Refresh reads
+the exact selected invocation again; summary monitoring does not refresh it. A
+failed invocation read retains the earlier facts and their original read time,
+with the failed read's time and error alongside them.
+
+Inventory and Instance run tables keep the primary identity visible in a sticky
+first column while the remaining columns scroll horizontally. A visible hint
+explains the local scroll; exact-value disclosures and all columns remain available.
+
+Invocation Created, Deadline and Run deadline numeric epoch seconds are shown
+as readable UTC timestamps with their raw seconds in a disclosure. Null,
+nonnumeric and unrepresentable dates remain their recorded values. The separate
+snapshot read time and failed-read time retain their own meaning.
+
+The current run status is a flat recorded fact beside the Reports action. Both
+contextual and form Review entry points use the same outlined treatment; Send
+remains the solid primary action. Graph read failures size to their message,
+guidance and retry action; the resizable split keeps a bounded handle when no
+canvas exists. Planes, Graph and History tables include horizontal-scroll cues.
+Plane identity remains available while its columns scroll, with full identifiers
+in disclosures. An invocation selected in Inspector is explicitly not marked as
+a graph node.

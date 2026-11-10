@@ -95,6 +95,13 @@ test("the grid places every node deterministically without overlap", () => {
   assert.equal(first.nodes.size, topology.nodes.length);
   const seen = new Set([...first.nodes.values()].map((point) => `${point.x},${point.y}`));
   assert.equal(seen.size, topology.nodes.length);
+  // Distinct coordinates alone are insufficient when readable node boxes grow.
+  const boxes = [...first.nodes.values()];
+  for (let i = 0; i < boxes.length; i += 1) {
+    for (let j = i + 1; j < boxes.length; j += 1) {
+      assert.ok(Math.abs(boxes[i].x - boxes[j].x) >= NODE_WIDTH || Math.abs(boxes[i].y - boxes[j].y) >= NODE_HEIGHT);
+    }
+  }
 });
 
 test("the directed layout is deterministic, routes every edge and keeps the orphan", () => {

@@ -10,10 +10,12 @@ export function TargetLink({
   target,
   navigate,
   children,
+  label,
 }: {
   target: Target;
   navigate: (target: Target) => void;
   children: ReactNode;
+  label?: string;
 }) {
   const follow = (event: MouseEvent<HTMLAnchorElement>) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -21,15 +23,40 @@ export function TargetLink({
     navigate(target);
   };
   return (
-    <a href={targetHref(target)} onClick={follow}>
+    <a href={targetHref(target)} onClick={follow} aria-label={label}>
       {children}
     </a>
   );
 }
 
+/** A compact display label never replaces the exact value or target identity. */
+export function shortId(value: string): string {
+  return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value;
+}
+
+/** Only explicitly supported recorded statuses receive a semantic color. */
+export function stateClass(value: unknown): string {
+  return value === null || value === undefined || value === "unknown" || value === "may_live" ? "state state--uncertain" : value === "paused" ? "state state--paused" : value === "failed" ? "state state--failed"
+    : value === "running" ? "state state--running" : "state";
+}
+
+export function pathLabel(value: unknown, field = "project"): string {
+  const path = text(value);
+  return path === null ? `Unknown ${field}` : path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
+}
+
+export function ExactValue({ value, label = "Exact value" }: { value: string; label?: string }) {
+  return (
+    <details className="exact-value">
+      <summary aria-label={`${label}: show full value`}>{value === "unknown" ? <span>Unknown {label.toLowerCase()}</span> : <code>{value.includes("/") || value.includes("\\") ? pathLabel(value, label.toLowerCase()) : shortId(value)}</code>}</summary>
+      <code className="exact-value__full">{value}</code>
+    </details>
+  );
+}
+
 const MEANINGS: Record<string, string> = {
   client_deadline: "No response within 5 seconds. Not observed: the service may still be working.",
-  network_unavailable: "The service could not be reached. Not observed: nothing is known about its work.",
+  network_unavailable: "The service could not be reached for this read. No new observation was obtained.",
   response_too_large: "The response exceeded the 1,049,600-byte read limit. Use the headless CLI or API.",
   router_read_busy: "Eight reads are already in progress on the service. Retry shortly.",
   router_inspection_unavailable: "Router inspection is not installed on this service (router extra).",
@@ -94,8 +121,9 @@ export interface InventoryProps {
 export function Inventory({ target, homes, instances, onPage, navigate }: InventoryProps) {
   return (
     <>
-      <section className="region" aria-labelledby="homes-heading">
+      <section className="region inventory-homes" aria-labelledby="homes-heading">
         <h2 id="homes-heading">Configured state homes</h2>
+        <p className="section-intro">Choose where to work. Each home is a separate configured state store.</p>
         {homes.observation === null ? (
           <p className="muted" role="status">
             {homes.loading ? "Reading configured homes…" : "Not read yet."}
@@ -141,7 +169,7 @@ export function Inventory({ target, homes, instances, onPage, navigate }: Invent
       </section>
       {target.home !== null && instances !== null ? (
         <section className="region" aria-labelledby="instances-heading">
-          <h2 id="instances-heading">
+          <h2 id="instances-heading" tabIndex={-1}>
             Instances in <code>{target.home}</code>
           </h2>
           <InstanceTable home={target.home} instances={instances} onPage={onPage} navigate={navigate} />
@@ -177,12 +205,12 @@ function InstanceTable({
       {rows.length === 0 && instances.page === 0 ? (
         <p className="empty">No instances in this home.</p>
       ) : (
-        <table>
+        <><p className="table-scroll-hint">Scroll horizontally when needed · identity stays on the left.</p><div className="table-scroll"><table className="identity-table">
           <caption className="visually-hidden">Instances in {home}</caption>
           <thead>
             <tr>
               <th scope="col">Instance</th>
-              <th scope="col">Project root</th>
+              <th scope="col">Project folder</th>
               <th scope="col">Workflow file</th>
               <th scope="col">Settings version</th>
               <th scope="col">Store format</th>
@@ -199,13 +227,15 @@ function InstanceTable({
                     {id === null ? (
                       "unknown"
                     ) : (
-                      <TargetLink target={{ home, instance: id, run: null }} navigate={navigate}>
-                        <code className="id">{id}</code>
+                      <TargetLink target={{ home, instance: id, run: null }} navigate={navigate} label={`Open ${pathLabel(row.project_root)} instance ${id}`}>
+                        <span className="item-name">{pathLabel(row.project_root)}</span>
+                        <span className="item-subtitle">{pathLabel(row.workflow_file, "workflow file")}</span>
                       </TargetLink>
                     )}
+                    {id === null ? null : <ExactValue value={id} label="Instance ID" />}
                   </th>
-                  <td className="path">{display(row.project_root)}</td>
-                  <td className="path">{display(row.workflow_file)}</td>
+                  <td><ExactValue value={display(row.project_root)} label="Project folder" /></td>
+                  <td><ExactValue value={display(row.workflow_file)} label="Workflow file" /></td>
                   <td>{display(row.settings_version)}</td>
                   <td>{display(row.store_format)}</td>
                   <td>{error === null ? "available" : <span className="state state--refused">refused {error}</span>}</td>
@@ -213,7 +243,7 @@ function InstanceTable({
               );
             })}
           </tbody>
-        </table>
+        </table></div></>
       )}
       <Pager
         label="Instances"

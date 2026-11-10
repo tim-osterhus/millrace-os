@@ -52,8 +52,8 @@ export interface Placed {
   fallback: string | null;
 }
 
-export const NODE_WIDTH = 184;
-export const NODE_HEIGHT = 64;
+export const NODE_WIDTH = 224;
+export const NODE_HEIGHT = 104;
 const GAP_X = 72;
 const GAP_Y = 48;
 

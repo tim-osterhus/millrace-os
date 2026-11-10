@@ -3,7 +3,9 @@
 // Targets live only in the validated `home`/`instance`/`run` query and the
 // History API. Reads are sequential and bounded (homes or the selected page,
 // then the selected summary); optional panels read only when opened, and a
-// hidden panel never reads. Presentation changes alter layout only: never the
+// hidden panel never reads. The run screen shows one view at a time (Overview,
+// Graph, Activity, Reports, Control); a view's optional panels mount and read
+// only after it is first opened. Presentation changes alter layout only: never the
 // target, selection, trust or any request. Saved presentations are written
 // only by an explicit action, with the service's expected-version check.
 // Control requests are reviewed exact Core envelopes kept, with their bytes, in
@@ -57,10 +59,10 @@ import {
   type Observed,
   type Target,
 } from "./api.ts";
-import { Inspector, type Selection } from "./panels/Inspector.tsx";
+import { Inspector, type Selection, type InvocationSnapshot } from "./panels/Inspector.tsx";
 import { Instance } from "./panels/Instance.tsx";
-import { FailureNote, Inventory, TargetLink, type Paged } from "./panels/Inventory.tsx";
-import { CurrentWorkRegion, planesOf, PlanesRegion, StatusRegion, type Summary } from "./panels/Run.tsx";
+import { FailureNote, Inventory, pathLabel, shortId, TargetLink, type Paged } from "./panels/Inventory.tsx";
+import { CurrentWorkRegion, planesOf, PlanesRegion, RunAnnouncement, StatusRegion, type Summary } from "./panels/Run.tsx";
 import {
   ControlForm,
   MonitorStatus,
@@ -188,9 +190,52 @@ function bound<T>(page: Keyed<T>, key: string): Paged<T> {
   return page.key === key ? page : { observation: null, loading: true, page: 0 };
 }
 
+/** The exact home and instance an instance observation belongs to, whatever run is open. */
+function instanceKeyOf(target: Target): string {
+  return `${target.home}|${target.instance}`;
+}
+
 function sameRef(a: Ref | null, b: Ref | null): boolean {
   return a === null || b === null ? a === b : a.kind === b.kind && a.id === b.id;
 }
+
+// ---- run views -------------------------------------------------------------------
+
+/** The run screen shows one view at a time; Overview is always the first. */
+const RUN_VIEWS = ["overview", "graph", "activity", "reports", "controls"] as const;
+type RunView = (typeof RUN_VIEWS)[number];
+
+const VIEW_LABELS: Record<RunView, string> = {
+  overview: "Overview",
+  graph: "Graph",
+  activity: "Activity",
+  reports: "Reports",
+  controls: "Control",
+};
+
+/** The optional panels each inspection view holds, in display order. */
+const VIEW_PANELS: Record<"graph" | "activity", readonly PanelId[]> = {
+  graph: ["graph", "inspector", "revisions"],
+  activity: ["current-work", "planes", "history"],
+};
+
+/** The view that holds a focus destination (a panel, Reports, Control or Overview). */
+function viewOf(destination: string): RunView {
+  if ((VIEW_PANELS.graph as readonly string[]).includes(destination)) return "graph";
+  if ((VIEW_PANELS.activity as readonly string[]).includes(destination)) return "activity";
+  return destination === "reports" || destination === "controls" ? destination : "overview";
+}
+
+const FIRST_VIEW: ReadonlySet<RunView> = new Set<RunView>(["overview"]);
+
+/**
+ * Each view's stable container: `view-<name>`. Its Run views button names it in
+ * `aria-controls` and labels it, and a deliberate view choice focuses it. It
+ * exists whether or not the view has been opened, so it never waits on a read.
+ */
+const VIEW_DESTINATION = "view-";
+const viewId = (name: RunView) => `${VIEW_DESTINATION}${name}`;
+const viewTabId = (name: RunView) => `view-tab-${name}`;
 
 // ---- control requests ----------------------------------------------------------
 
@@ -288,10 +333,45 @@ export function App() {
   const [historySection, setHistorySection] = useState<HistorySection | null>(null);
   const [historyCursors, setHistoryCursors] = useState<(string | null)[]>([null]);
   const [historyPage, setHistoryPage] = useState<Keyed<CoreView>>(unkeyed);
-  const [invocationPage, setInvocationPage] = useState<Keyed<CoreView> | null>(null);
-  const [reportsOpen, setReportsOpen] = useState(false);
+  const [invocationPage, setInvocationPage] = useState<(Keyed<CoreView> & { snapshot: InvocationSnapshot | null }) | null>(null);
+  const invocationSequence = useRef(0);
+  const [view, setView] = useState<RunView>("overview");
+  /** Views opened for this target; an unopened view mounts and reads nothing. */
+  const [visited, setVisited] = useState<ReadonlySet<RunView>>(FIRST_VIEW);
+  const reportsOpen = visited.has("reports");
   const [presentation, setPresentation] = useState<Presentation>(INITIAL_PRESENTATION);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const [destination, setDestination] = useState<string | null>(null);
+  const showView = useCallback((next: RunView) => {
+    setView(next);
+    setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
+  }, []);
+  /** Open the view that holds a destination, then move focus to it. */
+  const go = useCallback((next: string) => {
+    showView(viewOf(next));
+    setDestination(next);
+  }, [showView]);
+  /** A deliberate choice in Run views: open it, then focus the view it controls. */
+  const openView = useCallback((next: RunView) => {
+    showView(next);
+    setDestination(`${VIEW_DESTINATION}${next}`);
+  }, [showView]);
+  const [controlChoice, setControlChoice] = useState<{ planeId: string; serial: number; targetKey: string } | null>(null);
+  // Stable shells survive lazy content replacement, including the first Reports open.
+  useEffect(() => {
+    if (destination === null) return;
+    const frame = window.requestAnimationFrame(() => {
+      // A view chosen in Run views is focused in place: its tabs stay in sight.
+      const wholeView = destination.startsWith(VIEW_DESTINATION);
+      const element = document.getElementById(wholeView ? destination : destination === "overview" ? "status-heading" : `destination-${destination}`);
+      if (element !== null) {
+        element.focus({ preventScroll: wholeView });
+        if (!wholeView) element.scrollIntoView({ block: "start" });
+        setDestination(null);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [destination, view, reportsOpen, presentation.working.panels, summary]);
 
   // One lexical intent set for this tab, restored observe-only from this entry.
   const [restored] = useState(() => readHistory(window.history.state));
@@ -331,7 +411,7 @@ export function App() {
   const targetRef = useRef(target);
   targetRef.current = target;
   const instancesKey = `${target.home}`;
-  const instanceKey = `${target.home}|${target.instance}`;
+  const instanceKey = instanceKeyOf(target);
   const historyKey = `${targetKey}|${historySection}`;
 
   // Theme and density are document-level presentation only.
@@ -340,7 +420,8 @@ export function App() {
     document.documentElement.dataset.density = payload.density;
   }, [payload.theme, payload.density]);
 
-  const resetTargetState = () => {
+  const resetTargetState = (next: Target) => {
+    setDestination(null);
     setHomeCursors([null]);
     setInstanceCursors([null]);
     setRunCursors([null]);
@@ -353,10 +434,18 @@ export function App() {
     setHistorySection(null);
     setHistoryCursors([null]);
     setHistoryPage(unkeyed());
+    invocationSequence.current += 1;
     setInvocationPage(null);
     setInstancesPage(unkeyed());
-    setInstancePage(unkeyed());
-    setReportsOpen(false);
+    // An instance observation outlives a run change inside its own exact home
+    // and instance, so the run screen can name the project it already read. Any
+    // other home or instance clears it; nothing is read to fill the name in.
+    // Back on the instance screen it is re-read at once, as Refresh does, so it
+    // is marked loading there and its paging waits for that read.
+    setInstancePage((page) =>
+      next.instance !== null && page.key === instanceKeyOf(next) ? { ...page, loading: next.run === null } : unkeyed<CoreView>());
+    setView("overview");
+    setVisited(FIRST_VIEW);
     setMonitor(freshMonitor());
   };
 
@@ -410,7 +499,7 @@ export function App() {
 
   const navigate = useCallback((next: Target) => {
     pushTarget(targetHref(next));
-    resetTargetState();
+    resetTargetState(next);
     setTarget(next);
     window.requestAnimationFrame(() => headingRef.current?.focus());
   }, [pushTarget]);
@@ -424,8 +513,9 @@ export function App() {
       const raw = incoming.raw;
       if (raw !== null) setUnreadable((current) => (current.includes(raw) ? current : [...current, raw]));
       commitIntents(merge(intentsRef.current, incoming.kept));
-      resetTargetState();
-      setTarget(parseTarget(window.location.search) ?? NO_TARGET);
+      const next = parseTarget(window.location.search) ?? NO_TARGET;
+      resetTargetState(next);
+      setTarget(next);
     };
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
@@ -563,7 +653,7 @@ export function App() {
   );
 
   // Opening Graph (or changing its revision) reads that captured revision once.
-  const graphOpen = screen === "run" && payload.panels.graph;
+  const graphOpen = screen === "run" && payload.panels.graph && visited.has("graph");
   useEffect(() => {
     if (graphOpen && shownRevision !== null && !graphs.has(shownRevision)) void loadGraph(shownRevision);
   }, [graphOpen, shownRevision, graphs, loadGraph]);
@@ -599,29 +689,50 @@ export function App() {
     }
   };
 
-  const selectNode = (planeId: string, nodeId: string) => {
-    setSelection({ kind: "node", planeId, nodeId, revisionId: shownRevision });
+  const selectNode = (planeId: string, nodeId: string, revisionId = shownRevision) => {
+    invocationSequence.current += 1;
+    setSelection({ kind: "node", planeId, nodeId, revisionId });
     setGraphPlane(planeId);
     reveal("inspector");
+    if (narrow) go("inspector");
   };
 
-  const selectInvocation = async (invocationId: string) => {
-    setSelection({ kind: "invocation", invocationId });
-    reveal("inspector");
-    if (historyRows.some((row) => row.invocation_id === invocationId)) {
-      setInvocationPage(null);
-      return;
+  const selectInvocation = async (invocationId: string, forceRead = false) => {
+    const sequence = ++invocationSequence.current;
+    const selectedTarget = targetKey;
+    const key = `${selectedTarget}|${invocationId}`;
+    if (!forceRead) {
+      setSelection({ kind: "invocation", invocationId });
+      reveal("inspector");
+      if (narrow) go("inspector");
+      const row = historyRows.find((item) => item.invocation_id === invocationId);
+      if (row !== undefined && shownHistory.observation?.ok) {
+        setInvocationPage({ observation: null, loading: false, page: 0, key,
+          snapshot: { row, observedAt: shownHistory.observation.observedAt, provenance: "History snapshot" } });
+        return;
+      }
     }
-    const key = `${targetKey}|${invocationId}`;
-    setInvocationPage({ observation: null, loading: true, page: 0, key });
+    setInvocationPage((current) => ({ observation: null, loading: true, page: 0, key,
+      snapshot: current?.key === key ? current.snapshot : null }));
     const observed = await invocation(target, invocationId);
-    // A reply for an earlier selection (A then B) never replaces the latest one.
-    setInvocationPage((current) => (current?.key === key ? { ...current, observation: observed, loading: false } : current));
+    // Exact target/selection and sequence guards also cover repeated manual reads.
+    if (targetKeyRef.current !== selectedTarget || sequence !== invocationSequence.current) return;
+    setInvocationPage((current) => {
+      if (current?.key !== key) return current;
+      const row = observed.ok ? record(observed.value.items[0]) : null;
+      return { ...current, observation: observed, loading: false,
+        snapshot: observed.ok && row?.invocation_id === invocationId
+          ? { row, observedAt: observed.observedAt, provenance: "Invocation read" } : current.snapshot };
+    });
   };
   const invocationKey = selection?.kind === "invocation" ? `${targetKey}|${selection.invocationId}` : null;
   const shownInvocation = invocationPage !== null && invocationPage.key === invocationKey ? invocationPage : null;
   const shownInstances = bound(instancesPage, instancesKey);
   const shownInstance = bound(instancePage, instanceKey);
+  // The instance's project folder name, only from an observation bound to this
+  // exact home and instance. A run opened directly has none: the ID is shown.
+  const instanceRoot = shownInstance.observation?.ok === true ? text(shownInstance.observation.value.data.project_root) : null;
+  const instanceName = target.instance === null || instanceRoot === null ? null : pathLabel(instanceRoot);
 
   const page = (setCursors: (update: (cursors: (string | null)[]) => (string | null)[]) => void, next: string | null) =>
     (direction: 1 | -1) =>
@@ -918,6 +1029,7 @@ export function App() {
       <ControlForm
         key={targetKey}
         target={controlTarget}
+        choice={controlChoice?.targetKey === targetKey ? controlChoice : null}
         disabled={formDisabled}
         outstanding={outstandingFor}
         onNeedGraph={needActiveGraph}
@@ -1130,7 +1242,7 @@ export function App() {
   return (
     <div className="app">
       <header className="app__header">
-        <div className="app__brand">Millrace OS</div>
+        <div className="app__brand"><span className="brand-mark" aria-hidden="true">m</span><div>Millrace OS<span className="app__tagline">Workflow operations</span></div></div>
         <nav aria-label="Target" className="breadcrumbs">
           <TargetLink target={NO_TARGET} navigate={navigate}>
             Homes
@@ -1146,16 +1258,18 @@ export function App() {
           {target.instance !== null ? (
             <>
               <span aria-hidden="true">/</span>
-              <TargetLink target={{ ...target, run: null }} navigate={navigate}>
-                <code className="id">{target.instance}</code>
+              <TargetLink target={{ ...target, run: null }} navigate={navigate} label={instanceName === null ? `Instance ${target.instance}` : `Instance ${instanceName}, ID ${target.instance}`}>
+                {instanceName === null
+                  ? <code className="id" title={target.instance}>{shortId(target.instance)}</code>
+                  : <span className="breadcrumbs__name" title={`Instance ID ${target.instance}`}>{instanceName}</span>}
               </TargetLink>
             </>
           ) : null}
           {target.run !== null ? (
             <>
               <span aria-hidden="true">/</span>
-              <code className="id" aria-current="page">
-                {target.run}
+              <code className="id" aria-current="page" title={target.run}>
+                {shortId(target.run)}
               </code>
             </>
           ) : null}
@@ -1163,13 +1277,17 @@ export function App() {
         <PresentationMenu presentation={presentation} writable={writable} actions={actions} />
       </header>
       <main className="app__main">
-        <div className="region__head">
-          <h1 ref={headingRef} tabIndex={-1}>
+        <div className={`page-heading${screen === "run" ? " page-heading--run" : ""}`}>
+          <div className="page-heading__title"><div>{screen === "run" ? null : <p className="eyebrow">Workspace inventory</p>}<h1 ref={headingRef} tabIndex={-1}>
             {title}
-          </h1>
-          <button type="button" onClick={() => setRefreshEpoch((epoch) => epoch + 1)} disabled={!booted}>
+          </h1></div>
+          <button type="button" onClick={() => {
+            setRefreshEpoch((epoch) => epoch + 1);
+            if (selection?.kind === "invocation") void selectInvocation(selection.invocationId, true);
+          }} disabled={!booted}>
             Refresh
-          </button>
+          </button></div>
+          {screen === "run" ? <MonitorStatus state={monitorState} onContinue={() => setMonitor(freshMonitor())} /> : null}
         </div>
         <Notices
           trust={trust}
@@ -1182,7 +1300,7 @@ export function App() {
           exit={{ held: exitHeld, review: reviewPending, requests: exitRequests }}
           onLeave={leave}
         />
-        <MonitorStatus state={monitorState} onContinue={() => setMonitor(freshMonitor())} />
+        {screen !== "run" ? <MonitorStatus state={monitorState} onContinue={() => setMonitor(freshMonitor())} /> : null}
         <RequestArea
           entries={entries}
           flags={flags}
@@ -1229,8 +1347,23 @@ export function App() {
             onSplit={(ratio) => actions.change({ ...payload, split_ratios: { ...payload.split_ratios, [payload.arrangement]: ratio } })}
             reveal={reveal}
             selection={selection}
-            onClearSelection={() => setSelection(null)}
+            onClearSelection={() => { invocationSequence.current += 1; setSelection(null); }}
             onSelectNode={selectNode}
+            onSelectActiveNode={(planeId, nodeId) => {
+              setGraphRevision(activeRevision);
+              reveal("graph");
+              selectNode(planeId, nodeId, activeRevision);
+            }}
+            view={view}
+            visited={visited}
+            onView={openView}
+            onFocus={go}
+            onReviewPlane={(planeId) => {
+              if (!reviewPending && busy.size === 0) setControlChoice((current) => ({ planeId, serial: (current?.serial ?? 0) + 1, targetKey }));
+              go("controls");
+            }}
+            controlBusy={reviewPending || busy.size > 0}
+            controlBusyReason={busy.size > 0 ? "Wait for the current request." : reviewPending ? "Finish or discard the open review." : null}
             onSelectInvocation={(id) => void selectInvocation(id)}
             graph={graph}
             graphEntry={graphEntry}
@@ -1238,6 +1371,7 @@ export function App() {
             onShowRevision={(revisionId) => {
               setGraphRevision(revisionId);
               reveal("graph");
+              go("graph");
             }}
             onLoadGraph={() => shownRevision !== null && void loadGraph(shownRevision)}
             graphPlane={graphPlane}
@@ -1251,8 +1385,8 @@ export function App() {
             onHistoryPage={page(setHistoryCursors, shownHistory.observation?.ok ? shownHistory.observation.value.nextCursor : null)}
             historyRows={historyRows}
             invocationPage={shownInvocation}
+            invocationSnapshot={shownInvocation?.snapshot ?? null}
             reportsOpen={reportsOpen}
-            onOpenReports={() => setReportsOpen(true)}
             controls={controls}
             canValidate={writable && !unavailable.some((item) => item.operationId === "router.views.validate")}
           />
@@ -1418,6 +1552,14 @@ interface RunScreenProps {
   onClearSelection: () => void;
   onSelectNode: (planeId: string, nodeId: string) => void;
   onSelectInvocation: (invocationId: string) => void;
+  onSelectActiveNode: (planeId: string, nodeId: string) => void;
+  view: RunView;
+  visited: ReadonlySet<RunView>;
+  onView: (view: RunView) => void;
+  onFocus: (destination: string) => void;
+  onReviewPlane: (planeId: string) => void;
+  controlBusy: boolean;
+  controlBusyReason: string | null;
   graph: CapturedGraph | null;
   graphEntry: Observed<CoreView> | "loading" | undefined;
   shownRevision: string | null;
@@ -1431,9 +1573,9 @@ interface RunScreenProps {
   onHistoryPage: (direction: 1 | -1) => void;
   historyRows: Record<string, unknown>[];
   invocationPage: Paged<CoreView> | null;
+  invocationSnapshot: InvocationSnapshot | null;
   reportsOpen: boolean;
-  onOpenReports: () => void;
-  /** The exact control form, after Status: never a hideable panel. */
+  /** The exact control form, in its own Control view: never a hideable panel. */
   controls: ReactNode;
   canValidate: boolean;
 }
@@ -1446,9 +1588,11 @@ const LAZY_FALLBACK = (
 
 function RunScreen(props: RunScreenProps) {
   const { payload, summary } = props;
+  const inspectInvocation = (id: string) => { props.onSelectInvocation(id); props.onFocus("inspector"); };
+  const inspectActiveNode = (planeId: string, nodeId: string) => { props.onSelectActiveNode(planeId, nodeId); props.onFocus("inspector"); };
   const data = summary?.view.data ?? null;
   const panels: Record<PanelId, ReactNode> = {
-    planes: data === null ? null : <PlanesRegion summary={data} onSelectNode={props.onSelectNode} onSelectInvocation={props.onSelectInvocation} />,
+    planes: data === null ? null : <PlanesRegion summary={data} onSelectNode={inspectActiveNode} onSelectInvocation={inspectInvocation} />,
     "current-work": data === null ? null : <CurrentWorkRegion summary={data} />,
     graph: <GraphRegion {...props} />,
     inspector: (
@@ -1456,7 +1600,7 @@ function RunScreen(props: RunScreenProps) {
         selection={props.selection}
         graph={props.selection?.kind === "node" && props.selection.revisionId === props.shownRevision ? props.graph : null}
         invocation={props.invocationPage}
-        pageRows={props.historyRows}
+        snapshot={props.invocationSnapshot}
         onClear={props.onClearSelection}
       />
     ),
@@ -1467,7 +1611,7 @@ function RunScreen(props: RunScreenProps) {
           page={props.historyPage}
           onSection={props.onHistorySection}
           onPage={props.onHistoryPage}
-          onSelectInvocation={props.onSelectInvocation}
+          onSelectInvocation={inspectInvocation}
         />
       </Suspense>
     ),
@@ -1485,105 +1629,121 @@ function RunScreen(props: RunScreenProps) {
       ),
   };
   const visible = (panel: PanelId) => payload.panels[panel] && panels[panel] !== null;
+  const shell = (panel: PanelId) => visible(panel) ? <div id={`destination-${panel}`} className="workspace-section" tabIndex={-1}>{panels[panel]}</div> : null;
+  // The arrangement still names the one pair that shares a resizable row; both
+  // members of every pair live in the same view.
   const [first, second] = SPLIT_PANELS[payload.arrangement];
-  const order: Record<typeof payload.arrangement, PanelId[]> = {
-    "detail-split": ["current-work", "planes", "graph", "inspector", "history", "revisions"],
-    "status-stack": ["current-work", "planes", "history", "graph", "inspector", "revisions"],
-    "graph-split": ["graph", "inspector", "planes", "current-work", "history", "revisions"],
-  };
-  const slots: ReactNode[] = [];
-  for (const panel of order[payload.arrangement]) {
-    if (panel === second) continue;
-    if (panel === first) {
-      slots.push(
-        <SplitSlot
-          key="split"
-          narrow={props.narrow}
-          ratio={payload.split_ratios[payload.arrangement]}
-          arrangement={payload.arrangement}
-          left={visible(first) ? panels[first] : null}
-          right={visible(second) ? panels[second] : null}
-          onSplit={props.onSplit}
-        />,
-      );
-    } else if (visible(panel)) {
-      slots.push(<div key={panel}>{panels[panel]}</div>);
+  const inspection = (name: "graph" | "activity") => {
+    const ids = VIEW_PANELS[name];
+    if (summary === null) return <p className="muted">Shown once a run summary is observed.</p>;
+    // Nothing in a view mounts (or reads) before the view is first opened.
+    if (!props.visited.has(name)) return null;
+    const slots: ReactNode[] = [];
+    for (const panel of ids) {
+      if (panel === second && ids.includes(first)) continue;
+      if (panel === first && ids.includes(second)) {
+        slots.push(
+          <SplitSlot
+            key="split"
+            narrow={props.narrow}
+            ratio={payload.split_ratios[payload.arrangement]}
+            arrangement={payload.arrangement}
+            left={shell(first)}
+            right={shell(second)}
+            onSplit={props.onSplit}
+          />,
+        );
+      } else if (visible(panel)) {
+        slots.push(<div key={panel}>{shell(panel)}</div>);
+      }
     }
-  }
+    const off = ids.filter((panel) => !payload.panels[panel]);
+    return (
+      <>
+        {slots}
+        {off.length === 0 ? null : (
+          <p className="view-hidden">
+            <span className="muted">Hidden in this layout:</span>
+            {off.map((panel) => (
+              <button key={panel} type="button" onClick={() => { props.reveal(panel); props.onFocus(panel); }}>
+                Show {PANEL_LABELS[panel]}
+              </button>
+            ))}
+          </p>
+        )}
+      </>
+    );
+  };
+  const status = text(data?.status);
+  // The focus target of a deliberate view choice, named by its Run views button.
+  const viewShell = (name: RunView) => ({ id: viewId(name), role: "group", "aria-labelledby": viewTabId(name), tabIndex: -1 });
   return (
-    <div className={`run run--${payload.arrangement}`}>
-      <StatusRegion
-        target={props.target}
-        summary={summary}
-        latest={props.summaryFailure}
-        loading={props.summaryLoading}
-        demo={props.demo}
-        onSelectInvocation={props.onSelectInvocation}
+    <div className="run">
+      {/* Outside every view: a hidden view never hides the run announcement. */}
+      <RunAnnouncement summary={summary} latest={props.summaryFailure} />
+      <ViewTabs
+        view={props.view}
+        onView={props.onView}
+        status={data === null ? null : (status ?? "unknown")}
+        stale={summary !== null && props.summaryFailure !== null}
       />
-      {summary === null && props.summaryFailure !== null ? <FailureNote failure={props.summaryFailure} what="Run summary" /> : null}
-      <ActionsNav payload={payload} reveal={props.reveal} reportsOpen={props.reportsOpen} onOpenReports={props.onOpenReports} />
-      {props.controls}
-      {summary === null ? null : (
-        <>
-          {slots}
-          <section className="region" id="reports" aria-labelledby="reports-entry">
+      <div className="view" {...viewShell("overview")} hidden={props.view !== "overview"}>
+        <StatusRegion
+          target={props.target}
+          summary={summary}
+          latest={props.summaryFailure}
+          loading={props.summaryLoading}
+          demo={props.demo}
+          onSelectInvocation={inspectInvocation}
+          onSelectNode={inspectActiveNode}
+          onReviewPlane={props.onReviewPlane}
+          controlBusy={props.controlBusy}
+          controlBusyReason={props.controlBusyReason}
+          onOpenReports={() => props.onFocus("reports")}
+        />
+        {summary === null && props.summaryFailure !== null ? <FailureNote failure={props.summaryFailure} what="Run summary" /> : null}
+      </div>
+      <div className="view" {...viewShell("graph")} hidden={props.view !== "graph"}>{inspection("graph")}</div>
+      <div className="view" {...viewShell("activity")} hidden={props.view !== "activity"}>{inspection("activity")}</div>
+      <div className="view" {...viewShell("reports")} hidden={props.view !== "reports"}>
+        {summary === null ? <p className="muted">Shown once a run summary is observed.</p> : (
+          <div className="region reports-region workspace-section" id="destination-reports" tabIndex={-1}>
             {props.reportsOpen ? (
               <Suspense fallback={LAZY_FALLBACK}>
                 <Report target={props.target} />
               </Suspense>
-            ) : (
-              <div className="region__head">
-                <h2 id="reports-entry">Reports</h2>
-                <button type="button" onClick={props.onOpenReports}>
-                  Read published outputs
-                </button>
-              </div>
-            )}
-          </section>
-        </>
-      )}
+            ) : null}
+          </div>
+        )}
+      </div>
+      <div className="view" {...viewShell("controls")} hidden={props.view !== "controls"}>
+        <div id="destination-controls" tabIndex={-1} className="workspace-section">{props.controls}</div>
+      </div>
     </div>
   );
 }
 
-function ActionsNav({
-  payload,
-  reveal,
-  reportsOpen,
-  onOpenReports,
-}: {
-  payload: StockPayload;
-  reveal: (panel: PanelId) => void;
-  reportsOpen: boolean;
-  onOpenReports: () => void;
+/** The run's few views. The recorded status stays in sight on every one. */
+function ViewTabs({ view, onView, status, stale }: {
+  view: RunView;
+  onView: (view: RunView) => void;
+  status: string | null;
+  stale: boolean;
 }) {
-  // Every inspect section stays reachable here, whatever the preset hides.
-  const go = (id: string) => window.requestAnimationFrame(() => document.getElementById(id)?.focus());
   return (
-    <nav className="actions" aria-label="Actions">
-      <span className="actions__label">Inspect</span>
-      {PANELS.map((panel) => (
-        <button
-          key={panel}
-          type="button"
-          onClick={() => {
-            reveal(panel);
-            go(`${panel}-heading`);
-          }}
-        >
-          {PANEL_LABELS[panel]}
-          {payload.panels[panel] ? "" : " (hidden)"}
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => {
-          onOpenReports();
-          go(reportsOpen ? "reports-heading" : "reports-entry");
-        }}
-      >
-        Reports
-      </button>
+    <nav className="views" aria-label="Run views">
+      <div className="views__tabs">
+        {RUN_VIEWS.map((name) => (
+          <button key={name} type="button" id={viewTabId(name)} aria-controls={viewId(name)} aria-current={view === name ? "page" : undefined} onClick={() => onView(name)}>
+            {VIEW_LABELS[name]}
+          </button>
+        ))}
+      </div>
+      {status === null || view === "overview" ? null : (
+        <span className="views__status">
+          Run <strong>{status}</strong>{stale ? " · stale observation" : ""}
+        </span>
+      )}
     </nav>
   );
 }
@@ -1652,11 +1812,11 @@ function ResizableSplit({
         }
       }}
     >
-      <Panel id="primary" minSize="20%">
+      <Panel id="primary" minSize="20%" className="split__panel">
         {left}
       </Panel>
       <Separator className="split__handle" aria-label="Resize panels" />
-      <Panel id="secondary" minSize="20%">
+      <Panel id="secondary" minSize="20%" className="split__panel">
         {right}
       </Panel>
     </Group>
@@ -1670,21 +1830,23 @@ function GraphRegion(props: RunScreenProps) {
   const planeId = props.graphPlane ?? planes[0]?.[0] ?? props.graph?.planes[0]?.planeId ?? "";
   const plane = planes.find(([id]) => id === planeId)?.[1] ?? null;
   const isActive = props.shownRevision !== null && props.shownRevision === text(data?.active_revision_id);
+  const adjacentInspector = !props.narrow && props.payload.panels.inspector && props.payload.arrangement !== "status-stack";
   const last = record(plane?.last_event);
   const lastEvent =
     isActive && last?.event_kind === "transition" && text(last.node_id) !== null && text(last.outcome) !== null
       ? { nodeId: last.node_id as string, outcome: last.outcome as string }
       : null;
   return (
-    <section className="region" aria-labelledby="graph-heading">
-      <div className="region__head">
+    <section className={`region graph-region${entry === undefined || entry === "loading" || !entry.ok || props.graph === null ? " graph-region--without-canvas" : ""}`} aria-labelledby="graph-heading">
+      <div className="region__head graph-region__head">
         <h2 id="graph-heading" tabIndex={-1}>
           Graph
         </h2>
         <span className="muted">
-          Captured revision <code className="id">{props.shownRevision ?? "unknown"}</code>
+          Captured revision <code className="id" title={props.shownRevision ?? "unknown"}>{shortId(props.shownRevision ?? "unknown")}</code>
           {isActive ? " (active routing)" : ""}
         </span>
+
       </div>
       {entry === undefined || entry === "loading" ? (
         <p className="muted" role="status">
@@ -1707,9 +1869,17 @@ function GraphRegion(props: RunScreenProps) {
             onPlane={props.onPlane}
             cursor={isActive ? text(plane?.cursor) : null}
             lastEvent={lastEvent}
-            selectedNode={props.selection?.kind === "node" ? props.selection.nodeId : null}
-            onSelectNode={props.onSelectNode}
+            invocationSelected={props.selection?.kind === "invocation"}
+            selectedNode={props.selection?.kind === "node" && props.selection.planeId === planeId && props.selection.revisionId === props.shownRevision ? props.selection.nodeId : null}
+            onSelectNode={(planeId, nodeId) => {
+              props.onSelectNode(planeId, nodeId);
+              if (!adjacentInspector) props.onFocus("inspector");
+            }}
             colorMode={props.payload.theme}
+            viewActions={<>
+              {!props.narrow && props.payload.arrangement !== "status-stack" && props.payload.panels.inspector ? <button type="button" aria-label="Widen graph workspace" onClick={() => props.onSplit(0.67)}>Widen</button> : null}
+              {props.selection === null || adjacentInspector ? null : <button type="button" aria-label="Inspect selection in Inspector" onClick={() => { props.reveal("inspector"); props.onFocus("inspector"); }}>Inspect selection</button>}
+            </>}
           />
         </Suspense>
       )}
@@ -1753,11 +1923,12 @@ function PresentationMenu({ presentation, writable, actions }: { presentation: P
   const set = <K extends keyof StockPayload>(key: K, value: StockPayload[K]) => actions.change({ ...working, [key]: value });
   return (
     <details className="layout-menu">
-      <summary>
-        Layout: {active.name}
-        {unsaved ? " (unsaved changes)" : ""}
+      <summary aria-label={`Layout: ${active.name}${unsaved ? " (unsaved changes)" : ""}`}>
+        <span className="layout-summary-wide">Layout: {active.name}{unsaved ? " (unsaved changes)" : ""}</span>
+        <span className="layout-summary-narrow" aria-hidden="true">Layout</span>
       </summary>
       <div className="layout-menu__body">
+        <p className="layout-current">{active.name}{unsaved ? " · unsaved changes" : ""}</p>
         <label>
           Presentation{" "}
           <select
@@ -1792,7 +1963,7 @@ function PresentationMenu({ presentation, writable, actions }: { presentation: P
           <legend>Theme</legend>
           {THEMES.map((theme) => (
             <label key={theme}>
-              <input type="radio" name="theme" checked={working.theme === theme} onChange={() => set("theme", theme)} /> {theme}
+              <input type="radio" name="theme" checked={working.theme === theme} onChange={() => set("theme", theme)} /><span>{theme}</span>
             </label>
           ))}
         </fieldset>
@@ -1830,7 +2001,7 @@ function PresentationMenu({ presentation, writable, actions }: { presentation: P
               {PANEL_LABELS[panel]}
             </label>
           ))}
-          <p className="muted">Status, notices and actions always stay visible.</p>
+          <p className="muted">Overview, notices, Reports and Control are always available.</p>
         </fieldset>
         <div className="layout-menu__actions">
           <button type="button" onClick={actions.revert} disabled={!unsaved}>

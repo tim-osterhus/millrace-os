@@ -55,12 +55,29 @@ function reviewedText(home: string, reviewed: Reviewed): string {
   return exportText(newEntry(intent, "sending"));
 }
 
-function initialOperation(target: ControlTarget): Operation {
-  return target.runId === null ? "start_run" : "pause_run";
+function initialOperation(target: ControlTarget): Operation | "" {
+  return target.runId === null ? "start_run" : "";
 }
+
+const EFFECTS: Record<Operation, string> = {
+  start_run: "Create a new run of this instance using the selected edit mode.",
+  pause_run: "Request a pause of the whole run. Core decides when routing can pause.",
+  cancel_run: "Request cancellation of the whole run. Cancellation is not proof that every writer stopped.",
+  resume_run: "Ask Core to resume this run under its recorded control state.",
+  recover_run: "Ask Core to recover this run. Review the observed state and uncertainty first.",
+  pause_plane: "Request a pause of one exact plane; other planes keep their own state.",
+  cancel_plane: "Request cancellation of one exact plane; this does not prove writer closure.",
+  resume_plane: "Ask Core to resume one exact plane at its recorded resume target.",
+  retry_invocation: "Request another attempt of the exact invocation you identify.",
+  redirect_plane: "Request a move to a node of this plane's active captured revision.",
+  submit_revision: "Submit the current workflow as a revision candidate. This does not accept it.",
+  accept_revision: "Accept the observed pending candidate; Core may resume routing under its existing control.",
+  reconcile_invocation: "Record your explicit attestation that every writer of this exact invocation has stopped.",
+};
 
 export function ControlForm({
   target,
+  choice,
   disabled,
   outstanding,
   onNeedGraph,
@@ -68,6 +85,7 @@ export function ControlForm({
   onReviewChange,
 }: {
   target: ControlTarget;
+  choice: { planeId: string; serial: number } | null;
   /** Why no request may be sent now (trust, context, availability, capacity), or null. */
   disabled: string | null;
   /** Why a new request of this kind must wait for an unresolved one, or null. */
@@ -78,7 +96,7 @@ export function ControlForm({
   onReviewChange: (pending: boolean) => void;
 }) {
   const operations = OPERATIONS.filter((operation) => (target.runId === null) === (operation === "start_run"));
-  const [operation, setOperation] = useState<Operation>(() => initialOperation(target));
+  const [operation, setOperation] = useState<Operation | "">(() => initialOperation(target));
   const [planeId, setPlaneId] = useState("");
   const [invocationId, setInvocationId] = useState("");
   // A node choice and the reconcile attestation hold only for the exact identity
@@ -126,11 +144,19 @@ export function ControlForm({
     if (clearNode) setNodeChoice(null);
   };
 
-  const versionNeeded = !STOPS.has(operation);
-  const waiting = outstanding(operation);
-  const blocked = disabled ?? waiting ?? (versionNeeded && target.version === null ? "No fresh observed version: refresh first." : null);
+  // A contextual link only fills presentation inputs; review and Send remain deliberate.
+  useEffect(() => {
+    if (choice === null || review !== null || sending) return;
+    reidentify(setOperation, true)("resume_plane");
+    setPlaneId(choice.planeId);
+  }, [choice]);
+
+  const versionNeeded = operation !== "" && !STOPS.has(operation);
+  const waiting = operation === "" ? null : outstanding(operation);
+  const blocked = disabled ?? waiting ?? (operation === "" ? "Choose a request to see its scope and review the exact target." : null) ?? (versionNeeded && target.version === null ? "No fresh observed version: refresh first." : null);
 
   const doReview = () => {
+    if (operation === "") return;
     if (operation === "redirect_plane" && (nodes === null || !nodes.includes(nodeId))) {
       setReview(null);
       setMessage({ text: "Choose a node of this plane's active captured revision." });
@@ -173,13 +199,16 @@ export function ControlForm({
   };
 
   return (
-    <section className="region" aria-labelledby="control-heading">
-      <h2 id="control-heading">{target.runId === null ? "Start a run" : "Control this run"}</h2>
+    <section className="region control-region" aria-labelledby="control-heading">
+      <p className="eyebrow">Deliberate action</p>
+      <h2 id="control-heading" tabIndex={-1}>{target.runId === null ? "Start a run" : "Control this run"}</h2>
+      <p className="section-intro">{operation === "" ? "Choose a request to see its scope, then review the exact target and bytes before sending." : "Review the exact target and bytes before sending. The service decides applicability."}</p>
       <div className="control-form">
         {operations.length > 1 ? (
           <label>
             Request{" "}
-            <select value={operation} onChange={(event) => reidentify(setOperation, true)(event.target.value as Operation)}>
+            <select value={operation} onChange={(event) => reidentify(setOperation, true)(event.target.value as Operation | "")}>
+              <option value="">Choose a request…</option>
               {operations.map((item) => (
                 <option key={item} value={item}>
                   {OPERATION_LABELS[item]}
@@ -188,6 +217,7 @@ export function ControlForm({
             </select>
           </label>
         ) : null}
+        {operation === "" ? null : <p className="operation-effect">{EFFECTS[operation]}</p>}
         {planeOperation ? (
           <label>
             Plane{" "}
@@ -291,18 +321,18 @@ export function ControlForm({
             </label>
           </>
         ) : null}
-        <p className="muted">
+        {operation === "" ? null : <p className="muted">
           {versionNeeded
             ? target.version === null
               ? "Expected state version: not observed."
               : `Expected state version: ${target.version.value} (${target.runId === null ? "instance settings" : "run"}, observed ${target.version.observedAt}).`
             : "Stop requests carry no expected version."}
-        </p>
-        {blocked !== null ? <p className="notice notice--warn">{blocked}</p> : null}
+        </p>}
         <div className="toolbar">
-          <button type="button" disabled={blocked !== null} onClick={doReview}>
+          <button type="button" className="button--review" disabled={blocked !== null} onClick={doReview}>
             Review request
           </button>
+          {blocked !== null ? <p className={operation === "" && disabled === null ? "muted review-block-reason" : "notice notice--warn review-block-reason"}>{blocked}</p> : null}
         </div>
         {message !== null ? (
           <p className="notice notice--error" role="alert">
@@ -311,6 +341,13 @@ export function ControlForm({
         ) : null}
         {review !== null ? (
           <div className="review" aria-label="Reviewed request">
+            <div className="review__heading"><p className="eyebrow">Ready for your decision</p><h3>{OPERATION_LABELS[review.envelope.operation]}</h3><p>{EFFECTS[review.envelope.operation]}</p></div>
+            <dl className="facts review-target">
+              <div><dt>Home</dt><dd><code>{target.home}</code></dd></div>
+              <div><dt>Instance</dt><dd><code className="id">{review.envelope.instance_id}</code></dd></div>
+              <div><dt>Run</dt><dd><code className="id">{review.envelope.run_id ?? "New run (not created yet)"}</code></dd></div>
+              <div><dt>Plane</dt><dd><code>{review.envelope.plane_id ?? "Whole run / instance"}</code></dd></div>
+            </dl>
             <dl className="facts">
               <div>
                 <dt>Operation</dt>
@@ -332,8 +369,8 @@ export function ControlForm({
             <p className="muted">These exact bytes are sent, retained for replay and never changed:</p>
             <pre className="request-body">{review.body}</pre>
             <div className="toolbar">
-              <button type="button" disabled={sending || blocked !== null} onClick={() => void send(false)}>
-                Send
+              <button type="button" className="button--primary" disabled={sending || blocked !== null} onClick={() => void send(false)}>
+                {sending ? "Sending…" : `Send ${OPERATION_LABELS[review.envelope.operation].toLowerCase()} request`}
               </button>
               {message?.unprotected ? (
                 <button type="button" disabled={sending || blocked !== null} onClick={() => void send(true)}>
@@ -582,7 +619,7 @@ export function RequestArea({
     <section className="region region--requests" aria-labelledby="requests-heading">
       <h2 id="requests-heading">Requests in this tab</h2>
       <p className="muted">
-        An answer or receipt is not run completion, writer closure or a holder join. Run status, quiescence and writers stay in Status.
+        An answer or receipt is not run completion, writer closure or a holder join. Run status, quiescence and writers stay in Overview.
       </p>
       {flags.overCapacity ? (
         <p className="notice notice--error" role="alert">
@@ -627,7 +664,7 @@ export function MonitorStatus({ state, onContinue }: { state: MonitorState; onCo
   let message: string;
   let action: string | null = null;
   if (state.kind === "watching") {
-    message = `Monitoring this target: automatic reads continue until ${new Date(state.until).toLocaleTimeString()}.`;
+    message = `Monitoring this target: automatic reads continue until ${new Date(state.until).toLocaleTimeString().replace(/\s/g, "\u00a0")}.`;
     if (state.nextIn !== null) {
       const failed = state.failures === 0 ? "" : ` after ${state.failures} failed read${state.failures === 1 ? "" : "s"}`;
       message += ` Next automatic read in ${Math.round(state.nextIn / 1000)} s${failed}.`;
@@ -644,16 +681,18 @@ export function MonitorStatus({ state, onContinue }: { state: MonitorState; onCo
     message = "Automatic reads stopped: the bounded view refused this target. Use the headless CLI for a full read.";
     action = "Retry";
   } else {
-    message = "The run is terminal and quiescent; fast refresh stopped. This proves no holder closure.";
+    message = "The run is terminal and quiescent; fast refresh stopped. Holder closure is not established.";
   }
   return (
-    <p className="observation monitor" role="status">
+    <div className="monitor-region">
+    <p className="visually-hidden" role="status">{state.kind === "watching" ? `Monitoring this target${state.failures > 0 ? ": read failures recorded" : ""}.` : state.kind === "hidden" ? "Monitoring paused while hidden." : message}</p>
+    <p className="observation monitor">
       {message}{" "}
       {action !== null ? (
         <button type="button" onClick={onContinue}>
           {action}
         </button>
       ) : null}
-    </p>
+    </p></div>
   );
 }
