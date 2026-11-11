@@ -26,6 +26,8 @@ CONTEXT_HEADERS = {"X-Millrace-Session-Context": "1", "Sec-Fetch-Site": "same-or
 STOCK_CONTRACTS = {
     "ClientCapabilities",
     "DemoContext",
+    "DemoFinish",
+    "DemoFinishInput",
     "Error",
     "ExchangeInput",
     "FrontendState",
@@ -318,12 +320,18 @@ def test_symlinked_resources_are_refused_even_with_matching_bytes(
             {"path": "assets/x.svg", "sha256": "0" * 64, "media_type": "image/svg+xml"}
         ),
         lambda m, d: m["assets"].append(
-            {"path": "instances/x.js", "sha256": "0" * 64,
-             "media_type": "text/javascript; charset=utf-8"}
+            {
+                "path": "instances/x.js",
+                "sha256": "0" * 64,
+                "media_type": "text/javascript; charset=utf-8",
+            }
         ),
         lambda m, d: m["assets"].append(
-            {"path": "assets/other.html", "sha256": "0" * 64,
-             "media_type": "text/html; charset=utf-8"}
+            {
+                "path": "assets/other.html",
+                "sha256": "0" * 64,
+                "media_type": "text/html; charset=utf-8",
+            }
         ),
         lambda m, d: m["required_contracts"][0].update(sha256="0" * 64),
         # An unknown contract can never match, not even with a null digest.
@@ -565,8 +573,11 @@ def test_ordinary_service_has_only_the_typed_demo_context_sentinel(tmp_path):
         (_raising(RuntimeError("PRIVATE path")), 503, "demo_context_failed"),
         (lambda: _context(home="other"), 503, "demo_context_failed"),
         (lambda: _context(extra=1), 503, "demo_context_failed"),
-        (lambda: _context(accepted_output_refs=[_reference()] * 40), 503,
-         "demo_context_failed"),
+        (
+            lambda: _context(accepted_output_refs=[_reference()] * 40),
+            503,
+            "demo_context_failed",
+        ),
         (lambda: "not a mapping", 503, "demo_context_failed"),
     ],
 )
@@ -608,4 +619,4 @@ def test_exported_contracts_document_session_context_and_match_every_profile(tmp
     registry = json.loads(exported["registry.json"])["schemas"]
     names = {entry["contract_id"] for entry in registry}
     assert {"SessionContext", "DemoContext"} <= names
-    assert len(registry) == 64  # C1 adds the four frontend documents
+    assert len(registry) == 66  # D1 adds the fixed Finish input/acknowledgement

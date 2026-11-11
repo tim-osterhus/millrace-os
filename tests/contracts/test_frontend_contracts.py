@@ -163,9 +163,12 @@ def test_validation_reports_the_canonical_key_and_writes_nothing(tmp_path):
         "manifest": manifest,
     }
     # Canonical bytes: sorted keys, compact separators, UTF-8, no newline.
-    assert p.canonical_json_bytes(manifest) == json.dumps(
-        manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    ).encode()
+    assert (
+        p.canonical_json_bytes(manifest)
+        == json.dumps(
+            manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode()
+    )
     # Validation selects, copies and installs nothing.
     assert sorted(os.listdir(owned.config.config_dir)) == before
     state = client.get(FRONTEND, headers=bearer).json()
@@ -258,10 +261,16 @@ def _mutations():
         {"api_version": "v2"},
         {"entry": "main.html"},
         {"extra": True},
-        {"required_contracts": [{"contract_id": "FrontendState", "version": 1,
-                                 "sha256": "0" * 64}]},
-        {"required_contracts": [{"contract_id": "NoSuchContract", "version": 1,
-                                 "sha256": "0" * 64}]},
+        {
+            "required_contracts": [
+                {"contract_id": "FrontendState", "version": 1, "sha256": "0" * 64}
+            ]
+        },
+        {
+            "required_contracts": [
+                {"contract_id": "NoSuchContract", "version": 1, "sha256": "0" * 64}
+            ]
+        },
         {"required_capabilities": ["client.frontend.nonexistent"]},
         {"presentation_format": FORMAT},
         {"assets": [svg]},
@@ -330,8 +339,9 @@ def test_selection_is_owner_only_and_compares_its_version(tmp_path):
     saved = record.read_bytes()
     # A stale or absent-expecting version refuses and writes nothing.
     for stale in (None, "c" * 32):
-        refusal(select(client, bearer, stale, {"kind": "stock"}), 409,
-                "frontend_conflict")
+        refusal(
+            select(client, bearer, stale, {"kind": "stock"}), 409, "frontend_conflict"
+        )
         assert record.read_bytes() == saved
     # Reads never write.
     for _ in range(2):
@@ -340,7 +350,8 @@ def test_selection_is_owner_only_and_compares_its_version(tmp_path):
         client.get(f"/ui/local/{bundle_key}/")
     assert record.read_bytes() == saved
     assert not [
-        name for name in os.listdir(owned.config.config_dir)
+        name
+        for name in os.listdir(owned.config.config_dir)
         if name.startswith(".frontend-")
     ]
     # Reset is the stock selection with the same version check.
@@ -357,14 +368,19 @@ def test_select_revalidates_the_exact_bytes_before_committing(tmp_path):
     manifest = write_bundle(root)
     bundle_key = key(manifest)
     (root / "assets" / "app.js").write_bytes(b"export const board = 2;\n")
-    refusal(select(client, bearer, None, local(root, bundle_key)), 409,
-            "frontend_conflict")
+    refusal(
+        select(client, bearer, None, local(root, bundle_key)), 409, "frontend_conflict"
+    )
     write_bundle(root, frontend_version="2.0.0")
-    refusal(select(client, bearer, None, local(root, bundle_key)), 409,
-            "frontend_conflict")
+    refusal(
+        select(client, bearer, None, local(root, bundle_key)), 409, "frontend_conflict"
+    )
     write_bundle(root, required_capabilities=["client.frontend.nonexistent"])
-    refusal(select(client, bearer, None, local(root, bundle_key)), 409,
-            "frontend_incompatible")
+    refusal(
+        select(client, bearer, None, local(root, bundle_key)),
+        409,
+        "frontend_incompatible",
+    )
     assert not selection_file(owned).exists()
 
 
@@ -374,8 +390,9 @@ def test_a_concurrent_selection_refuses_instead_of_waiting(tmp_path):
     descriptor = os.open(lock, os.O_RDWR | os.O_CREAT, 0o600)
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX)
-        refusal(select(client, bearer, None, {"kind": "stock"}), 409,
-                "frontend_conflict")
+        refusal(
+            select(client, bearer, None, {"kind": "stock"}), 409, "frontend_conflict"
+        )
     finally:
         os.close(descriptor)
     assert not selection_file(owned).exists()
@@ -420,9 +437,10 @@ def test_only_the_effective_closure_is_served_exactly(tmp_path):
         response = client.get(base + name)
         assert response.status_code == 200, name
         assert response.content == FILES[name]
-        assert response.headers["content-type"] == frontend.MEDIA_TYPES[
-            "." + name.rsplit(".", 1)[1]
-        ]
+        assert (
+            response.headers["content-type"]
+            == frontend.MEDIA_TYPES["." + name.rsplit(".", 1)[1]]
+        )
         assert response.headers["content-security-policy"] == DEFAULT_CSP
         assert response.headers["cache-control"] == "no-store"
     (root / "notes.txt").write_text("undeclared")
@@ -442,9 +460,11 @@ def test_only_the_effective_closure_is_served_exactly(tmp_path):
         refusal(client.get(base + query), 422, "invalid_request")
     refusal(client.get(base + "assets/app.js?home=main"), 422, "invalid_request")
     # Any other digest: typed unavailability, never stock HTML.
-    stock_entry = package_files("millrace_os").joinpath(
-        "assets", "dashboard", "index.html"
-    ).read_bytes()
+    stock_entry = (
+        package_files("millrace_os")
+        .joinpath("assets", "dashboard", "index.html")
+        .read_bytes()
+    )
     for other in ("c" * 64, "not-a-digest"):
         page = client.get(f"/ui/local/{other}/")
         assert page.status_code == 503
@@ -452,8 +472,9 @@ def test_only_the_effective_closure_is_served_exactly(tmp_path):
         assert page.content != stock_entry and b"frontend_unavailable" in page.content
         for link in (b'href="/ui/stock/"', b'href="/client"', b'href="/recovery"'):
             assert link in page.content
-        refusal(client.get(f"/ui/local/{other}/assets/app.js"), 503,
-                "frontend_unavailable")
+        refusal(
+            client.get(f"/ui/local/{other}/assets/app.js"), 503, "frontend_unavailable"
+        )
     assert client.get("/ui/stock/").content == stock_entry
     assert client.get("/ui/stock", follow_redirects=False).headers["location"] == (
         "/ui/stock/"
@@ -489,9 +510,7 @@ def test_root_and_legacy_forms_redirect_to_the_effective_base(tmp_path, path, su
     assert response.headers["location"] == "/ui/stock/" + suffix
 
 
-def test_failures_fall_back_to_stock_and_keep_the_desired_choice(
-    tmp_path, monkeypatch
-):
+def test_failures_fall_back_to_stock_and_keep_the_desired_choice(tmp_path, monkeypatch):
     owned, client, bearer, root, _, bundle_key = selected(tmp_path)
     desired = local(root, bundle_key)
     base = f"/ui/local/{bundle_key}/"
@@ -568,9 +587,12 @@ def test_the_launcher_and_recovery_never_depend_on_the_selection(tmp_path):
             (root / "assets" / "app.js").write_bytes(b"throw new Error('broken');\n")
         launcher = client.get("/client")
         assert launcher.status_code == 200
-        assert launcher.text == package_files("millrace_os").joinpath(
-            "assets", "client.html"
-        ).read_text()
+        assert (
+            launcher.text
+            == package_files("millrace_os")
+            .joinpath("assets", "client.html")
+            .read_text()
+        )
         assert launcher.headers["content-security-policy"] == DEFAULT_CSP
         assert launcher.headers["cache-control"] == "no-store"
         for link in ('href="/ui/stock/"', 'href="/recovery"'):
@@ -579,9 +601,10 @@ def test_the_launcher_and_recovery_never_depend_on_the_selection(tmp_path):
         script = client.get("/client/client.js")
         assert script.status_code == 200
         assert script.headers["content-type"].startswith("text/javascript")
-        assert script.content == package_files("millrace_os").joinpath(
-            "assets", "client.js"
-        ).read_bytes()
+        assert (
+            script.content
+            == package_files("millrace_os").joinpath("assets", "client.js").read_bytes()
+        )
         assert client.get("/recovery").status_code == 200
         assert client.get("/recovery/bootstrap.js").status_code == 200
         assert client.get("/ui/stock/").status_code == 200
@@ -596,17 +619,28 @@ def test_frontend_routes_need_trust_and_a_session_write_needs_csrf(tmp_path):
     assert client.put(FRONTEND, json=body).status_code == 401
     _, csrf = bootstrap(client, bearer)
     assert client.get(FRONTEND).status_code == 200  # the session cookie
-    refusal(client.put(FRONTEND, json=body, headers={"Origin": ORIGIN}), 403,
-            "invalid_csrf")
-    written = client.put(FRONTEND, json=body,
-                         headers={"Origin": ORIGIN, "X-CSRF-Token": csrf})
+    refusal(
+        client.put(FRONTEND, json=body, headers={"Origin": ORIGIN}), 403, "invalid_csrf"
+    )
+    written = client.put(
+        FRONTEND, json=body, headers={"Origin": ORIGIN, "X-CSRF-Token": csrf}
+    )
     assert written.status_code == 200, written.text
-    for extra in ({"desired": {"kind": "stock", "path": "/x"}},
-                  {"expected_version": "C" * 32}, {"unknown": 1}):
-        refusal(client.put(FRONTEND, headers=bearer, json=body | extra), 422,
-                "invalid_request")
-    refusal(client.put(FRONTEND, headers=bearer, json={"desired": {"kind": "stock"}}),
-            422, "invalid_request")
+    for extra in (
+        {"desired": {"kind": "stock", "path": "/x"}},
+        {"expected_version": "C" * 32},
+        {"unknown": 1},
+    ):
+        refusal(
+            client.put(FRONTEND, headers=bearer, json=body | extra),
+            422,
+            "invalid_request",
+        )
+    refusal(
+        client.put(FRONTEND, headers=bearer, json={"desired": {"kind": "stock"}}),
+        422,
+        "invalid_request",
+    )
 
 
 def test_exactly_four_registered_documents_and_three_capabilities(tmp_path):
@@ -616,13 +650,20 @@ def test_exactly_four_registered_documents_and_three_capabilities(tmp_path):
         entry["contract_id"]
         for entry in json.loads(exported["registry.json"])["schemas"]
     }
-    new = {"FrontendState", "FrontendValidation", "FrontendValidateInput",
-           "FrontendWrite"}
-    assert new <= names and len(names) == 64
+    new = {
+        "FrontendState",
+        "FrontendValidation",
+        "FrontendValidateInput",
+        "FrontendWrite",
+    }
+    assert new <= names and len(names) == 66
     assert not any(name.startswith("Frontend") for name in names - new)
     paths = json.loads(exported["openapi.json"])["paths"]
-    for method, route in (("get", FRONTEND), ("post", FRONTEND + "/validate"),
-                          ("put", FRONTEND)):
+    for method, route in (
+        ("get", FRONTEND),
+        ("post", FRONTEND + "/validate"),
+        ("put", FRONTEND),
+    ):
         assert method in paths[route], (method, route)
     for route in (FRONTEND + "/validate", FRONTEND):
         operation = paths[route]["post" if "validate" in route else "put"]
@@ -633,15 +674,21 @@ def test_exactly_four_registered_documents_and_three_capabilities(tmp_path):
     listed = {item["operation_id"]: item for item in body["operations"]}
     for operation_id, method, request_contract, response_contract in (
         ("client.frontend.read", "GET", None, "FrontendState"),
-        ("client.frontend.validate", "POST", "FrontendValidateInput",
-         "FrontendValidation"),
+        (
+            "client.frontend.validate",
+            "POST",
+            "FrontendValidateInput",
+            "FrontendValidation",
+        ),
         ("client.frontend.write", "PUT", "FrontendWrite", "FrontendState"),
     ):
         item = listed[operation_id]
-        assert (item["method"], item["request_contract"],
-                item["response_contract"], item["available"]) == (
-            method, request_contract, response_contract, True
-        )
+        assert (
+            item["method"],
+            item["request_contract"],
+            item["response_contract"],
+            item["available"],
+        ) == (method, request_contract, response_contract, True)
 
 
 def presentation_store(client, bearer):
@@ -673,27 +720,37 @@ def test_the_selected_bundle_default_is_its_namespace_reset_base_only(tmp_path):
     # One edited custom config and one stock config; reset touches only one.
     stock_ns = {"frontend_id": "stock", "presentation_format": p.STOCK_FORMAT}
     precision = p.bundled_configs()[0]["payload"]
-    state = put_write(client, bearer, p.create(
-        state, stock_ns, "Mine", precision | {"theme": "dark"}))
-    state = put_write(client, bearer, p.create(
-        state, namespace, "Edited", {"columns": 9}))
+    state = put_write(
+        client, bearer, p.create(state, stock_ns, "Mine", precision | {"theme": "dark"})
+    )
+    state = put_write(
+        client, bearer, p.create(state, namespace, "Edited", {"columns": 9})
+    )
     edited = next(
-        item for item in state["store"]["namespaces"]
+        item
+        for item in state["store"]["namespaces"]
         if item["frontend_id"] == "example.board"
     )["configs"][0]["id"]
-    before_stock = [ns for ns in state["store"]["namespaces"]
-                    if ns["frontend_id"] == "stock"]
+    before_stock = [
+        ns for ns in state["store"]["namespaces"] if ns["frontend_id"] == "stock"
+    ]
     state = put_write(client, bearer, p.reset(state, namespace, edited))
-    (board,) = [ns for ns in state["store"]["namespaces"]
-                if ns["frontend_id"] == "example.board"]
+    (board,) = [
+        ns
+        for ns in state["store"]["namespaces"]
+        if ns["frontend_id"] == "example.board"
+    ]
     assert board["configs"][0]["payload"] == default
-    assert [ns for ns in state["store"]["namespaces"]
-            if ns["frontend_id"] == "stock"] == before_stock
+    assert [
+        ns for ns in state["store"]["namespaces"] if ns["frontend_id"] == "stock"
+    ] == before_stock
     # Not effective: no default is listed and reset refuses without a write.
     (root / "assets" / "app.css").unlink()
     state = presentation_store(client, bearer)
     assert [item["id"] for item in state["bundled_configs"]] == [
-        "precision", "command", "studio"
+        "precision",
+        "command",
+        "studio",
     ]
     store_file = Path(tmp_path / "config" / "presentation.json")
     saved = store_file.read_bytes()
@@ -707,8 +764,11 @@ def test_a_default_that_would_overflow_the_presentation_read_refuses(tmp_path):
     owned, client, bearer = service(tmp_path)
     root = tmp_path / "bundle"
     manifest = write_bundle(root, default={"blob": "x" * p.STATE_LIMIT})
-    refusal(select(client, bearer, None, local(root, key(manifest))), 409,
-            "frontend_incompatible")
+    refusal(
+        select(client, bearer, None, local(root, key(manifest))),
+        409,
+        "frontend_incompatible",
+    )
     assert not selection_file(owned).exists()
     smaller = write_bundle(root, default={"blob": "x" * 1024})
     response = select(client, bearer, None, local(root, key(smaller)))
@@ -748,8 +808,11 @@ def test_a_held_store_write_and_a_selection_never_commit_an_oversized_pair(
         # The store write resolved the (absent) default under its lock and now
         # holds it: the selection that would add a default cannot commit.
         assert entered.wait(30)
-        refusal(select(client, bearer, None, local(root, bundle_key)), 409,
-                "frontend_conflict")
+        refusal(
+            select(client, bearer, None, local(root, bundle_key)),
+            409,
+            "frontend_conflict",
+        )
     finally:
         release.set()
         writer.join(30)
@@ -757,8 +820,11 @@ def test_a_held_store_write_and_a_selection_never_commit_an_oversized_pair(
     assert not selection_file(owned).exists()
     monkeypatch.setattr(p, "_admit", admit)
     # The committed pair is checked as a pair: this default no longer fits.
-    refusal(select(client, bearer, None, local(root, bundle_key)), 409,
-            "frontend_incompatible")
+    refusal(
+        select(client, bearer, None, local(root, bundle_key)),
+        409,
+        "frontend_incompatible",
+    )
     assert client.get(PRESENTATION, headers=bearer).status_code == 200
 
 
@@ -772,8 +838,9 @@ def test_an_unconfirmed_directory_fsync_is_reported_uncertain(tmp_path, monkeypa
         return original(descriptor)
 
     monkeypatch.setattr(os, "fsync", fsync)
-    refusal(select(client, bearer, None, {"kind": "stock"}), 503,
-            "frontend_write_uncertain")
+    refusal(
+        select(client, bearer, None, {"kind": "stock"}), 503, "frontend_write_uncertain"
+    )
     monkeypatch.setattr(os, "fsync", original)
     # The replace happened and is not rolled back: inspect, then select again
     # with the version now saved. Nothing is replayed.
@@ -787,8 +854,14 @@ def test_an_unconfirmed_directory_fsync_is_reported_uncertain(tmp_path, monkeypa
 def test_pure_shell_helpers_recognize_both_bases_only():
     digest = "d" * 64
     assert frontend.is_shell("/ui/stock/") and frontend.is_shell(f"/ui/local/{digest}/")
-    for path in ("/ui/stock", f"/ui/local/{digest}", f"/ui/local/{digest}/a.js",
-                 "/ui/local/D" + "d" * 63 + "/", "/client", "/"):
+    for path in (
+        "/ui/stock",
+        f"/ui/local/{digest}",
+        f"/ui/local/{digest}/a.js",
+        "/ui/local/D" + "d" * 63 + "/",
+        "/client",
+        "/",
+    ):
         assert not frontend.is_shell(path), path
     assert frontend.query_keys(f"/ui/local/{digest}/") == frozenset(
         frontend.TARGET_KEYS

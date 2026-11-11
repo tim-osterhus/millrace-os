@@ -64,6 +64,8 @@ class ApplicationConfig:
     port: int = 8731
     socket_path: Path | None = None
     router_state_homes: dict[str, Path] = field(default_factory=dict)
+    # Explicit constructor-only exception for the owned foreground demo.
+    allow_ephemeral_port: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "config_dir", Path(self.config_dir).expanduser())
@@ -76,7 +78,10 @@ class ApplicationConfig:
             raise ConfigurationError(
                 "port must be a nonzero integer from 1 through 65535"
             )
-        if not 1 <= self.port <= 65535:
+        if not (
+            1 <= self.port <= 65535
+            or (self.port == 0 and self.allow_ephemeral_port is True)
+        ):
             raise ConfigurationError(
                 "port must be a nonzero integer from 1 through 65535"
             )

@@ -89,9 +89,7 @@ def evidence(tmp_path_factory) -> Path:
 def browser(evidence):
     with sync_api.sync_playwright() as playwright:
         executable = os.environ.get("MILLRACE_OS_BROWSER_EXECUTABLE") or None
-        instance = playwright.chromium.launch(
-            headless=True, executable_path=executable
-        )
+        instance = playwright.chromium.launch(headless=True, executable_path=executable)
         (evidence / "browser.json").write_text(
             json.dumps(
                 {
@@ -112,7 +110,15 @@ def browser(evidence):
 class Live:
     """One real OS service on a free loopback port, plus bearer API access."""
 
-    def __init__(self, root: Path, *, homes=None, router_client=None, reader=None):
+    def __init__(
+        self,
+        root: Path,
+        *,
+        homes=None,
+        router_client=None,
+        reader=None,
+        finish_request=None,
+    ):
         self.root = root
         self.config = ApplicationConfig(
             config_dir=root / "config",
@@ -124,7 +130,9 @@ class Live:
             else {"default": root / "core"},
         )
         self.dependencies = ServiceDependencies(
-            router_client=router_client, demo_context_reader=reader
+            router_client=router_client,
+            demo_context_reader=reader,
+            demo_finish_request=finish_request,
         )
         self.projects: list[Path] = []
         self._start()
@@ -151,9 +159,7 @@ class Live:
         self._start()
 
     def nonce(self, *, recovery: bool = False) -> str:
-        response = self.http.post(
-            "/api/v1/auth/bootstrap", json={"recovery": recovery}
-        )
+        response = self.http.post("/api/v1/auth/bootstrap", json={"recovery": recovery})
         assert response.status_code == 200, response.text
         return response.json()["nonce"]
 
@@ -570,9 +576,7 @@ def page(browser, evidence, request, page_errors, context_reads):
         assert reply.status == 404
         assert record["content_type"] == "application/json"
         consumption()
-        page.wait_for_function(
-            f"(probe) => ({matching})(probe)[0].consumed", arg=probe
-        )
+        page.wait_for_function(f"(probe) => ({matching})(probe)[0].consumed", arg=probe)
         assert consumption() is True
         ordinary = page.get_by_text("ordinary service", exact=True)
         sync_api.expect(ordinary).to_be_visible()

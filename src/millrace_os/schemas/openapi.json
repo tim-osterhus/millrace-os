@@ -342,6 +342,32 @@
         "title": "DemoContext",
         "type": "object"
       },
+      "DemoFinish": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "const": "millrace-os-demo-finish/v1",
+            "default": "millrace-os-demo-finish/v1",
+            "title": "Format",
+            "type": "string"
+          },
+          "requested": {
+            "const": true,
+            "default": true,
+            "title": "Requested",
+            "type": "boolean"
+          }
+        },
+        "title": "DemoFinish",
+        "type": "object"
+      },
+      "DemoFinishInput": {
+        "additionalProperties": false,
+        "description": "Finish is a required empty intent, never a controller command.",
+        "properties": {},
+        "title": "DemoFinishInput",
+        "type": "object"
+      },
       "DemoOutputRef": {
         "additionalProperties": false,
         "properties": {
@@ -2818,7 +2844,6 @@
             "items": {
               "$ref": "#/components/schemas/SchemaEntry"
             },
-            "maxItems": 64,
             "title": "Schemas",
             "type": "array"
           }
@@ -6330,6 +6355,145 @@
           }
         ],
         "summary": "Demo Context"
+      }
+    },
+    "/api/v1/demo/finish": {
+      "post": {
+        "operationId": "demo_finish_api_v1_demo_finish_post",
+        "parameters": [
+          {
+            "description": "Exact configured origin; required for browser mutations.",
+            "in": "header",
+            "name": "Origin",
+            "required": false,
+            "schema": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoFinishInput"
+              }
+            }
+          },
+          "required": true,
+          "x-max-body-bytes": 4096
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoFinish"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Typed refusal"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "Session": []
+          }
+        ],
+        "summary": "Demo Finish"
       }
     },
     "/api/v1/diagnostics": {

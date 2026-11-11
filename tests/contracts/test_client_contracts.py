@@ -547,7 +547,7 @@ def test_openapi_documents_parity_reads_and_the_apply_202(tmp_path):
         "DraftManifest",
         "DraftFileRead",
     } <= names
-    assert len(names) == 64  # C1 adds the four frontend documents
+    assert len(names) == 66  # D1 adds the fixed Finish input/acknowledgement
 
 
 def run_cli(monkeypatch, tmp_path, *argv):
@@ -591,21 +591,48 @@ def test_cli_parity_peers_select_exact_routes(tmp_path, monkeypatch):
         ),
         (
             (
-                "router", "draft", "manifest", "--home", "h", "--draft", "d",
-                "--limit", "2", "--cursor", "c_1",
+                "router",
+                "draft",
+                "manifest",
+                "--home",
+                "h",
+                "--draft",
+                "d",
+                "--limit",
+                "2",
+                "--cursor",
+                "c_1",
             ),
             "GET",
             router + "/drafts/d/manifest?home=h&limit=2&cursor=c_1",
         ),
         (
-            ("router", "draft", "read-file", "--home", "h", "--draft", "d",
-             "--path", "b/c.json"),
+            (
+                "router",
+                "draft",
+                "read-file",
+                "--home",
+                "h",
+                "--draft",
+                "d",
+                "--path",
+                "b/c.json",
+            ),
             "GET",
             router + "/drafts/d/file?home=h&path=b%2Fc.json",
         ),
         (
-            ("router", "draft", "publication-status", "--home", "h",
-             "--instance", "i", "--request-id", "q"),
+            (
+                "router",
+                "draft",
+                "publication-status",
+                "--home",
+                "h",
+                "--instance",
+                "i",
+                "--request-id",
+                "q",
+            ),
             "GET",
             router + "/publications/i?home=h&request_id=q",
         ),
@@ -620,8 +647,16 @@ def test_cli_parity_peers_select_exact_routes(tmp_path, monkeypatch):
             router + "/requests?home=h",
         ),
         (
-            ("client", "inspect", "--kind", "schema", "--contract-id", "Error",
-             "--digest", "f" * 64),
+            (
+                "client",
+                "inspect",
+                "--kind",
+                "schema",
+                "--contract-id",
+                "Error",
+                "--digest",
+                "f" * 64,
+            ),
             "GET",
             origin + "/api/v1/contracts/Error/1/" + "f" * 64,
         ),
@@ -638,8 +673,19 @@ def test_cli_parity_peers_select_exact_routes(tmp_path, monkeypatch):
     first.write_bytes(b"alpha")
     second.write_bytes(b"\x00\x01")
     request = run_cli(
-        monkeypatch, tmp_path, "router", "draft", "replace-files", "--home", "h",
-        "--draft", "d", "--entry", f"a.txt={first}", "--entry", f"b/c.bin={second}",
+        monkeypatch,
+        tmp_path,
+        "router",
+        "draft",
+        "replace-files",
+        "--home",
+        "h",
+        "--draft",
+        "d",
+        "--entry",
+        f"a.txt={first}",
+        "--entry",
+        f"b/c.bin={second}",
     )
     target = (request.get_method(), request.full_url)
     assert target == ("PUT", router + "/drafts/d/files")
@@ -652,8 +698,16 @@ def test_cli_parity_peers_select_exact_routes(tmp_path, monkeypatch):
     }
     for version in ("v1", "v2"):
         request = run_cli(
-            monkeypatch, tmp_path, "router", "request", "--home", "h",
-            "--request-id", "q", "--observation", version,
+            monkeypatch,
+            tmp_path,
+            "router",
+            "request",
+            "--home",
+            "h",
+            "--request-id",
+            "q",
+            "--observation",
+            version,
         )
         media = f"application/vnd.millrace.router-call.{version}+json"
         assert request.get_header("Accept") == media
@@ -666,8 +720,17 @@ def test_cli_parity_peers_select_exact_routes(tmp_path, monkeypatch):
         ("client", "inspect", "--kind", "observation"),
         ("client", "inspect", "--kind", "health", "--home", "h"),
         ("client", "inspect", "--kind", "frontend"),
-        ("router", "draft", "replace-files", "--home", "h", "--draft", "d",
-         "--entry", "missing-separator"),
+        (
+            "router",
+            "draft",
+            "replace-files",
+            "--home",
+            "h",
+            "--draft",
+            "d",
+            "--entry",
+            "missing-separator",
+        ),
     ):
         with pytest.raises(SystemExit) as exit_:
             run_cli(monkeypatch, tmp_path, *argv)
@@ -738,10 +801,19 @@ def test_replace_files_cli_sends_compact_utf8_within_the_body_policy(
     source = tmp_path / "upload.bin"
     source.write_bytes(b"\0" * (3 * quads))
     argv = [
-        "router", "draft", "replace-files", "--home", "default",
-        "--draft", created.json()["draft_id"], "--entry", f"{name}={source}",
-        "--config-dir", str(tmp_path / "config"),
-        "--state-dir", str(tmp_path / "state"),
+        "router",
+        "draft",
+        "replace-files",
+        "--home",
+        "default",
+        "--draft",
+        created.json()["draft_id"],
+        "--entry",
+        f"{name}={source}",
+        "--config-dir",
+        str(tmp_path / "config"),
+        "--state-dir",
+        str(tmp_path / "state"),
     ]
     assert main(argv) == 0
     (request,) = sent

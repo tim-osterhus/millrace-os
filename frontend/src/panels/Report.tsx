@@ -14,6 +14,7 @@ import {
   saveText,
   targetHref,
   type Failure,
+  type DemoMode,
   type Observed,
   type OutputItem,
   type OutputRead,
@@ -192,7 +193,7 @@ function Evidence({ value }: { value: OutputRead }) {
  */
 type Listing = Paged<OutputsPage> & { key: string | null; stale: Failure | null };
 
-export default function Report({ target }: { target: Target }) {
+export default function Report({ target, demo, reportContext }: { target: Target; demo: DemoMode | null; reportContext: DemoMode | null }) {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [listing, setListing] = useState<Listing>({ observation: null, loading: true, page: 0, key: null, stale: null });
   // Bumped only by the operator's Refresh outputs: nothing re-reads on a timer.
@@ -204,6 +205,40 @@ export default function Report({ target }: { target: Target }) {
   const [download, setDownload] = useState<{ reading: boolean; failure: Failure | null }>({ reading: false, failure: null });
   const cursor = cursors[cursors.length - 1];
   const listingKey = `${targetHref(target)}|${cursors.length - 1}|${cursor ?? ""}`;
+  const contextStale = demo === null || demo.kind === "pending" || demo.kind === "unknown";
+  const context = contextStale ? reportContext : demo;
+  const owned = context?.kind === "demo";
+  const matching = owned && context.home === target.home && context.instanceId === target.instance && context.runId === target.run;
+  const accepted = matching ? context.acceptedOutputRefs : [];
+  const pinsKey = JSON.stringify(accepted);
+
+  const checkPinned = (result: Observed<OutputRead>, item: OutputItem, representation: "report" | "json"): Observed<OutputRead> => {
+    if (!result.ok || !owned) return result;
+    const pin = accepted.find((entry) => entry.reference.outputId === item.outputId && entry.reference.recordSha256 === item.recordSha256);
+    const expected = representation === "report" ? pin?.reportSha256 : pin?.jsonSha256;
+    if (pin !== undefined && expected === result.value.representation.sha256 &&
+        result.value.reference.instanceId === pin.reference.instanceId && result.value.reference.runId === pin.reference.runId) return result;
+    return { ok: false, status: 0, code: "demo_output_mismatch", summary: "The output does not match the coordinator's accepted reference and digest.", retryable: false, receivedAt: Date.now() };
+  };
+
+  // Context pins select the main report directly, even before discovery lists
+  // it. A conflicting discovery record never replaces this selection.
+  useEffect(() => {
+    if (context?.kind === "ordinary") return;
+    const pin = accepted[0];
+    if (pin === undefined) {
+      chosen.current = null;
+      setSelected(null);
+      setRead(null);
+      return;
+    }
+    const item: OutputItem = { outputId: pin.reference.outputId, recordSha256: pin.reference.recordSha256,
+      available: true, reason: null, producer: null, label: null, publishedAt: null, invocation: null,
+      report: { format: REPORT_FORMAT, sha256: pin.reportSha256 },
+      json: pin.jsonSha256 === null ? null : { format: "unknown", sha256: pin.jsonSha256 } };
+    void choose(item);
+    // The serialized accepted refs are the immutable selection identity.
+  }, [pinsKey, target.home, target.instance, target.run, context?.kind]);
 
   // One listing read per target, page and explicit Refresh outputs. A reply is
   // shown only while its own read is still the current one, so a superseded
@@ -233,13 +268,14 @@ export default function Report({ target }: { target: Target }) {
   const outputKey = (item: OutputItem) => `${item.outputId}|${item.recordSha256}`;
 
   const choose = async (item: OutputItem) => {
+    if (context?.kind !== "ordinary" && (!matching || !accepted.some((pin) => pin.reference.outputId === item.outputId && pin.reference.recordSha256 === item.recordSha256))) return;
     const key = outputKey(item);
     chosen.current = key;
     setSelected(item);
     setRead(null);
     setDownload({ reading: false, failure: null });
     if (!item.available || item.recordSha256 === null) return;
-    const result = await output(target, item.outputId, item.recordSha256, "report");
+    const result = checkPinned(await output(target, item.outputId, item.recordSha256, "report"), item, "report");
     // Selecting A then B: A's late reply never replaces B's.
     if (chosen.current === key) setRead({ key, result });
   };
@@ -247,7 +283,7 @@ export default function Report({ target }: { target: Target }) {
   const saveEnvelope = async (item: OutputItem, representation: "report" | "json") => {
     if (item.recordSha256 === null) return;
     setDownload({ reading: true, failure: null });
-    const result = await output(target, item.outputId, item.recordSha256, representation);
+    const result = checkPinned(await output(target, item.outputId, item.recordSha256, representation), item, representation);
     // The file is named for the output it was requested for; a failure is shown
     // only while that output is still the selected one.
     if (result.ok) saveText(result.text, `${item.outputId}-${representation}-api-response.json`);
@@ -275,6 +311,9 @@ export default function Report({ target }: { target: Target }) {
         Workflow-produced evidence. A report proves no task success, writer closure, ownership or join; read execution
         facts in Overview and Activity.
       </p>
+      {owned && !matching ? <p className="notice notice--warn">This run is inspect-only; it is not the terminal's bound demo target.</p> : null}
+      {matching && context.outputError !== null ? <p className="notice notice--warn">The coordinator reported an output error: <code>{context.outputError}</code>.</p> : null}
+      {matching && accepted.length === 0 ? <p className="muted">Waiting for a coordinator-accepted report reference.</p> : null}
       <div className="toolbar report-listing-actions">
         <button type="button" onClick={refreshOutputs}>
           Refresh outputs
@@ -320,7 +359,7 @@ export default function Report({ target }: { target: Target }) {
               {observation.value.items.map((item) => (
                 <tr key={item.outputId} aria-current={selected !== null && outputKey(selected) === outputKey(item) ? "true" : undefined}>
                   <th scope="row">
-                    <button type="button" className="link" onClick={() => void choose(item)}>
+                    <button type="button" className="link" disabled={context?.kind !== "ordinary" && !accepted.some((pin) => pin.reference.outputId === item.outputId && pin.reference.recordSha256 === item.recordSha256)} onClick={() => void choose(item)}>
                       <code>{item.outputId}</code>
                     </button>
                   </th>
@@ -358,6 +397,7 @@ export default function Report({ target }: { target: Target }) {
             <FailureNote failure={report} what="Report" />
           ) : (
             <>
+              {contextStale ? <p className="notice notice--warn" role="status">Service context is unavailable. Showing the last successfully read report for this target; it is stale.</p> : null}
               <p className="report-byline">Producer (claimed): <strong>{report.value.producer.id}</strong> {report.value.producer.version}<span>Published {report.value.publishedAt}</span></p>
               {report.value.representation.format !== REPORT_FORMAT ? (
                 <p className="notice notice--warn">

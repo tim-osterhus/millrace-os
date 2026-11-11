@@ -481,6 +481,36 @@
     "title": "DemoContext",
     "type": "object"
   },
+  "DemoFinish": {
+    "$id": "urn:millrace-os:DemoFinish:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "format": {
+        "const": "millrace-os-demo-finish/v1",
+        "default": "millrace-os-demo-finish/v1",
+        "title": "Format",
+        "type": "string"
+      },
+      "requested": {
+        "const": true,
+        "default": true,
+        "title": "Requested",
+        "type": "boolean"
+      }
+    },
+    "title": "DemoFinish",
+    "type": "object"
+  },
+  "DemoFinishInput": {
+    "$id": "urn:millrace-os:DemoFinishInput:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Finish is a required empty intent, never a controller command.",
+    "properties": {},
+    "title": "DemoFinishInput",
+    "type": "object"
+  },
   "Diagnostics": {
     "$id": "urn:millrace-os:Diagnostics:1",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -3042,7 +3072,6 @@
             "items": {
               "$ref": "#/$defs/SchemaEntry"
             },
-            "maxItems": 64,
             "title": "Schemas",
             "type": "array"
           }
@@ -3360,7 +3389,6 @@
         "items": {
           "$ref": "#/$defs/SchemaEntry"
         },
-        "maxItems": 64,
         "title": "Schemas",
         "type": "array"
       }

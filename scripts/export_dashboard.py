@@ -45,6 +45,8 @@ REGISTRY_URL = "https://registry.npmjs.org/"
 STOCK_CONTRACTS = (
     "ClientCapabilities",
     "DemoContext",
+    "DemoFinish",
+    "DemoFinishInput",
     "Error",
     "ExchangeInput",
     "FrontendState",
@@ -102,9 +104,12 @@ class ExportError(Exception):
 
 
 def _json_bytes(value: object) -> bytes:
-    return json.dumps(
-        value, sort_keys=True, ensure_ascii=False, allow_nan=False, indent=1
-    ).encode("utf-8") + b"\n"
+    return (
+        json.dumps(
+            value, sort_keys=True, ensure_ascii=False, allow_nan=False, indent=1
+        ).encode("utf-8")
+        + b"\n"
+    )
 
 
 def _strict_load(path: Path) -> object:
@@ -395,16 +400,18 @@ def _inventory(
         if declared.get("version") != entry.get("version"):
             raise ExportError(f"{key} installed version differs from the lock")
         texts = _license_texts(directory, emitted.get(key, set()))
-        bundled.append({
-            "name": name,
-            "version": entry["version"],
-            "license": entry.get("license"),
-            "integrity": entry["integrity"],
-            "resolved": entry["resolved"],
-            "emitted_modules": modules.get(key, 0),
-            "included_by": None if key in emitted else included[key],
-            "notice_files": [label for label, _ in texts],
-        })
+        bundled.append(
+            {
+                "name": name,
+                "version": entry["version"],
+                "license": entry.get("license"),
+                "integrity": entry["integrity"],
+                "resolved": entry["resolved"],
+                "emitted_modules": modules.get(key, 0),
+                "included_by": None if key in emitted else included[key],
+                "notice_files": [label for label, _ in texts],
+            }
+        )
         notices.append((f"{name}@{entry['version']}", entry.get("license"), texts))
     helpers = []
     for tool in sorted(tools):
@@ -413,13 +420,15 @@ def _inventory(
         if entry is None:
             raise ExportError(f"helper tool {tool} is not locked")
         texts = _license_texts(FRONTEND / key, set())
-        helpers.append({
-            "name": tool,
-            "version": entry["version"],
-            "license": entry.get("license"),
-            "role": "bundler-authored runtime helper code in emitted chunks",
-            "notice_files": [label for label, _ in texts],
-        })
+        helpers.append(
+            {
+                "name": tool,
+                "version": entry["version"],
+                "license": entry.get("license"),
+                "role": "bundler-authored runtime helper code in emitted chunks",
+                "notice_files": [label for label, _ in texts],
+            }
+        )
         title = f"{tool}@{entry['version']} (helper code)"
         notices.append((title, entry.get("license"), texts))
     build_only = [

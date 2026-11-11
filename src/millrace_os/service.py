@@ -60,6 +60,7 @@ class ServiceDependencies:
     # Fixed before app creation by a private demo owner only. None means an
     # ordinary service: `/api/v1/demo/context` answers `demo_context_unavailable`.
     demo_context_reader: Callable[[], dict[str, object]] | None = None
+    demo_finish_request: Callable[[], None] | None = None
 
 
 def _public_liveness(service: Service) -> tuple[dict[str, str], int]:

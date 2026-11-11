@@ -197,7 +197,7 @@ class SchemaEntry(Contract):
 
 class Registry(Contract):
     registry: Literal["os.registry.v1"] = "os.registry.v1"
-    schemas: Annotated[list[SchemaEntry], Field(max_length=64)]
+    schemas: list[SchemaEntry]
 
 
 class RouterRead(Contract, Generic[T]):  # noqa: UP046
@@ -583,6 +583,15 @@ class DemoContext(Contract):
     output_error: Identifier | None
 
 
+class DemoFinishInput(Contract):
+    """Finish is a required empty intent, never a controller command."""
+
+
+class DemoFinish(Contract):
+    format: Literal["millrace-os-demo-finish/v1"] = "millrace-os-demo-finish/v1"
+    requested: Literal[True] = True
+
+
 # Shared presentation preferences (P1): display data in the OS configuration
 # directory, never execution authority. `presentation.py` owns the store rules
 # (ordering, uniqueness, references, stock payloads); these strict shapes
@@ -858,9 +867,7 @@ class FrontendState(Contract):
     """The saved desired choice and the effective one; desired is kept when a
     local closure is unavailable, and `reason` says why stock is effective."""
 
-    contract: Literal["millrace-os-frontend-state/v1"] = (
-        "millrace-os-frontend-state/v1"
-    )
+    contract: Literal["millrace-os-frontend-state/v1"] = "millrace-os-frontend-state/v1"
     status: Literal["absent", "ready", "invalid"]
     version: CoreId | None
     desired: FrontendChoice | None
@@ -948,6 +955,8 @@ MODELS = [
     SessionOutput,
     SessionContext,
     DemoContext,
+    DemoFinishInput,
+    DemoFinish,
     Rotation,
     Registry,
     Read[Version],

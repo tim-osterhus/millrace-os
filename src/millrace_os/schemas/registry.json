@@ -47,6 +47,16 @@
       "version": 1
     },
     {
+      "contract_id": "DemoFinish",
+      "sha256": "5004ec4fca5f37cfb75d7174fdc30e9be53587d70b0264a3326bf1213cc1c097",
+      "version": 1
+    },
+    {
+      "contract_id": "DemoFinishInput",
+      "sha256": "6ab66d181217c982d8fcc41f024558179efbdb6ccd754c39ec0d39aee30e4552",
+      "version": 1
+    },
+    {
       "contract_id": "Diagnostics",
       "sha256": "b61d56d2ddc0f1701b5f3ba4f55e706a9498a6e3ef60551765a1c45d6d86dcf8",
       "version": 1
@@ -183,7 +193,7 @@
     },
     {
       "contract_id": "Read-Registry",
-      "sha256": "e50b53d4f6029687eba7831be3f724f911819e967fa6fbbd9cd203cbcef242dc",
+      "sha256": "d43f32ea2b4da880803d687a2f6743678dc51dff8ccf609c6a7bcd02b7445e2a",
       "version": 1
     },
     {
@@ -198,7 +208,7 @@
     },
     {
       "contract_id": "Registry",
-      "sha256": "10b256450d27ae55145d2328d9d97d059a18b60d90b304a3f01db20986f4c42e",
+      "sha256": "3ad0afc4a8f7c77c2fc560a9c0c17ac2d72fd98231ee928e7c3ae464c0b2a58f",
       "version": 1
     },
     {

@@ -28,6 +28,7 @@ import { Group, Panel, Separator, type GroupImperativeHandle } from "react-resiz
 import {
   capabilities,
   demoContext,
+  finishDemo,
   frontendChoice,
   homes,
   instance,
@@ -308,6 +309,24 @@ export function App() {
   const [target, setTarget] = useState<Target>(() => parseTarget(window.location.search) ?? NO_TARGET);
   const [targetValid] = useState(() => parseTarget(window.location.search) !== null);
   const [demo, setDemo] = useState<DemoMode | null>(null);
+  // Last successful context is display evidence only. Current `demo` still
+  // decides every mutation and Finish permission after a failed refresh.
+  const [reportContext, setReportContext] = useState<DemoMode | null>(null);
+  const demoRef = useRef<DemoMode | null>(null);
+  const contextRead = useRef<Promise<DemoMode> | null>(null);
+  const [finishState, setFinishState] = useState<"idle" | "sending" | "requested">("idle");
+  const [finishFailure, setFinishFailure] = useState<Failure | null>(null);
+  const refreshContext = useCallback((): Promise<DemoMode> => {
+    if (contextRead.current !== null) return contextRead.current;
+    const pending = demoContext().then((mode) => {
+      demoRef.current = mode;
+      if (mode.kind === "ordinary" || mode.kind === "demo") setReportContext(mode);
+      setDemo(mode);
+      return mode;
+    }).finally(() => { contextRead.current = null; });
+    contextRead.current = pending;
+    return pending;
+  }, []);
   const [unavailable, setUnavailable] = useState<Capability[]>([]);
   const [frontend, setFrontend] = useState<FrontendChoice | null>(null);
   const [booted, setBooted] = useState(false);
@@ -395,11 +414,11 @@ export function App() {
 
   const screen = target.run !== null ? "run" : target.instance !== null ? "instance" : "inventory";
   const payload = presentation.working;
-  // Writes need trust and a positively observed context: an ordinary service
-  // (its typed 404) or a bound demo context. Pending, failed, unreadable or
-  // unreachable context is never treated as ordinary.
-  const contextObserved = demo?.kind === "ordinary" || demo?.kind === "demo";
-  const writable = trust.state === "ready" && contextObserved;
+  // Only the typed ordinary-service sentinel permits ordinary mutations.
+  const writable = trust.state === "ready" && demo?.kind === "ordinary";
+  const matchingDemo = demo?.kind === "demo" && demo.home === target.home &&
+    demo.instanceId === target.instance && demo.runId === target.run;
+  const canFinish = trust.state === "ready" && matchingDemo && demo.finishAvailable;
   /** The unmet write precondition, said beside the Layout menu's save actions; its code is in the page notice. */
   const layoutBlock = writable
     ? null
@@ -409,6 +428,8 @@ export function App() {
         ? "the browser session has ended"
         : trust.state === "refused"
           ? "browser trust was refused"
+          : demo?.kind === "demo"
+            ? "the terminal owns this temporary demo; Finish cancels or closes it"
           : demo?.kind === "unknown"
             ? "the service context could not be observed"
             : "the service context has not been observed yet";
@@ -563,9 +584,8 @@ export function App() {
     if (trust.state !== "ready" || booted) return;
     let current = true;
     void (async () => {
-      const mode = await demoContext();
+      await refreshContext();
       if (!current) return;
-      setDemo(mode);
       await loadPresentation();
       const operations = await capabilities();
       if (!current) return;
@@ -580,7 +600,7 @@ export function App() {
     return () => {
       current = false;
     };
-  }, [trust.state, booted, loadPresentation]);
+  }, [trust.state, booted, loadPresentation, refreshContext]);
 
   /** The target's one in-flight summary read, started only if none is in flight. */
   const readSummary = useCallback((selected: Target): Promise<Observed<CoreView>> => {
@@ -808,6 +828,7 @@ export function App() {
 
   const sendReviewed = useCallback(
     async (reviewed: Reviewed, unprotected: boolean): Promise<SendResult> => {
+      if (demoRef.current?.kind !== "ordinary") return { sent: false, reason: "The terminal owns this temporary demo; ordinary controls are disabled." };
       const home = targetRef.current.home;
       const envelope = reviewed.envelope;
       if (home === null) return { sent: false, reason: "No home is selected." };
@@ -865,6 +886,7 @@ export function App() {
     () => ({
       observe: (key: string) => void observe(key),
       replay: (key: string) => {
+        if (demoRef.current?.kind !== "ordinary") return;
         const entry = intentsRef.current.find((item) => keyOf(item.intent) === key);
         if (entry === undefined || entry.conflicts.length > 0 || entry.integrity !== null) return;
         updateEntry(key, (current) => ({ ...current, delivery: "sending", answer: null, intent: { ...current.intent, sent: true } }));
@@ -925,6 +947,8 @@ export function App() {
         return;
       }
       void (async () => {
+        await refreshContext();
+        if (cancelled) return;
         // A summary budget refusal (only reported while its target is selected)
         // stops this target's reads at once: no receipt read follows, and a
         // cleaned-up batch still records it. A receipt's refusal stops that request.
@@ -952,7 +976,7 @@ export function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [booted, trust.state, monitor, hidden, watching, watchSummary, watchedKey, refreshSummary, observe]);
+  }, [booted, trust.state, monitor, hidden, watching, watchSummary, watchedKey, refreshSummary, refreshContext, observe]);
 
   const monitorState: MonitorState = !booted
     ? { kind: "idle" }
@@ -1360,6 +1384,7 @@ export function App() {
             {title}
           </h1></div>
           <button type="button" onClick={() => {
+            void refreshContext();
             setRefreshEpoch((epoch) => epoch + 1);
             if (selection?.kind === "invocation") void selectInvocation(selection.invocationId, true);
           }} disabled={!booted}>
@@ -1378,6 +1403,20 @@ export function App() {
           exit={{ held: exitHeld, review: reviewPending, requests: exitRequests }}
           onLeave={leave}
         />
+        {canFinish ? <div className="demo-finish notice notice--info">
+          <p>The terminal owns this temporary demo. Finish cancels active work or closes the completed view.</p>
+          <button type="button" disabled={finishState !== "idle"} onClick={() => {
+            setFinishState("sending");
+            setFinishFailure(null);
+            void finishDemo(targetRef.current).then(async (result) => {
+              setFinishState(result.ok ? "requested" : "idle");
+              setFinishFailure(result.ok ? null : result);
+              await refreshContext();
+            });
+          }}> {finishState === "requested" ? "Finish requested" : finishState === "sending" ? "Requesting Finish…" : "Finish"}</button>
+          {finishState === "requested" ? <p role="status">Intent accepted. Shutdown, export and writer closure are still being observed by the terminal.</p> : null}
+          {finishFailure !== null ? <FailureNote failure={finishFailure} what="Finish" /> : null}
+        </div> : null}
         {screen !== "run" ? <MonitorStatus state={monitorState} onContinue={() => setMonitor(freshMonitor())} /> : null}
         <RequestArea
           entries={entries}
@@ -1420,6 +1459,7 @@ export function App() {
             summaryFailure={summaryFailure}
             summaryLoading={summaryLoading}
             demo={demo}
+            reportContext={reportContext}
             narrow={narrow}
             payload={payload}
             onSplit={(ratio) => actions.change({ ...payload, split_ratios: { ...payload.split_ratios, [payload.arrangement]: ratio } })}
@@ -1622,6 +1662,7 @@ interface RunScreenProps {
   summaryFailure: Failure | null;
   summaryLoading: boolean;
   demo: DemoMode | null;
+  reportContext: DemoMode | null;
   narrow: boolean;
   payload: StockPayload;
   onSplit: (ratio: number) => void;
@@ -1788,7 +1829,7 @@ function RunScreen(props: RunScreenProps) {
           <div className="region reports-region workspace-section" id="destination-reports" tabIndex={-1}>
             {props.reportsOpen ? (
               <Suspense fallback={LAZY_FALLBACK}>
-                <Report target={props.target} />
+                <Report key={targetHref(props.target)} target={props.target} demo={props.demo} reportContext={props.reportContext} />
               </Suspense>
             ) : null}
           </div>

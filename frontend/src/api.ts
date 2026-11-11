@@ -270,7 +270,7 @@ function callObservation(body: Json): CallObservation | null {
 
 /** POST the exact retained body bytes. 200/202 is an OS observation, never task success. */
 export async function submitRequest(body: string): Promise<Observed<CallObservation>> {
-  return observed(await write("POST", "/api/v1/router/requests", body), callObservation);
+  return observed(await ordinaryWrite("POST", "/api/v1/router/requests", body), callObservation);
 }
 
 /** The strict bounded receipt view by exact ID and known target. 404 stays unknown. */
@@ -287,7 +287,7 @@ export async function observeRequest(
 /** Bounded validation of the current editable files; it publishes and replaces nothing. */
 export async function validateCurrent(target: Target): Promise<Observed<CoreView>> {
   const body = JSON.stringify({ home: target.home, instance_id: target.instance, run_id: target.run });
-  return observed(await write("POST", "/api/v1/router/views/validate", body), coreView("validation"));
+  return observed(await ordinaryWrite("POST", "/api/v1/router/views/validate", body), coreView("validation"));
 }
 
 // ---- generic workflow outputs ----------------------------------------------
@@ -433,7 +433,7 @@ export async function presentationState(): Promise<Observed<Json>> {
 }
 
 export async function putPresentation(body: string): Promise<Observed<Json>> {
-  return observed(await write("PUT", "/api/v1/client/presentation", body), (value) =>
+  return observed(await ordinaryWrite("PUT", "/api/v1/client/presentation", body), (value) =>
     value.contract === "millrace-os-presentation-state/v1" ? value : null,
   );
 }
@@ -496,14 +496,53 @@ export async function frontendChoice(): Promise<Observed<FrontendChoice>> {
   });
 }
 
+export interface DemoOutputRef {
+  reference: { instanceId: string; runId: string; outputId: string; recordSha256: string };
+  reportSha256: string;
+  jsonSha256: string | null;
+}
+
 export type DemoMode =
   | { kind: "ordinary" }
-  | { kind: "demo"; home: string; instanceId: string; runId: string; finishAvailable: boolean }
+  | { kind: "demo"; home: string; instanceId: string; runId: string; finishAvailable: boolean; acceptedOutputRefs: DemoOutputRef[]; outputError: string | null }
   | { kind: "pending" }
   | { kind: "unknown"; code: string };
 
-/** Only an authenticated typed 404 establishes an ordinary service. */
-export async function demoContext(): Promise<DemoMode> {
+// This shared send guard is synchronous at the network boundary. A reviewed
+// form, validation request or retained Replay cannot bypass a context change.
+let mutationContext: DemoMode | null = null;
+
+function blockedMutation(): Reply {
+  return { ok: false, status: 0, receivedAt: Date.now(), error: {
+    status: 0, code: "demo_mutation_disabled", retryable: false,
+    summary: "The terminal owns this temporary demo; Finish cancels or closes it.",
+  } };
+}
+
+async function ordinaryWrite(method: "PUT" | "POST", path: string, body: string): Promise<Reply> {
+  if (mutationContext?.kind !== "ordinary") return blockedMutation();
+  return write(method, path, body);
+}
+
+function exactKeys(value: Json, keys: string[]): boolean {
+  return Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+
+function demoOutputRef(value: unknown, instanceId: string, runId: string): DemoOutputRef | null {
+  const item = record(value);
+  const reference = record(item?.reference);
+  if (item === null || reference === null || !exactKeys(item, ["reference", "report_sha256", "json_sha256"]) ||
+      !exactKeys(reference, ["instance_id", "run_id", "output_id", "record_sha256"]) ||
+      reference.instance_id !== instanceId || reference.run_id !== runId ||
+      typeof reference.output_id !== "string" || !IDENTIFIER.test(reference.output_id) ||
+      typeof reference.record_sha256 !== "string" || !SHA256.test(reference.record_sha256) ||
+      typeof item.report_sha256 !== "string" || !SHA256.test(item.report_sha256) ||
+      (item.json_sha256 !== null && (typeof item.json_sha256 !== "string" || !SHA256.test(item.json_sha256)))) return null;
+  return { reference: { instanceId, runId, outputId: reference.output_id, recordSha256: reference.record_sha256 },
+    reportSha256: item.report_sha256, jsonSha256: item.json_sha256 as string | null };
+}
+
+async function readDemoContext(): Promise<DemoMode> {
   const reply = await read("/api/v1/demo/context");
   if (!reply.ok) {
     if (reply.status === 404 && reply.error.code === "demo_context_unavailable") return { kind: "ordinary" };
@@ -516,14 +555,46 @@ export async function demoContext(): Promise<DemoMode> {
   const finishAvailable = bool(body?.finish_available);
   if (
     body?.format !== "millrace-os-demo-context/v1" ||
+    !exactKeys(body, ["format", "home", "instance_id", "run_id", "finish_available", "accepted_output_refs", "output_error"]) ||
     body.home !== "demo" ||
-    instanceId === null ||
-    runId === null ||
-    finishAvailable === null
+    instanceId === null || !CORE_ID.test(instanceId) ||
+    runId === null || !CORE_ID.test(runId) ||
+    finishAvailable === null || !Array.isArray(body.accepted_output_refs) ||
+    (body.output_error !== null && (typeof body.output_error !== "string" || !IDENTIFIER.test(body.output_error))) ||
+    new TextEncoder().encode(reply.text).length > 4096
   ) {
     return { kind: "unknown", code: "invalid_response" };
   }
-  return { kind: "demo", home: "demo", instanceId, runId, finishAvailable };
+  const refs = (body.accepted_output_refs as unknown[]).map((item) => demoOutputRef(item, instanceId, runId));
+  if (refs.some((item) => item === null) || new Set(refs.map((item) => item?.reference.outputId)).size !== refs.length) {
+    return { kind: "unknown", code: "invalid_response" };
+  }
+  return { kind: "demo", home: "demo", instanceId, runId, finishAvailable,
+    acceptedOutputRefs: refs as DemoOutputRef[], outputError: body.output_error as string | null };
+}
+
+/** Only an authenticated typed 404 establishes an ordinary service. */
+export async function demoContext(): Promise<DemoMode> {
+  const mode = await readDemoContext();
+  mutationContext = mode;
+  return mode;
+}
+
+/** The sole demo browser mutation; exact visible target checked before I/O. */
+export async function finishDemo(target: Target): Promise<{ ok: true; requested: true } | Failure> {
+  const mode = mutationContext;
+  if (mode?.kind !== "demo" || !mode.finishAvailable || target.home !== mode.home ||
+      target.instance !== mode.instanceId || target.run !== mode.runId) {
+    return failure(blockedMutation());
+  }
+  const reply = await write("POST", "/api/v1/demo/finish", "{}");
+  if (!reply.ok) return failure(reply);
+  const body = record(reply.body);
+  if (body === null || !exactKeys(body, ["format", "requested"]) ||
+      body.format !== "millrace-os-demo-finish/v1" || body.requested !== true) return failure(reply);
+  // This fixed acknowledgement has no observed_at: it accepts the intent,
+  // without claiming that shutdown, export or writer closure was observed.
+  return { ok: true, requested: true };
 }
 
 // ---- captured revision graph -------------------------------------------------
