@@ -459,7 +459,7 @@
    "version": "4.5.7"
   }
  ],
- "first_party_modules": 19,
+ "first_party_modules": 20,
  "format": "millrace-os-dependency-inventory/v1",
  "frontend_id": "stock",
  "package_json_sha256": "423be266c3141736372b274240756ff4add05dd8225c3ddb74db260ae98e5aa0",

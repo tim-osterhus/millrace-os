@@ -61,6 +61,7 @@ import {
 } from "./api.ts";
 import { Inspector, type Selection, type InvocationSnapshot } from "./panels/Inspector.tsx";
 import { Instance } from "./panels/Instance.tsx";
+import { PresentationMenu, type PanelGroup, type Presentation } from "./panels/PresentationSettings.tsx";
 import { FailureNote, Inventory, pathLabel, shortId, TargetLink, type Paged } from "./panels/Inventory.tsx";
 import { CurrentWorkRegion, planesOf, PlanesRegion, RunAnnouncement, StatusRegion, type Summary } from "./panels/Run.tsx";
 import {
@@ -117,18 +118,12 @@ import {
   type WriteBody,
 } from "./preferences.ts";
 import {
-  ARRANGEMENT_LABELS,
-  ARRANGEMENTS,
   copyPayload,
-  DENSITIES,
   PANEL_LABELS,
-  PANELS,
   PRECISION_FALLBACK,
   PRESET_LABELS,
-  PRESETS,
   samePayload,
   SPLIT_PANELS,
-  THEMES,
   type PanelId,
   type StockPayload,
 } from "./presets.ts";
@@ -219,6 +214,13 @@ const VIEW_PANELS: Record<"graph" | "activity", readonly PanelId[]> = {
   activity: ["current-work", "planes", "history"],
 };
 
+/** The same grouping, named for the Layout menu's panel choices. */
+const PANEL_GROUPS: readonly PanelGroup[] = (["graph", "activity"] as const).map((name) => ({
+  id: name,
+  label: VIEW_LABELS[name],
+  panels: VIEW_PANELS[name],
+}));
+
 /** The view that holds a focus destination (a panel, Reports, Control or Overview). */
 function viewOf(destination: string): RunView {
   if ((VIEW_PANELS.graph as readonly string[]).includes(destination)) return "graph";
@@ -268,20 +270,15 @@ const freshMonitor = (): Monitor => ({ since: Date.now(), errors: 0, halted: nul
 interface Intent {
   ref: Ref | null;
   sent: StockPayload;
+  /**
+   * The page's own choice and layout objects at that moment. Each later choice
+   * or edit replaces them, even one that returns to the same layout or values.
+   */
+  active: Presentation["active"];
+  working: StockPayload;
 }
 
 // ---- presentation state ------------------------------------------------------
-
-interface Presentation {
-  snapshot: Snapshot | null;
-  /** Why the saved store is not in use (read failure or unreadable file). */
-  problem: string | null;
-  active: { ref: Ref | null; name: string };
-  saved: StockPayload;
-  working: StockPayload;
-  message: { tone: "info" | "warn" | "error"; text: string } | null;
-  busy: boolean;
-}
 
 const INITIAL_PRESENTATION: Presentation = {
   snapshot: null,
@@ -403,6 +400,18 @@ export function App() {
   // unreachable context is never treated as ordinary.
   const contextObserved = demo?.kind === "ordinary" || demo?.kind === "demo";
   const writable = trust.state === "ready" && contextObserved;
+  /** The unmet write precondition, said beside the Layout menu's save actions; its code is in the page notice. */
+  const layoutBlock = writable
+    ? null
+    : trust.state === "pending"
+      ? "browser trust is not established yet"
+      : trust.state === "expired"
+        ? "the browser session has ended"
+        : trust.state === "refused"
+          ? "browser trust was refused"
+          : demo?.kind === "unknown"
+            ? "the service context could not be observed"
+            : "the service context has not been observed yet";
   // Async completions check this before committing, so a late reply for an
   // earlier target can never be shown under the current one.
   const targetKey = targetHref(target);
@@ -534,7 +543,7 @@ export function App() {
       setPresentation((current) => ({
         ...current,
         snapshot: null,
-        problem: `saved presentations unavailable (${observed.code})`,
+        problem: `saved layouts unavailable (${observed.code})`,
         message,
       }));
       return null;
@@ -545,7 +554,7 @@ export function App() {
       return snapshot;
     } catch (error) {
       const code = error instanceof PreferenceError ? error.code : "invalid_response";
-      setPresentation((current) => ({ ...current, snapshot: null, problem: `saved presentations unreadable (${code})`, message }));
+      setPresentation((current) => ({ ...current, snapshot: null, problem: `saved layouts unreadable (${code})`, message }));
       return null;
     }
   }, []);
@@ -1042,19 +1051,25 @@ export function App() {
 
   type Adopt = (snapshot: Snapshot, before: Snapshot, intent: Intent) => void;
 
-  const commit = async (make: (snapshot: Snapshot) => WriteBody, done: string, adopt?: Adopt) => {
+  const commit = async (make: (snapshot: Snapshot) => WriteBody, done: string, adopt?: Adopt, refused = "Not saved") => {
     const before = presentation.snapshot;
-    if (before === null || !writable) return;
+    // One saved-layout request at a time: a pending write or reload settles first.
+    if (before === null || !writable || presentation.busy) return;
     // The exact choice and layout this write was issued for. Its reply updates
     // only what was sent: edits made while it is pending stay unsaved, and a
     // different choice made meanwhile is never replaced.
-    const intent: Intent = { ref: presentation.active.ref, sent: copyPayload(presentation.working) };
+    const intent: Intent = {
+      ref: presentation.active.ref,
+      sent: copyPayload(presentation.working),
+      active: presentation.active,
+      working: presentation.working,
+    };
     let body: WriteBody;
     try {
       body = make(before);
     } catch (error) {
       const code = error instanceof PreferenceError ? error.message : "invalid_request";
-      setPresentation((current) => ({ ...current, message: { tone: "error", text: `Not saved: ${code}.` } }));
+      setPresentation((current) => ({ ...current, message: { tone: "error", text: `${refused}: ${code}.` } }));
       return;
     }
     setPresentation((current) => ({ ...current, busy: true, message: null }));
@@ -1076,7 +1091,8 @@ export function App() {
         busy: false,
         message: {
           tone: "warn",
-          text: "Not saved: saved presentations changed in another client. Reload them to review; your unsaved layout is kept.",
+          text: `${refused}: saved layouts changed in another client. Nothing in this page was changed. Reload saved layouts to continue; that shows the default layout and discards unsaved changes.`,
+          reload: true,
         },
       }));
       return;
@@ -1092,7 +1108,7 @@ export function App() {
         busy: false,
         message: visible
           ? { tone: "info", text: `${done} (confirmed by re-reading after an uncertain response).` }
-          : { tone: "warn", text: `Save outcome unknown (${observed.code}); the re-read does not show it. Reload to review.` },
+          : { tone: "warn", text: `Outcome unknown (${observed.code}); the re-read does not show it. Reload saved layouts to review.`, reload: true },
       }));
       if (visible && snapshot !== null) adopt?.(snapshot, before, intent);
       return;
@@ -1100,7 +1116,7 @@ export function App() {
     setPresentation((current) => ({
       ...current,
       busy: false,
-      message: { tone: "error", text: `Not saved: ${observed.code}.` },
+      message: { tone: "error", text: `${refused}: ${observed.code}.` },
     }));
   };
 
@@ -1117,7 +1133,7 @@ export function App() {
         message: null,
       }));
     } catch {
-      setPresentation((current) => ({ ...current, message: { tone: "error", text: "That saved presentation no longer exists." } }));
+      setPresentation((current) => ({ ...current, message: { tone: "error", text: "That saved layout no longer exists." } }));
     }
   };
 
@@ -1125,16 +1141,33 @@ export function App() {
   const whileCurrent = (intent: Intent, change: (current: Presentation) => Presentation) =>
     setPresentation((current) => (sameRef(current.active.ref, intent.ref) ? change(current) : current));
 
-  const adoptCreated: Adopt = (snapshot, before, intent) => {
+  /**
+   * Switch to the record a write created. Save-as sent the page's own settings,
+   * which stay as they are. A duplicate or import stored other settings: it is
+   * adopted only if no layout was chosen since, and its settings are shown only
+   * if the page was not edited since. Both are judged by the exact objects the
+   * write was issued from, so choosing the same layout again, or editing back
+   * to the same values, still counts as later.
+   */
+  const adoptCreated = (show: boolean): Adopt => (snapshot, before, intent) => {
     const known = new Set(before.stock?.configs.map((config) => config.id) ?? []);
     const created = snapshot.stock?.configs.find((config) => !known.has(config.id));
-    if (created !== undefined) {
-      whileCurrent(intent, (current) => ({
-        ...current,
-        active: { ref: { kind: "user", id: created.id }, name: created.name },
-        saved: copyPayload(created.payload),
-      }));
+    if (created === undefined) return;
+    const adopted: Presentation["active"] = { ref: { kind: "user", id: created.id }, name: created.name };
+    if (!show) {
+      whileCurrent(intent, (current) => ({ ...current, active: adopted, saved: copyPayload(created.payload) }));
+      return;
     }
+    setPresentation((current) =>
+      current.active !== intent.active
+        ? current
+        : {
+            ...current,
+            active: adopted,
+            saved: copyPayload(created.payload),
+            working: current.working === intent.working ? copyPayload(created.payload) : current.working,
+          },
+    );
   };
 
   /** The server's stored payload for one saved record, if the reply has it. */
@@ -1143,7 +1176,7 @@ export function App() {
 
   const actions = {
     saveAs: (name: string) =>
-      void commit((snapshot) => createConfig(snapshot, name, payload), `Saved “${name}”.`, adoptCreated),
+      void commit((snapshot) => createConfig(snapshot, name, payload), `Saved “${name}”.`, adoptCreated(false)),
     save: () => {
       const ref = presentation.active.ref;
       if (ref?.kind !== "user") return;
@@ -1158,11 +1191,12 @@ export function App() {
       if (ref?.kind !== "user") return;
       void commit((snapshot) => renameConfig(snapshot, ref.id, name), `Renamed to “${name}”.`, (_, __, intent) =>
         whileCurrent(intent, (current) => ({ ...current, active: { ...current.active, name } })),
+        "Not renamed",
       );
     },
     duplicate: (name: string) => {
       const ref: Ref = presentation.active.ref ?? { kind: "bundled", id: payload.preset };
-      void commit((snapshot) => duplicateConfig(snapshot, ref, name), `Duplicated as “${name}”.`, adoptCreated);
+      void commit((snapshot) => duplicateConfig(snapshot, ref, name), `Duplicated as “${name}”.`, adoptCreated(true), "Not duplicated");
     },
     remove: () => {
       const ref = presentation.active.ref;
@@ -1176,11 +1210,11 @@ export function App() {
           active: { ref: { kind: "bundled", id: preset }, name: base?.name ?? PRESET_LABELS[preset] },
           saved: base === undefined ? current.saved : copyPayload(base.payload),
         }));
-      });
+      }, "Not deleted");
     },
     makeDefault: () => {
       const ref: Ref = presentation.active.ref ?? { kind: "bundled", id: payload.preset };
-      void commit((snapshot) => setDefaultConfig(snapshot, ref), `“${presentation.active.name}” is the default for the next page load.`);
+      void commit((snapshot) => setDefaultConfig(snapshot, ref), `“${presentation.active.name}” is the default for the next page load.`, undefined, "Default not changed");
     },
     reset: () => {
       const ref = presentation.active.ref;
@@ -1194,7 +1228,7 @@ export function App() {
           saved: copyPayload(stored),
           working: samePayload(current.working, intent.sent) ? copyPayload(stored) : current.working,
         }));
-      });
+      }, "Not reset");
     },
     exportActive: () => {
       const snapshot = presentation.snapshot;
@@ -1214,12 +1248,28 @@ export function App() {
         setPresentation((current) => ({ ...current, message: { tone: "error", text: "Not imported: the file exceeds 1 MiB." } }));
         return;
       }
-      const source = await file.text();
-      void commit((snapshot) => importConfig(snapshot, source), `Imported “${file.name}” as a new saved presentation.`, adoptCreated);
+      // Busy from here, before the file is read: no other saved-layout write or
+      // reload can start between this read and its write. The same invocation's
+      // commit then sends this page's observed version and intent.
+      if (presentation.snapshot === null || !writable || presentation.busy) return;
+      setPresentation((current) => ({ ...current, busy: true, message: null }));
+      try {
+        let source: string;
+        try {
+          source = await file.text();
+        } catch {
+          setPresentation((current) => ({ ...current, message: { tone: "error", text: "Not imported: the file could not be read." } }));
+          return;
+        }
+        await commit((snapshot) => importConfig(snapshot, source), `Imported “${file.name}” as a new saved layout.`, adoptCreated(true), "Not imported");
+      } finally {
+        // Every exit releases the claim, including a refused or invalid import.
+        setPresentation((current) => ({ ...current, busy: false }));
+      }
     },
     replace: async () => {
       const snapshot = presentation.snapshot;
-      if (snapshot === null || !writable) return;
+      if (snapshot === null || !writable || presentation.busy) return;
       setPresentation((current) => ({ ...current, busy: true, message: null }));
       const observed = await putPresentation(replaceUnreadable(snapshot));
       await loadPresentation(
@@ -1229,7 +1279,35 @@ export function App() {
       );
       setPresentation((current) => ({ ...current, busy: false }));
     },
-    reload: () => void loadPresentation({ tone: "info", text: "Reloaded saved presentations." }),
+    reload: async () => {
+      // Busy until the read settles: no saved-layout write or second reload can
+      // overlap it, so the default it adopts is never older than a later write.
+      // Until the first read settles (a snapshot or a recorded problem) there is
+      // nothing to read again, and a second read could outlive a later write.
+      if (presentation.busy || (presentation.snapshot === null && presentation.problem === null)) return;
+      setPresentation((current) => ({ ...current, busy: true, message: null }));
+      // Only a completed, usable read says so; anything else names what happened.
+      const snapshot = await loadPresentation();
+      setPresentation((current) => ({
+        ...current,
+        busy: false,
+        message:
+          snapshot === null
+            ? {
+                tone: "error",
+                text: `Not reloaded: ${current.problem ?? "saved layouts could not be read"}. This page keeps its current settings; reload saved layouts again to retry.`,
+                reload: true,
+              }
+            : snapshot.status === "invalid" || snapshot.status === "incompatible"
+              ? {
+                  tone: "warn",
+                  text: `Read again, but the saved-layout file is unreadable (${snapshot.status}) and is kept unchanged. Precision is shown in this page; replacing the file is a separate step under Manage layouts.`,
+                }
+              : current.problem !== null
+                ? { tone: "warn", text: "Reloaded saved layouts. Their default layout was not found, so Precision is shown in this page." }
+                : { tone: "info", text: "Reloaded saved layouts." },
+      }));
+    },
     revert: () => setPresentation((current) => ({ ...current, working: copyPayload(current.saved), message: null })),
     adopt: adoptRef,
     change: (next: StockPayload) => setPresentation((current) => ({ ...current, working: next })),
@@ -1274,7 +1352,7 @@ export function App() {
             </>
           ) : null}
         </nav>
-        <PresentationMenu presentation={presentation} writable={writable} actions={actions} />
+        <PresentationMenu presentation={presentation} blocked={layoutBlock} panelGroups={PANEL_GROUPS} actions={actions} />
       </header>
       <main className="app__main">
         <div className={`page-heading${screen === "run" ? " page-heading--run" : ""}`}>
@@ -1515,14 +1593,14 @@ function Notices({
   if (demo?.kind === "pending" || demo?.kind === "unknown") {
     items.push({
       tone: "warn",
-      content: `Service context is ${demo.kind === "pending" ? "pending" : `unknown (${demo.code})`}; saving presentations and every control stay disabled until it is observed.`,
+      content: `Service context is ${demo.kind === "pending" ? "pending" : `unknown (${demo.code})`}; saving layouts and workflow controls stay disabled until it is observed.`,
     });
   }
   if (demo?.kind === "demo") {
     items.push({ tone: "info", content: "This is an owned demo service; its coordinator owns the run lifecycle." });
   }
   if (presentation.problem !== null) {
-    items.push({ tone: "warn", content: `Using Precision in memory: ${presentation.problem}. Nothing is written automatically.` });
+    items.push({ tone: "warn", content: `Using ${presentation.active.name} in memory: ${presentation.problem}. Nothing is written automatically.` });
   }
   if (items.length === 0) return null;
   return (
@@ -1886,215 +1964,3 @@ function GraphRegion(props: RunScreenProps) {
     </section>
   );
 }
-
-// ---- presentation menu ------------------------------------------------------------
-
-type Actions = {
-  saveAs: (name: string) => void;
-  save: () => void;
-  rename: (name: string) => void;
-  duplicate: (name: string) => void;
-  remove: () => void;
-  makeDefault: () => void;
-  reset: () => void;
-  exportActive: () => void;
-  importFile: (file: File) => Promise<void>;
-  replace: () => Promise<void>;
-  reload: () => void;
-  revert: () => void;
-  adopt: (ref: Ref) => void;
-  change: (next: StockPayload) => void;
-};
-
-function PresentationMenu({ presentation, writable, actions }: { presentation: Presentation; writable: boolean; actions: Actions }) {
-  const [name, setName] = useState("");
-  const { snapshot, working, active, busy } = presentation;
-  const unsaved = !samePayload(working, presentation.saved);
-  const saved = snapshot?.stock?.configs ?? [];
-  const isUser = active.ref?.kind === "user";
-  const canWrite = writable && snapshot !== null && !busy && (snapshot.status === "ready" || snapshot.status === "absent");
-  const defaultRef: Ref = snapshot?.stock?.defaultRef ?? { kind: "bundled", id: "precision" };
-  const choice = active.ref === null ? "" : `${active.ref.kind}:${active.ref.id}`;
-  const bundled = snapshot?.bundled ?? [];
-  const named = (run: (value: string) => void) => () => {
-    run(name.trim());
-    setName("");
-  };
-  const set = <K extends keyof StockPayload>(key: K, value: StockPayload[K]) => actions.change({ ...working, [key]: value });
-  return (
-    <details className="layout-menu">
-      <summary aria-label={`Layout: ${active.name}${unsaved ? " (unsaved changes)" : ""}`}>
-        <span className="layout-summary-wide">Layout: {active.name}{unsaved ? " (unsaved changes)" : ""}</span>
-        <span className="layout-summary-narrow" aria-hidden="true">Layout</span>
-      </summary>
-      <div className="layout-menu__body">
-        <p className="layout-current">{active.name}{unsaved ? " · unsaved changes" : ""}</p>
-        <label>
-          Presentation{" "}
-          <select
-            value={choice}
-            onChange={(event) => {
-              const [kind, id] = event.target.value.split(":");
-              if (kind === "bundled" || kind === "user") actions.adopt({ kind, id } as Ref);
-            }}
-          >
-            {choice === "" ? <option value="">Precision (built-in)</option> : null}
-            <optgroup label="Presets">
-              {(bundled.length > 0 ? bundled.map((item) => item.id) : PRESETS).map((id) => (
-                <option key={id} value={`bundled:${id}`}>
-                  {PRESET_LABELS[id as keyof typeof PRESET_LABELS] ?? id}
-                  {defaultRef.kind === "bundled" && defaultRef.id === id ? " — default" : ""}
-                </option>
-              ))}
-            </optgroup>
-            {saved.length > 0 ? (
-              <optgroup label="Saved">
-                {saved.map((config) => (
-                  <option key={config.id} value={`user:${config.id}`}>
-                    {config.name}
-                    {defaultRef.kind === "user" && defaultRef.id === config.id ? " — default" : ""}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-          </select>
-        </label>
-        <fieldset>
-          <legend>Theme</legend>
-          {THEMES.map((theme) => (
-            <label key={theme}>
-              <input type="radio" name="theme" checked={working.theme === theme} onChange={() => set("theme", theme)} /><span>{theme}</span>
-            </label>
-          ))}
-        </fieldset>
-        <fieldset>
-          <legend>Density</legend>
-          {DENSITIES.map((density) => (
-            <label key={density}>
-              <input type="radio" name="density" checked={working.density === density} onChange={() => set("density", density)} />{" "}
-              {density}
-            </label>
-          ))}
-        </fieldset>
-        <label>
-          Arrangement{" "}
-          <select
-            value={working.arrangement}
-            onChange={(event) => set("arrangement", event.target.value as StockPayload["arrangement"])}
-          >
-            {ARRANGEMENTS.map((arrangement) => (
-              <option key={arrangement} value={arrangement}>
-                {ARRANGEMENT_LABELS[arrangement]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <fieldset>
-          <legend>Optional panels</legend>
-          {PANELS.map((panel) => (
-            <label key={panel}>
-              <input
-                type="checkbox"
-                checked={working.panels[panel]}
-                onChange={(event) => set("panels", { ...working.panels, [panel]: event.target.checked })}
-              />{" "}
-              {PANEL_LABELS[panel]}
-            </label>
-          ))}
-          <p className="muted">Overview, notices, Reports and Control are always available.</p>
-        </fieldset>
-        <div className="layout-menu__actions">
-          <button type="button" onClick={actions.revert} disabled={!unsaved}>
-            Revert unsaved changes
-          </button>
-          <button type="button" onClick={actions.save} disabled={!canWrite || !isUser || !unsaved}>
-            Save
-          </button>
-          <button type="button" onClick={actions.makeDefault} disabled={!canWrite}>
-            Make default
-          </button>
-          <button type="button" onClick={actions.reset} disabled={!canWrite || !isUser}>
-            Reset to preset
-          </button>
-          <button type="button" onClick={actions.remove} disabled={!canWrite || !isUser}>
-            Delete
-          </button>
-          <button type="button" onClick={actions.exportActive} disabled={snapshot === null}>
-            Export
-          </button>
-        </div>
-        <label>
-          Name{" "}
-          <input value={name} maxLength={256} onChange={(event) => setName(event.target.value)} />
-        </label>
-        <div className="layout-menu__actions">
-          <button type="button" onClick={named(actions.saveAs)} disabled={!canWrite || name.trim() === ""}>
-            Save as new
-          </button>
-          <button type="button" onClick={named(actions.duplicate)} disabled={!canWrite || name.trim() === ""}>
-            Duplicate as
-          </button>
-          <button type="button" onClick={named(actions.rename)} disabled={!canWrite || !isUser || name.trim() === ""}>
-            Rename to
-          </button>
-        </div>
-        <label>
-          Import a saved presentation{" "}
-          <input
-            type="file"
-            accept="application/json,.json"
-            disabled={!canWrite}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (file !== undefined) void actions.importFile(file);
-            }}
-          />
-        </label>
-        <div className="layout-menu__actions">
-          <button type="button" onClick={actions.reload} disabled={busy}>
-            Reload saved presentations
-          </button>
-          {snapshot !== null && (snapshot.status === "invalid" || snapshot.status === "incompatible") ? (
-            <ReplaceUnreadable snapshot={snapshot} disabled={!writable || busy} onReplace={actions.replace} />
-          ) : null}
-        </div>
-        <p className="muted" role="status">
-          {snapshot === null
-            ? "Saved presentations are not available; layout changes stay in this page."
-            : `Saved store: ${snapshot.status}${snapshot.version ? `, version ${snapshot.version}` : ""}.`}
-          {snapshot?.others.length ? ` ${snapshot.others.length} other frontend namespace(s) are kept unchanged.` : ""}
-        </p>
-        {presentation.message !== null ? (
-          <p className={`notice notice--${presentation.message.tone}`} role="status">
-            {presentation.message.text}
-          </p>
-        ) : null}
-      </div>
-    </details>
-  );
-}
-
-function ReplaceUnreadable({ snapshot, disabled, onReplace }: { snapshot: Snapshot; disabled: boolean; onReplace: () => Promise<void> }) {
-  const [confirming, setConfirming] = useState(false);
-  if (!confirming) {
-    return (
-      <button type="button" disabled={disabled} onClick={() => setConfirming(true)}>
-        Replace unreadable file…
-      </button>
-    );
-  }
-  return (
-    <span className="confirm">
-      Replace the {snapshot.status} file <code className="id">{snapshot.fileSha256}</code> with an empty store? Its bytes are
-      lost.{" "}
-      <button type="button" disabled={disabled} onClick={() => void onReplace().then(() => setConfirming(false))}>
-        Replace
-      </button>{" "}
-      <button type="button" onClick={() => setConfirming(false)}>
-        Cancel
-      </button>
-    </span>
-  );
-}
-

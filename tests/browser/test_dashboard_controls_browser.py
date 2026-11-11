@@ -269,11 +269,11 @@ def test_unknown_requests_survive_presets_navigation_back_and_reload(
         expect(entry).to_contain_text("No observation is available (HTTP 404)")
 
         # Presentation changes keep the request and send nothing.
-        page.locator("details.layout-menu summary").click()
-        page.get_by_role("combobox", name="Presentation").select_option(
+        page.locator("details.layout-menu > summary").click()
+        page.get_by_role("combobox", name="Layout", exact=True).select_option(
             "bundled:studio"
         )
-        page.locator("details.layout-menu summary").click()
+        page.locator("details.layout-menu > summary").click()
         expect(entry).to_contain_text(first["request_id"])
 
         # A second unresolved request on another screen, then Back and reload.
@@ -330,11 +330,11 @@ def test_reconcile_needs_attestation_and_redirect_reads_the_hidden_graph_once(
     instance, run = paused_run(service, review_gate)
     try:
         page.goto(service.url(target(instance), nonce=service.nonce()))
-        page.locator("details.layout-menu summary").click()
-        page.get_by_role("combobox", name="Presentation").select_option(
+        page.locator("details.layout-menu > summary").click()
+        page.get_by_role("combobox", name="Layout", exact=True).select_option(
             "bundled:command"
         )
-        page.locator("details.layout-menu summary").click()
+        page.locator("details.layout-menu > summary").click()
         page.get_by_role("link", name=run).click()
 
         def graph_reads():

@@ -45,6 +45,39 @@ def open_view(page, name):
     ).click()
 
 
+LAYOUT_SUMMARY = "details.layout-menu > summary"
+
+
+def choose_layout(page, value):
+    """Choose a built-in or saved layout in the open Layout menu."""
+    page.get_by_role("combobox", name="Layout", exact=True).select_option(value)
+
+
+def layout_section(page, name):
+    """Open one disclosure of the open Layout menu and return it."""
+    section = page.locator("details.layout-more").filter(
+        has=page.locator("summary", has_text=name)
+    )
+    if not section.evaluate("node => node.open"):
+        section.locator("summary").click()
+    return section
+
+
+def layout_button(page, name):
+    return page.locator("details.layout-menu").get_by_role(
+        "button", name=name, exact=True
+    )
+
+
+def save_as_new_layout(page, name):
+    """Name and save the page's current settings as a new saved layout."""
+    layout_button(page, "Save as new layout…").click()
+    field = page.get_by_label("Name for the new layout", exact=True)
+    expect(field).to_be_focused()
+    field.fill(name)
+    layout_button(page, "Save new layout").click()
+
+
 def no_page_overflow(page) -> bool:
     return page.evaluate(
         "document.documentElement.scrollWidth <= window.innerWidth + 1"
@@ -157,7 +190,7 @@ def test_nonce_journey_from_inventory_to_graph_inspector_and_history(
     observed_instance_reads = instance_reads()
     assert observed_instance_reads >= 1
     page.get_by_role("link", name=run).click()
-    layout_summary = page.locator(".layout-menu > summary")
+    layout_summary = page.locator(LAYOUT_SUMMARY)
     expect(layout_summary).to_have_accessible_name("Layout: Precision")
     expect(layout_summary.locator(".layout-summary-narrow")).to_have_text("Layout")
     expect(layout_summary.locator(".layout-summary-wide")).not_to_be_visible()
@@ -487,15 +520,104 @@ def test_presets_shared_preferences_restart_conflict_and_unreadable_fallback(
     page.goto(service.url(target, nonce=service.nonce()))
     expect(heading(page, "Run")).to_be_visible()
     menu = page.locator("details.layout-menu")
-    menu.locator("summary").click()
+    summary = page.locator(LAYOUT_SUMMARY)
+
+    # Keyboard: open, reach the first control, and Escape back to the trigger.
+    # Saved layouts are read: the (still closed) Layout choice is usable.
+    expect(page.locator("#layout-choice")).to_have_js_property("disabled", False)
+    summary.focus()
+    page.keyboard.press("Enter")
+    expect(menu).to_have_js_property("open", True)
+    page.keyboard.press("Tab")
+    expect(page.get_by_role("combobox", name="Layout", exact=True)).to_be_focused()
+    page.keyboard.press("Tab")
+    expect(page.get_by_label("System", exact=True)).to_be_focused()
+    page.keyboard.press("Escape")
+    expect(menu).to_have_js_property("open", False)
+    expect(summary).to_be_focused()
+    summary.click()
+
+    # The open menu holds the everyday controls and one truthful save state;
+    # panels and saved-layout management wait behind their disclosures.
+    expect(page.get_by_role("radiogroup", name="Theme")).to_be_visible()
+    expect(page.get_by_role("radiogroup", name="Density")).to_be_visible()
+    expect(menu.locator("#layout-state-text")).to_contain_text(
+        "Precision is a built-in layout."
+    )
+    expect(menu.locator("#layout-save-block")).to_have_count(0)
+    expect(layout_button(page, "Save as new layout…")).to_be_enabled()
+    for absent in (
+        "Save changes",
+        "Discard changes",
+        "Rename…",
+        "Duplicate…",
+        "Make default",
+        "Reset…",
+        "Delete…",
+        "Export file",
+        "Import file…",
+        "Reload saved layouts",
+    ):
+        expect(layout_button(page, absent)).to_have_count(0)
+    expect(page.get_by_role("checkbox", name="Inspector", exact=True)).to_have_count(0)
+    shot(page, evidence, "layout-menu-basic")
+
+    # Panels are grouped by the view that shows them; the split names its pair.
+    panels = layout_section(page, "Panels and split")
+    expect(panels.locator("summary")).to_contain_text("6 of 6 panels shown")
+    for view, names in (
+        ("Graph view", ("Graph", "Inspector", "Revisions")),
+        ("Activity view", ("Current work", "Planes", "History")),
+    ):
+        group = panels.get_by_role("group", name=view, exact=True)
+        for name in names:
+            expect(group.get_by_role("checkbox", name=name, exact=True)).to_be_checked()
+    split = panels.get_by_role("combobox", name="Side by side", exact=True)
+    expect(split).to_have_value("detail-split")
+    expect(split).to_contain_text("Status stack: Planes beside History")
+    expect(panels.locator("#layout-split-hint")).to_contain_text(
+        "When both are shown on a wide screen, Graph and Inspector share one "
+        "resizable row in the Graph view"
+    )
+    expect(panels.locator("#layout-split-hint")).to_contain_text("otherwise they stack")
+    expect(panels).not_to_contain_text("is not read")
+    expect(menu.locator("#layout-choice-hint")).to_have_count(0)
+    # A built-in layout offers only what applies to it, and says why.
+    manage = layout_section(page, "Manage layouts")
+    expect(manage.locator(".layout-state")).to_contain_text(
+        "Precision: a built-in layout, the default."
+    )
+    expect(manage.locator(".layout-state")).to_contain_text(
+        "Built-in layouts cannot be renamed, reset or removed"
+    )
+    # The default is said once, in that line: no action row repeats it.
+    expect(manage.get_by_text("Default layout", exact=True)).to_have_count(0)
+    for absent in ("Rename…", "Reset…", "Delete…", "Make default"):
+        expect(layout_button(page, absent)).to_have_count(0)
+    expect(layout_button(page, "Duplicate…")).to_be_enabled()
+    shot(page, evidence, "layout-menu-advanced")
+    # An edit is live in this page only and can be discarded without a write.
+    page.get_by_label("Compact", exact=True).check()
+    expect(page.locator("html")).to_have_attribute("data-density", "compact")
+    expect(summary).to_contain_text("(unsaved changes)")
+    expect(menu.locator("#layout-state-text")).to_contain_text(
+        "Precision is built in and cannot be overwritten."
+    )
+    expect(layout_button(page, "Save changes")).to_have_count(0)
+    expect(menu.locator("#layout-choice-hint")).to_have_text(
+        "Choosing another layout discards this page's unsaved changes."
+    )
+    layout_button(page, "Discard changes").click()
+    expect(page.locator("html")).to_have_attribute("data-density", "comfortable")
+    expect(summary).not_to_contain_text("(unsaved changes)")
+    expect(menu.locator(".layout-state").first).to_be_focused()
+    assert [item for item in fetches(page) if item["method"] == "PUT"] == []
 
     for preset, hidden, view in (
         ("command", "Show Graph", "Graph"),
         ("studio", "Show Planes", "Activity"),
     ):
-        page.get_by_role("combobox", name="Presentation").select_option(
-            f"bundled:{preset}"
-        )
+        choose_layout(page, f"bundled:{preset}")
         open_view(page, view)
         expect(page.locator(".view:not([hidden]) .view-hidden")).to_contain_text(
             hidden
@@ -503,34 +625,119 @@ def test_presets_shared_preferences_restart_conflict_and_unreadable_fallback(
         open_view(page, "Overview")
         expect(page.get_by_role("region", name="Status")).to_contain_text(run)
         shot(page, evidence, f"preset-{preset}")
-    page.get_by_role("combobox", name="Presentation").select_option("bundled:command")
+    choose_layout(page, "bundled:command")
 
-    page.get_by_label("Name").fill("Night shift")
-    page.get_by_role("button", name="Save as new").click()
+    save_as_new_layout(page, "Night shift")
     expect(page.get_by_text("Saved “Night shift”.")).to_be_visible()
+    # The result is reported, and focused, beside the save actions.
+    expect(menu.locator(".layout-state").first).to_be_focused()
+    expect(menu.locator("#layout-state-text")).to_contain_text(
+        "“Night shift” is saved."
+    )
     store = _presentation(service)["store"]
     stock = next(item for item in store["namespaces"] if item["frontend_id"] == "stock")
     saved = next(item for item in stock["configs"] if item["name"] == "Night shift")
     assert saved["payload"]["preset"] == "command"
 
-    page.get_by_role("button", name="Make default").click()
+    # Management acts on the chosen saved layout, in its own section.
+    expect(manage.locator(".layout-state")).to_contain_text(
+        "Night shift: a saved layout."
+    )
+    layout_button(page, "Make default").click()
     expect(page.get_by_text("is the default for the next page load")).to_be_visible()
-    page.get_by_label("Name").fill("Night shift two")
-    page.get_by_role("button", name="Duplicate as").click()
+    expect(manage.locator(".layout-state")).to_be_focused()
+    expect(layout_button(page, "Make default")).to_have_count(0)
+    expect(manage.locator(".layout-state")).to_contain_text(
+        "Night shift: a saved layout, the default."
+    )
+    # Duplicate names its copy in its own step; Enter submits it. It copies the
+    # saved settings: the page then shows that copy, not its unsaved edit.
+    page.get_by_label("Comfortable", exact=True).check()
+    expect(page.locator("html")).to_have_attribute("data-density", "comfortable")
+    expect(summary).to_contain_text("(unsaved changes)")
+    layout_button(page, "Duplicate…").click()
+    copy_name = page.get_by_label("Name for the copy", exact=True)
+    expect(copy_name).to_be_focused()
+    expect(copy_name).to_have_value("Night shift copy")
+    expect(page.locator("#layout-name-duplicate-hint")).to_contain_text(
+        "Copies the saved settings and switches to the copy; this page's "
+        "unsaved changes are discarded."
+    )
+    copy_name.fill("Night shift two")
+    copy_name.press("Enter")
     expect(page.get_by_text("Duplicated as “Night shift two”.")).to_be_visible()
-    page.get_by_label("Name").fill("Night shift 2")
-    page.get_by_role("button", name="Rename to").click()
+    expect(summary).to_contain_text("Layout: Night shift two")
+    expect(summary).not_to_contain_text("(unsaved changes)")
+    expect(page.locator("html")).to_have_attribute("data-density", "compact")
+    stock = next(
+        item
+        for item in _presentation(service)["store"]["namespaces"]
+        if item["frontend_id"] == "stock"
+    )
+    copied = next(
+        item for item in stock["configs"] if item["name"] == "Night shift two"
+    )
+    assert copied["payload"] == saved["payload"]
+    # Rename starts from the current name; Escape cancels only that step.
+    rename = layout_button(page, "Rename…")
+    rename.click()
+    new_name = page.get_by_label("New name", exact=True)
+    expect(new_name).to_have_value("Night shift two")
+    new_name.press("Escape")
+    expect(new_name).to_have_count(0)
+    expect(rename).to_be_focused()
+    expect(menu).to_have_js_property("open", True)
+    rename.click()
+    page.get_by_label("New name", exact=True).fill("Night shift 2")
+    layout_button(page, "Rename layout").click()
     expect(page.get_by_text("Renamed to “Night shift 2”.")).to_be_visible()
     with page.expect_download() as exported:
-        page.get_by_role("button", name="Export").click()
+        layout_button(page, "Export file").click()
     document = json.loads(open(exported.value.path(), encoding="utf-8").read())
     assert document["format"] == "millrace-os-presentation-config/v2"
-    page.get_by_label("Import a saved presentation").set_input_files(
-        exported.value.path()
+    # Import opens the file chooser from an ordinary button, and the page
+    # shows the imported settings rather than an edit made before it.
+    page.get_by_label("Comfortable", exact=True).check()
+    expect(summary).to_contain_text("(unsaved changes)")
+    # While the chosen file is still being read, other saved-layout actions wait.
+    page.evaluate("""() => {
+      const text = File.prototype.text;
+      File.prototype.text = function () {
+        return new Promise((done) => {
+          window.__releaseImport = () => {
+            File.prototype.text = text;
+            done(text.call(this));
+          };
+        });
+      };
+    }""")
+    with page.expect_file_chooser() as chooser:
+        layout_button(page, "Import file…").click()
+    chooser.value.set_files(exported.value.path())
+    page.wait_for_function("typeof window.__releaseImport === 'function'")
+    for name in ("Reload saved layouts", "Save as new layout…", "Make default"):
+        expect(layout_button(page, name)).to_be_disabled()
+    page.evaluate("window.__releaseImport()")
+    expect(page.get_by_text("as a new saved layout")).to_be_visible()
+    expect(manage.locator(".layout-state")).to_be_focused()
+    expect(summary).not_to_contain_text("(unsaved changes)")
+    expect(page.locator("html")).to_have_attribute("data-density", "compact")
+    # Delete asks first, and cancelling it writes nothing.
+    writes = len([item for item in fetches(page) if item["method"] == "PUT"])
+    delete = layout_button(page, "Delete…")
+    delete.click()
+    confirm = manage.locator(".layout-step[role=group]")
+    expect(confirm).to_be_focused()
+    expect(confirm).to_contain_text("Delete “Night shift 2”?")
+    confirm.get_by_role("button", name="Cancel", exact=True).click()
+    expect(delete).to_be_focused()
+    assert len([item for item in fetches(page) if item["method"] == "PUT"]) == writes
+    delete.click()
+    layout_button(page, "Delete layout").click()
+    expect(page.get_by_text("Deleted “Night shift 2”.")).to_be_visible()
+    expect(manage.locator(".layout-state")).to_contain_text(
+        "Command: a built-in layout."
     )
-    expect(page.get_by_text("as a new saved presentation")).to_be_visible()
-    page.get_by_role("button", name="Delete").click()
-    expect(page.get_by_text("Deleted")).to_be_visible()
     names = sorted(
         config["name"]
         for config in next(
@@ -541,10 +748,36 @@ def test_presets_shared_preferences_restart_conflict_and_unreadable_fallback(
     )
     assert names == ["Night shift", "Night shift 2"]
 
+    # A reload holds every saved-layout write, and a second reload, until its
+    # read settles; a page-only edit stays available and is then discarded.
+    writes = len([item for item in fetches(page) if item["method"] == "PUT"])
+    with hold(page, "**/api/v1/client/presentation") as held:
+        reload = layout_button(page, "Reload saved layouts")
+        reload.click()
+        wait_held(page, held, 1)
+        expect(reload).to_be_disabled()
+        for name in (
+            "Save as new layout…",
+            "Duplicate…",
+            "Make default",
+            "Import file…",
+        ):
+            expect(layout_button(page, name)).to_be_disabled()
+        page.get_by_label("Comfortable", exact=True).check()
+        expect(page.locator("html")).to_have_attribute("data-density", "comfortable")
+        held.release(0)
+    expect(page.get_by_text("Reloaded saved layouts.")).to_be_visible()
+    expect(reload).to_be_enabled()
+    expect(layout_button(page, "Save as new layout…")).to_be_enabled()
+    expect(summary).to_contain_text("Layout: Night shift")
+    expect(summary).not_to_contain_text("(unsaved changes)")
+    expect(page.locator("html")).to_have_attribute("data-density", "compact")
+    assert len([item for item in fetches(page) if item["method"] == "PUT"]) == writes
+
     # A new origin on the same config root reads the same saved default.
     service.restart()
     page.goto(service.url(target, nonce=service.nonce()))
-    expect(page.locator("details.layout-menu summary")).to_contain_text("Night shift")
+    expect(summary).to_contain_text("Night shift")
     requests = [item["url"] for item in fetches(page)]
     assert not any("/revisions/" in url for url in requests)  # Graph is hidden
     open_view(page, "Graph")
@@ -573,8 +806,13 @@ def test_presets_shared_preferences_restart_conflict_and_unreadable_fallback(
     other = helpers.create(state, namespace, "From the CLI", payload)
     written = service.http.put("/api/v1/client/presentation", json=other)
     assert written.status_code == 200, written.text
-    page.locator("details.layout-menu summary").click()
-    page.get_by_role("button", name="Make default").click()
+    # The panels shown above in memory are this page's unsaved changes.
+    summary.click()
+    expect(summary).to_contain_text("(unsaved changes)")
+    expect(menu.locator("#layout-state-text")).to_contain_text(
+        "“Night shift” has unsaved changes."
+    )
+    layout_button(page, "Save changes").click()
     expect(page.get_by_text("changed in another client")).to_be_visible()
     stock = next(
         item
@@ -582,6 +820,40 @@ def test_presets_shared_preferences_restart_conflict_and_unreadable_fallback(
         if item["frontend_id"] == "stock"
     )
     assert any(config["name"] == "From the CLI" for config in stock["configs"])
+    night = next(item for item in stock["configs"] if item["name"] == "Night shift")
+    # The refused save wrote nothing.
+    assert night["payload"]["panels"]["graph"] is False
+    # The refusal keeps the edits and offers the recovery where it is reported.
+    expect(summary).to_contain_text("(unsaved changes)")
+    # A reload whose read fails says so, keeps this page and never reports
+    # success; the layout choice explains why it is unavailable meanwhile.
+    state_url = "**/api/v1/client/presentation"
+    page.route(state_url, lambda route: route.abort())
+    layout_button(page, "Reload saved layouts").click()
+    expect(menu.locator(".layout-state").first).to_contain_text(
+        "Not reloaded: saved layouts unavailable"
+    )
+    expect(page.get_by_text("Reloaded saved layouts.")).to_have_count(0)
+    expect(summary).to_contain_text("(unsaved changes)")
+    expect(page.locator("#layout-choice")).to_be_disabled()
+    expect(menu.locator("#layout-choice-hint")).to_contain_text(
+        "Layouts cannot be switched: saved layouts could not be read."
+    )
+    expect(menu.locator("#layout-state-text")).to_have_text(
+        "Night shift is shown in this page, with changes made here."
+    )
+    expect(page.get_by_label("Dark", exact=True)).to_be_enabled()
+    expect(layout_button(page, "Save changes")).to_be_disabled()
+    page.unroute(state_url)
+    layout_button(page, "Reload saved layouts").click()
+    expect(page.get_by_text("Reloaded saved layouts.")).to_be_visible()
+    expect(page.locator("#layout-choice")).to_be_enabled()
+    expect(menu.locator(".layout-state").first).to_be_focused()
+    expect(
+        page.get_by_role("combobox", name="Layout", exact=True)
+    ).to_contain_text("From the CLI")
+    expect(summary).not_to_contain_text("(unsaved changes)")
+    expect(layout_button(page, "Reload saved layouts")).to_have_count(0)
 
     # Newer or malformed saved data is preserved and never rewritten on mount.
     path = service.config.config_dir / "presentation.json"
@@ -591,6 +863,34 @@ def test_presets_shared_preferences_restart_conflict_and_unreadable_fallback(
     page.reload()
     expect(page.get_by_text("presentation_incompatible")).to_be_visible()
     expect(page.get_by_role("region", name="Status")).to_contain_text(run)
+    assert path.read_bytes() == newer
+    # The menu says why nothing can be saved, and replacing the file is a
+    # separate confirmed step that cancelling leaves untouched.
+    summary.click()
+    expect(menu.locator("#layout-save-block")).to_contain_text(
+        "the saved-layout file is unreadable (incompatible)"
+    )
+    expect(layout_button(page, "Save as new layout…")).to_be_disabled()
+    manage = layout_section(page, "Manage layouts")
+    expect(layout_button(page, "Import file…")).to_be_disabled()
+    expect(layout_button(page, "Export file")).to_be_disabled()
+    expect(manage).to_contain_text(
+        "Unavailable while the saved-layout file is unreadable."
+    )
+    # Replacing asks first, naming the exact file; Escape cancels only that
+    # step and returns focus to the button that opened it.
+    replace = layout_button(page, "Replace unreadable file…")
+    replace.click()
+    confirm = manage.locator(".layout-step[role=group]")
+    expect(confirm).to_be_focused()
+    expect(confirm).to_contain_text("with an empty store?")
+    expect(confirm).to_contain_text(_presentation(service)["file_sha256"])
+    page.keyboard.press("Escape")
+    expect(confirm).to_have_count(0)
+    expect(replace).to_be_focused()
+    expect(menu).to_have_js_property("open", True)
+    expect(replace).to_be_enabled()
+    assert [item for item in fetches(page) if item["method"] == "PUT"] == []
     assert path.read_bytes() == newer
     assert csp_violations(page) == []
 
@@ -779,8 +1079,8 @@ def test_crowded_uncertain_and_stale_states_stay_truthful(
     # Status keeps each plane's blocker code and targets when Studio hides
     # Planes and Current work.
     page.set_viewport_size({"width": 1440, "height": 900})
-    page.locator("details.layout-menu summary").click()
-    page.get_by_role("combobox", name="Presentation").select_option("bundled:studio")
+    page.locator(LAYOUT_SUMMARY).click()
+    choose_layout(page, "bundled:studio")
     open_view(page, "Activity")
     expect(page.get_by_role("heading", name="Planes")).to_have_count(0)
     expect(page.locator(".view:not([hidden]) .view-hidden")).to_contain_text(
@@ -815,7 +1115,7 @@ def test_crowded_uncertain_and_stale_states_stay_truthful(
     expect(status).to_contain_text("resume node_1")
     expect(status).to_contain_text("Inspection target: node_" + "y" * 50 + "_1")
     expect(status).to_contain_text("requires terminal other succeeded")
-    page.locator("details.layout-menu summary").click()
+    page.locator(LAYOUT_SUMMARY).click()
 
     # Reconciled: recorded may_live stays visible beside effective quiescence.
     fake.reconciled = True
@@ -1191,9 +1491,12 @@ def test_an_ordinary_service_is_established_only_by_its_typed_404(live, page):
     page.goto(ordinary.url(nonce=ordinary.nonce()))
     expect(heading(page, "State homes")).to_be_visible()
     expect(page.get_by_text("Service context is")).to_have_count(0)
-    page.locator("details.layout-menu summary").click()
-    page.get_by_label("Name").fill("Mine")
-    expect(page.get_by_role("button", name="Save as new")).to_be_enabled()
+    page.locator(LAYOUT_SUMMARY).click()
+    expect(layout_button(page, "Save as new layout…")).to_be_enabled()
+    expect(page.locator("#layout-save-block")).to_have_count(0)
+    layout_section(page, "Manage layouts")
+    expect(page.locator("#layout-manage-block")).to_have_count(0)
+    expect(layout_button(page, "Import file…")).to_be_enabled()
 
 
 @pytest.mark.parametrize("mode", ["pending", "failed", "unreachable"])
@@ -1213,15 +1516,35 @@ def test_unresolved_context_never_enables_preference_writes(live, page, mode):
         page.route("**/api/v1/demo/context", lambda handle: handle.abort())
     page.goto(service.url(nonce=service.nonce()))
     expect(page.get_by_text("Service context is")).to_be_visible()
-    notice = "saving presentations and every control stay disabled"
+    notice = "saving layouts and workflow controls stay disabled"
     expect(page.get_by_text(notice)).to_be_visible()
-    page.locator("details.layout-menu summary").click()
-    page.get_by_label("Name").fill("Mine")
-    for name in ("Save as new", "Duplicate as", "Make default"):
-        expect(page.get_by_role("button", name=name)).to_be_disabled()
-    expect(page.get_by_label("Import a saved presentation")).to_be_disabled()
+    page.locator(LAYOUT_SUMMARY).click()
+    # Each disabled write names the unmet precondition beside it.
+    reason = (
+        "the service context has not been observed yet"
+        if mode == "pending"
+        else "the service context could not be observed"
+    )
+    expect(page.locator("#layout-save-block")).to_have_text(
+        f"Saving is unavailable: {reason}. Changes still apply to this page."
+    )
+    save_as = layout_button(page, "Save as new layout…")
+    expect(save_as).to_be_disabled()
+    expect(save_as).to_have_attribute("aria-describedby", "layout-save-block")
+    layout_section(page, "Manage layouts")
+    expect(page.locator("#layout-manage-block")).to_contain_text(reason)
+    for name in ("Duplicate…", "Import file…"):
+        expect(layout_button(page, name)).to_be_disabled()
+        expect(layout_button(page, name)).to_have_attribute(
+            "aria-describedby", "layout-manage-block"
+        )
     # In-memory presentation still changes; nothing is written.
-    page.get_by_label("dark", exact=True).check()
+    page.get_by_label("Dark", exact=True).check()
+    expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+    expect(layout_button(page, "Save as new layout…")).to_be_disabled()
+    layout_button(page, "Discard changes").click()
+    expect(page.locator("html")).to_have_attribute("data-theme", "system")
+    page.get_by_label("Dark", exact=True).check()
     expect(page.locator("html")).to_have_attribute("data-theme", "dark")
     assert [item for item in fetches(page) if item["method"] == "PUT"] == []
     assert "PRIVATE" not in page.content()
@@ -1311,20 +1634,36 @@ def test_a_pending_save_never_marks_later_edits_saved_or_adopts_a_new_choice(
     instance, run = crowded_ids
     service = live("save-race", router_client=fake_router, homes={"crowded": evidence})
     target = {"home": "crowded", "instance": instance, "run": run}
-    page.goto(service.url(target, nonce=service.nonce()))
-    summary = page.locator("details.layout-menu summary")
-    summary.click()
-    page.get_by_label("Name").fill("Base")
-    page.get_by_role("button", name="Save as new").click()
+    summary = page.locator(LAYOUT_SUMMARY)
+    # Until the first read of saved layouts settles, it cannot be read again;
+    # the page's own appearance still changes.
+    with hold(page, "**/api/v1/client/presentation") as held:
+        page.goto(service.url(target, nonce=service.nonce()))
+        wait_held(page, held, 1)
+        summary.click()
+        manage = layout_section(page, "Manage layouts")
+        reload = layout_button(page, "Reload saved layouts")
+        expect(reload).to_be_disabled()
+        expect(manage).to_contain_text(
+            "Unavailable until the first read of saved layouts finishes."
+        )
+        page.get_by_label("Dark", exact=True).check()
+        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+        assert len(held) == 1
+        held.release(0)
+    expect(reload).to_be_enabled()
+    save_as_new_layout(page, "Base")
     expect(page.get_by_text("Saved “Base”.")).to_be_visible()
+    save = layout_button(page, "Save changes")
+    expect(save).to_have_count(0)  # nothing to save until something changes
 
     with hold(page, "**/api/v1/client/presentation", method="PUT") as held:
-        page.get_by_label("light", exact=True).check()
-        page.get_by_role("button", name="Save", exact=True).click()
+        page.get_by_label("Light", exact=True).check()
+        save.click()
         wait_held(page, held, 1)
-        page.get_by_label("compact", exact=True).check()  # edited while pending
+        page.get_by_label("Compact", exact=True).check()  # edited while pending
         held.release(0)
-        settled = page.get_by_role("button", name="Make default")
+        settled = layout_button(page, "Make default")
         expect(settled).to_be_enabled()  # the write and its adoption have completed
         expect(page.get_by_text("Saved “Base”.")).to_be_visible()
         stock = next(
@@ -1336,14 +1675,14 @@ def test_a_pending_save_never_marks_later_edits_saved_or_adopts_a_new_choice(
         stored = base["payload"]
         assert (stored["theme"], stored["density"]) == ("light", "comfortable")
         expect(summary).to_contain_text("(unsaved changes)")
-        expect(page.get_by_role("button", name="Save", exact=True)).to_be_enabled()
+        expect(save).to_be_enabled()
 
         # A different presentation chosen while a rename is pending stays chosen.
-        page.get_by_label("Name").fill("Renamed base")
-        page.get_by_role("button", name="Rename to").click()
+        layout_button(page, "Rename…").click()
+        page.get_by_label("New name", exact=True).fill("Renamed base")
+        layout_button(page, "Rename layout").click()
         wait_held(page, held, 2)
-        chooser = page.get_by_role("combobox", name="Presentation")
-        chooser.select_option("bundled:studio")
+        choose_layout(page, "bundled:studio")
         held.release(1)
     expect(settled).to_be_enabled()
     expect(page.get_by_text("Renamed to “Renamed base”.")).to_be_visible()
@@ -1355,6 +1694,38 @@ def test_a_pending_save_never_marks_later_edits_saved_or_adopts_a_new_choice(
         for config in item["configs"]
     ]
     assert names == ["Renamed base"]
+
+    # A copy is never adopted over a later choice or edit, even one that
+    # returns to the same layout or the same values.
+    with hold(page, "**/api/v1/client/presentation", method="PUT") as held:
+        layout_button(page, "Duplicate…").click()
+        page.get_by_label("Name for the copy", exact=True).press("Enter")
+        wait_held(page, held, 1)
+        choose_layout(page, "bundled:command")
+        choose_layout(page, "bundled:studio")  # chosen again while pending
+        held.release(0)
+        expect(page.get_by_text("Duplicated as “Studio copy”.")).to_be_visible()
+        expect(summary).to_contain_text("Layout: Studio")
+        expect(summary).not_to_contain_text("Studio copy")
+
+        page.get_by_label("Dark", exact=True).check()
+        layout_button(page, "Duplicate…").click()
+        page.get_by_label("Name for the copy", exact=True).fill("Studio copy 2")
+        layout_button(page, "Duplicate layout").click()
+        wait_held(page, held, 2)
+        page.get_by_label("Light", exact=True).check()
+        page.get_by_label("Dark", exact=True).check()  # edited back while pending
+        held.release(1)
+        expect(page.get_by_text("Duplicated as “Studio copy 2”.")).to_be_visible()
+        expect(summary).to_contain_text("Layout: Studio copy 2 (unsaved changes)")
+        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+    names = sorted(
+        config["name"]
+        for item in _presentation(service)["store"]["namespaces"]
+        if item["frontend_id"] == "stock"
+        for config in item["configs"]
+    )
+    assert names == ["Renamed base", "Studio copy", "Studio copy 2"]
 
 
 def test_target_switches_never_show_the_previous_targets_rows(
@@ -1828,10 +2199,15 @@ def test_any_403_disables_writes_without_another_request(
     page.get_by_role("button", name="Refresh").click()
     expect(page.get_by_text("Browser trust refused")).to_be_visible()
     expect(page.get_by_text("example_forbidden").first).to_be_visible()
-    page.locator("details.layout-menu summary").click()
-    page.get_by_label("Name").fill("After refusal")
-    expect(page.get_by_role("button", name="Save as new")).to_be_disabled()
-    expect(page.get_by_role("button", name="Make default")).to_be_disabled()
+    page.locator(LAYOUT_SUMMARY).click()
+    expect(layout_button(page, "Save as new layout…")).to_be_disabled()
+    expect(page.locator("#layout-save-block")).to_have_text(
+        "Saving is unavailable: browser trust was refused. "
+        "Changes still apply to this page."
+    )
+    layout_section(page, "Manage layouts")
+    expect(layout_button(page, "Duplicate…")).to_be_disabled()
+    expect(layout_button(page, "Import file…")).to_be_disabled()
     writes = [item for item in fetches(page) if item["method"] == "PUT"]
     assert writes == []
 
@@ -1942,9 +2318,13 @@ def test_workbench_destinations_focus_after_reveal_and_lazy_report_load(
     adjacent_node.click()
     expect(adjacent_node).to_be_focused()  # visible adjacent split stays in place
     expect(page.locator("#destination-inspector")).not_to_be_focused()
-    page.locator("details.layout-menu summary").click()
-    page.get_by_role("checkbox", name="Inspector", exact=True).uncheck()
-    page.locator("details.layout-menu summary").click()
+    page.locator(LAYOUT_SUMMARY).click()
+    panels = layout_section(page, "Panels and split")
+    panels.get_by_role("group", name="Graph view", exact=True).get_by_role(
+        "checkbox", name="Inspector", exact=True
+    ).uncheck()
+    expect(panels.locator("summary")).to_contain_text("5 of 6 panels shown")
+    page.locator(LAYOUT_SUMMARY).click()
     expect(page.locator("#destination-inspector")).to_have_count(0)
     adjacent_node.click()
     expect(page.locator("#destination-inspector")).to_be_focused()
@@ -1972,9 +2352,9 @@ def test_workbench_destinations_focus_after_reveal_and_lazy_report_load(
     expect(page.locator("#destination-controls")).to_be_visible()
     open_view(page, "Graph")
 
-    page.locator("details.layout-menu summary").click()
-    page.get_by_role("combobox", name="Presentation").select_option("bundled:command")
-    page.locator("details.layout-menu summary").click()
+    page.locator(LAYOUT_SUMMARY).click()
+    choose_layout(page, "bundled:command")
+    page.locator(LAYOUT_SUMMARY).click()
     expect(page.locator("#destination-graph")).to_have_count(0)
     page.locator(".view:not([hidden]) .view-hidden").get_by_role(
         "button", name="Show Graph", exact=True

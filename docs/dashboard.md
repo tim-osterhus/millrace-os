@@ -82,7 +82,8 @@ After trust, the client reads `GET /api/v1/demo/context`. Only an authenticated
 404 `demo_context_unavailable` establishes an ordinary service. A pending,
 failed or unreadable context is shown, and no control may treat it as ordinary.
 Until an ordinary or a bound demo context is observed, presentation saves and
-every control stay disabled; a transport failure is not an ordinary service.
+workflow controls stay disabled; a transport failure is not an ordinary service.
+Theme, density and panel changes still apply to the page.
 
 ## Workbench layout
 
@@ -343,15 +344,57 @@ optional panel stays reachable from **Show** in its view. Selecting a node revea
 Inspector in memory. A presentation change never changes the target,
 selection, trust or any request.
 
+The header's **Layout** menu calls a presentation a *layout*. Opened, it shows
+three everyday rows (**Layout**, with built-in and saved layouts; **Theme**;
+**Density**) and one line that says whether the page's settings are saved.
+Edits apply to this page only until an explicit action writes them:
+
+- **Save changes** appears for a saved layout with unsaved changes.
+- **Save as new layout…** names and saves the page's current settings,
+  including unsaved changes. It is the only save for a built-in layout, which
+  cannot be overwritten.
+- **Discard changes** returns the page to the saved settings and writes nothing.
+
+When saving is unavailable, the same line names the unmet precondition: browser
+trust, the service context, saved layouts that could not be read, or an
+unreadable file. Two disclosures hold the rest:
+
+- **Panels and split** groups the optional panels by the view that shows them
+  (Graph view; Activity view). **Side by side** is the arrangement: it names
+  the pair that shares a resizable row when both are shown on a wide screen,
+  with its current division; otherwise the two stack.
+- **Manage layouts** acts on the chosen layout: **Rename…**, **Duplicate…**,
+  **Make default**, **Reset…**, **Delete…** and **Export file**; then
+  **Import file…** and **Reload saved layouts** for the store. Duplicate and
+  Export use the saved settings, without unsaved changes. After Duplicate or
+  Import the page shows the new layout as stored, discarding unsaved changes
+  unless the page was edited while the write was pending. Reset and Delete ask
+  for confirmation. Rename, Reset and Delete are not offered for a built-in
+  layout, and Make default is not offered for the default. Reload shows the
+  default layout again and discards unsaved changes; it reports success only
+  after a usable read, and otherwise says what failed. Saved-layout writes
+  and another reload wait until a pending write or reload settles.
+
+Choosing another layout also discards unsaved changes, and the menu says so
+while there are any. Until saved layouts are read, the Layout choice is
+disabled with the reason beside it; theme, density and panels still change the
+page.
+
+Each result is reported, and focused, in the section whose action produced it.
+Escape cancels an open naming or confirmation step, otherwise closes the menu
+and returns focus to its button.
+
 Saved presentations use the shared service store described in
 `presentation.md`. Changes are written only by an explicit action, and the
 service's expected-version check refuses a write if another client changed the
-store first. The page then offers a reload and keeps the unsaved layout. A
+store first. The page then offers **Reload saved layouts** beside the refusal
+and keeps the unsaved layout until that reload. A
 reply marks saved only the exact payload that was sent; edits made while it was
 pending stay unsaved, and a reply never changes a presentation chosen since.
 Nothing is retried automatically. If the store is unreadable or newer, the
-client keeps its bytes and shows Precision in memory with the reason; replacing
-it is a separate confirmed action.
+client keeps its bytes and shows Precision in memory with the reason; Export is
+unavailable, and replacing the file is a separate confirmed action under
+**Manage layouts**.
 
 The Run overview labels stale observations beside the recorded status. Plane
 activity lists recorded blockers and pending routing first, followed by the other
@@ -390,7 +433,7 @@ view switch recenters the graph. Switching views changes no saved presentation.
 At narrow widths, populated Inventory and Instance run tables scroll locally so
 all columns, links and exact-value disclosures stay available without widening
 the page. Refresh stays beside the Run title; target breadcrumbs wrap at segment
-boundaries and the view bar scrolls in one row; the compact Layout label retains the presentation name in its accessible name and menu. Fit all and Readable size stay together outside
+boundaries and the view bar scrolls in one row; the compact Layout label retains the layout name in its accessible name and menu. Fit all and Readable size stay together outside
 the drawing. Inspect selection appears when the Inspector is not adjacent.
 
 State chips share a common UI face, border and shape. Paused uses warning colors,
