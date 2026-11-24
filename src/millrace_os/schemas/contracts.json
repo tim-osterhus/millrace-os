@@ -3213,8 +3213,8 @@
             "type": "string"
           },
           "version": {
-            "const": "0.23.1",
-            "default": "0.23.1",
+            "const": "0.23.2",
+            "default": "0.23.2",
             "title": "Version",
             "type": "string"
           }
@@ -4884,8 +4884,8 @@
         "type": "string"
       },
       "version": {
-        "const": "0.23.1",
-        "default": "0.23.1",
+        "const": "0.23.2",
+        "default": "0.23.2",
         "title": "Version",
         "type": "string"
       }

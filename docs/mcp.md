@@ -8,7 +8,7 @@ cancelling its work.
 Install the explicit `mcp` extra with Python 3.12 or 3.13:
 
 ```bash
-python -m pip install 'millrace-os[mcp]==0.23.1'
+python -m pip install 'millrace-os[mcp]==0.23.2'
 millrace-os mcp serve --config /absolute/path/to/mcp.json
 ```
 

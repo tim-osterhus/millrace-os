@@ -1,16 +1,23 @@
 # Independent OS service foundation
 
 Python 3.12, FastAPI 0.116.1, Pydantic 2.11.9 and uvicorn 0.35.0 are the
-foundation stack for Millrace OS 0.23.1. The base service has no Core or Plus dependency. Install `millrace-os[router]==0.23.1` for the optional public controls.
+foundation stack for Millrace OS 0.23.2. The base service has no Core or Plus dependency. Install `millrace-os[router]==0.23.2` for the optional public controls.
 The wheel includes OS migration resources and needs no source checkout.
 
-Release publication requires `uv.lock` with public-registry dependencies and exact Core, Plus, and OS 0.23.1 selections. CI checks lock freshness with `uv lock --check --no-sources --python 3.12` and installs the frozen development and router environment. Tag publication requires a present, fresh lock. Dependency sources use public PyPI; the OS project itself is the local root.
+After the exact Core and Plus 0.23.2 wheels are available on PyPI, refresh
+`uv.lock` from public PyPI with both upstream versions fixed at 0.23.2. CI
+checks the lock with `uv lock --check --no-sources --python 3.12` and installs
+the frozen development and router environment. The OS project is the editable
+root in the lock. Before tagging, verify the upstream wheel hashes against the
+lock, rebuild the OS distributions from that source, and freeze the upstream
+wheel and OS artifact hashes in the publication workflow.
 
 Builds use the fixed `SOURCE_DATE_EPOCH=1580601600`, independent of publication-control pin commits. Build with `uv build --force-pep517`.
 
-`millrace-os serve` starts the foreground service on the configured explicit
-loopback host and nonzero port (default 127.0.0.1:8731). A collision is an error;
-the service never chooses another port. `health` returns minimal public liveness.
+`millrace-os serve` starts the foreground service on a configured loopback
+host and nonzero port (default 127.0.0.1:8731). If that port is in use, startup
+fails. On Linux, use `millrace-os serve --no-pid-file` and Ctrl+C in the
+serving terminal to start shutdown. `health` returns minimal public liveness.
 Authenticated state, recovery, schema, and router reads use the local trust boundary described in `api-foundations.md`.
 
 `stop` requires the owner-only JSON daemon identity record. On supported macOS,

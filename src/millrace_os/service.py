@@ -13,6 +13,7 @@ from typing import Protocol
 import uvicorn
 from fastapi import FastAPI
 
+from . import __version__
 from .config import ApplicationConfig, _endpoint_host
 from .credentials import CredentialStore
 from .recovery.runtime import RecoveryRuntime
@@ -76,7 +77,7 @@ def create_app(service: Service) -> FastAPI:
 
     app = FastAPI(
         title="Millrace OS",
-        version="0.23.1",
+        version=__version__,
         docs_url=None,
         redoc_url=None,
         openapi_url=None,

@@ -410,6 +410,15 @@ def bounded_stdio(profile=V1):
             sys.stdin, sys.stdout = stdin, stdout
 
 
+async def _close_http_resources(
+    backend: BackendClient, verifier: ResourceVerifier
+) -> None:
+    try:
+        await backend.close()
+    finally:
+        await verifier.close()
+
+
 async def _serve(config: MCPConfig, profile=V1) -> None:
     # The v1 profile constructs every class exactly as before.
     selected = {} if profile.tools == "v1" else {"profile": profile}
@@ -444,9 +453,16 @@ async def _serve(config: MCPConfig, profile=V1) -> None:
             )
             await server.serve()
     finally:
-        await backend.close()
-        if verifier:
-            await verifier.close()
+        if verifier is None:
+            await backend.close()
+        else:
+            # Uvicorn can replay SIGINT after ASGI shutdown and cancel this task.
+            closing = asyncio.create_task(_close_http_resources(backend, verifier))
+            try:
+                await asyncio.shield(closing)
+            except asyncio.CancelledError:
+                await closing
+                raise
 
 
 def serve(path: str, transport: str, tools: str = "v1") -> None:

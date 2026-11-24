@@ -7,19 +7,23 @@ upload, draft Apply or automatic acceptance/continuation tool. Keep the manual
 Apply journey below, then explicitly accept the pending revision and request
 continuation only when the resulting Core state requires it.
 
-Millrace OS 0.23.1 maps `/api/v1/router` to public Plus/Core controls. Core owns graph semantics, durable instances, runs, receipts, planes, seams, and effective writer facts. OS keeps no second run registry or scheduler.
+Millrace OS 0.23.2 maps `/api/v1/router` to public Plus and Core controls. Core owns graph semantics, durable instances, runs, receipts, planes, and effective writer facts. The [stock dashboard](dashboard.md) and headless client use the same authenticated API.
 
-Install `millrace-os[router]==0.23.1` in Python 3.12 or later. Its optional dependency range is `millrace-plus[router]>=0.23.1,<0.24.0`. The selected release uses matched Core, Plus, and OS 0.23.1 artifacts. The public execution contract must be `millrace-router-execution/v2`; version equality alone is insufficient. Base installation supports service health, trust, and recovery without Core or Plus. Router calls load optional components lazily and refuse unavailable or incompatible contracts.
+Install `millrace-os[router]==0.23.2` on Python 3.12 or newer. The extra selects `millrace-plus[router]>=0.23.2,<0.24.0` and installs Core transitively. The release pairs Core, Plus, and OS 0.23.2. Router operations require the `millrace-router-execution/v2` contract. The base package provides service health, trust, and recovery independently.
 
-Start the service with explicit named homes:
+On Linux, start the foreground service with an explicit Core state home:
+
+```bash
+millrace-os serve --no-pid-file --router-state-home main=/absolute/path/to/core-state
+```
+
+On macOS, start the service with native process identity for `millrace-os stop`:
 
 ```bash
 millrace-os serve --router-state-home main=/absolute/path/to/core-state
 ```
 
-Repeat `--router-state-home NAME=PATH` for additional homes. Names must be unique. Canonical path aliases are refused. `MILLRACE_OS_ROUTER_STATE_HOMES` accepts an equivalent JSON object mapping names to paths. HTTP clients select a configured name, never an arbitrary Core state root.
-
-The router extra requires Plus 0.23.1 for this release's bundled LAD workflow, subworkflow commands, Paperclip bridge, and OpenCode adapter.
+Repeat `--router-state-home NAME=PATH` for additional homes. Names must be unique. The service refuses canonical path aliases. `MILLRACE_OS_ROUTER_STATE_HOMES` accepts an equivalent JSON object mapping names to paths. HTTP clients select a configured name.
 
 ## Inspect and submit
 
@@ -101,4 +105,34 @@ A queued start can remain unresolved without a live holder, for example after a 
 
 A second deliberate signal requests Core cancellation. OS never directly kills native children. Forced process death leaves Core's normal uncertainty and holds visible. The retained OS SQLite foundation refuses crash WAL/SHM sidecars and exposes its recovery shell instead of normal router routes. It preserves those files. An operator can explicitly select a fresh owned OS state directory with the same configured Core home to inspect and recover Core state. This does not recover old OS drafts or sessions automatically. The shared Core-home publication marker still blocks incomplete publication across OS state directories. No worker is recreated from an OS observation.
 
-`millrace-os stop --timeout SECONDS` verifies the recorded daemon identity and observes exit. Its timeout can expire while draining continues. A timeout never prints `stopped` or authorizes escalation to a kill.
+On Linux, press Ctrl+C in the serving terminal to start drain. On macOS with a PID file, run `millrace-os stop --timeout SECONDS` to verify the recorded daemon identity and observe exit. If the observation times out, drain can still be running. The client reports a timeout and leaves the service to finish its drain.
+
+## Use the stock dashboard
+
+In 0.23.1, the browser pages covered trust setup and recovery. For that
+version's headless operations, see the
+[0.23.1 router guide](https://github.com/tim-osterhus/millrace-os/blob/v0.23.1/docs/router-operation.md).
+
+The optional stock dashboard lists configured homes and instances. Select a run
+to inspect its planes, captured read-only graph, reports, blockers, and active or
+pending revisions. The Graph view's Revisions panel shows validation diagnostics
+when available. See [bounded router views](router-views.md) for the read API.
+
+Review the exact request and target before sending a control. Core receipts
+list the request status (`queued`, `applied`, or `refused`). The dashboard
+uses call/v1 to show the receipt and OS call phase. A returned call records
+the worker's return. Use call/v2 to check whether the worker and receipt
+watcher both joined. See [router call observations](router-call-observations.md).
+
+To confirm writer closure, inspect fresh Core evidence of quiescence, stopped
+recorded and effective writers, and no in-flight work.
+
+For the [owned demo](demo.md), the same run view shows its report and offers
+**Finish** on the bound run. After selecting **Finish**, wait for the terminal
+to confirm export and shutdown.
+
+The OS packages include the prebuilt dashboard. Maintainers use Node to rebuild
+the frontend assets. Precision, Command, and Studio share the same controls and
+inspection views. The service shares saved theme, density, and panel preferences
+through `config_dir/presentation.json`. Unsaved layout stays in the browser.
+See [shared presentation preferences](presentation.md).

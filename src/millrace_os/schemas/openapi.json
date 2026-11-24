@@ -3942,8 +3942,8 @@
             "type": "string"
           },
           "version": {
-            "const": "0.23.1",
-            "default": "0.23.1",
+            "const": "0.23.2",
+            "default": "0.23.2",
             "title": "Version",
             "type": "string"
           }
@@ -4309,7 +4309,7 @@
   },
   "info": {
     "title": "Millrace OS",
-    "version": "0.23.1"
+    "version": "0.23.2"
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",

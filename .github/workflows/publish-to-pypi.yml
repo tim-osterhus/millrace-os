@@ -2,7 +2,7 @@ name: Publish to PyPI
 
 on:
   push:
-    tags: [v0.23.1]
+    tags: [v0.23.2]
 
 permissions:
   contents: read
@@ -11,11 +11,11 @@ env:
   # Independent of the commit containing only publication digest pins.
   SOURCE_DATE_EPOCH: '1580601600'
   PYTHONDONTWRITEBYTECODE: '1'
-  # R7 must freeze these exact reviewed artifact digests before the release tag.
-  EXPECTED_WHEEL_SHA256: "50d7fdbf1778348e81f2f0e0036f570035f45f3947c01ce607ac6b0c0d7198f2"
-  EXPECTED_SDIST_SHA256: "8a82f8f3f7c65eefb792b122e9668b3c8052816e80c50046421af195d378b1e1"
-  CORE_WHEEL_SHA256: "b5c2ac37259031136384e1d573dae8ea0e7597e5b1c792bd26ae42c019ab7778"
-  PLUS_WHEEL_SHA256: "6a6718ad1e733ac25113bd464d8f46737a89364050ceaa7b54c1b03967c1cb30"
+  # Fill these pins after the exact public dependencies and release artifacts are verified.
+  EXPECTED_WHEEL_SHA256: '643fed8b5cc0fea1d88db35a1e6c2a9f04bbba3eca758721e57fdec5fdceba52'
+  EXPECTED_SDIST_SHA256: '2f693143574d37150cee2af03b8ce7354a648b273288a613b2bf2cd7a0b703a2'
+  CORE_WHEEL_SHA256: 'bc6ccd5a3de66c32d4e9122fa467cae6f01f0fabbb541d8a83893ab40542b41a'
+  PLUS_WHEEL_SHA256: 'c203a46db469618688954d90594fbc5dd5ffba66fc3f2b170f8f1431025ff8bf'
 
 jobs:
   tests:
@@ -34,29 +34,42 @@ jobs:
       - name: Require final public registry lock and exact upstream artifacts
         run: |
           test -f uv.lock
-          uv lock --check --python 3.12
-          uv sync --frozen --no-editable --extra dev --extra router --python 3.12
-          .venv/bin/python - <<'PY'
+          uv lock --check --no-sources --python 3.12
+          uv run --no-project --python 3.12 python - <<'PY'
           import hashlib, json, os, re, tomllib, urllib.request
           from pathlib import Path
           for key in ['EXPECTED_WHEEL_SHA256', 'EXPECTED_SDIST_SHA256', 'CORE_WHEEL_SHA256', 'PLUS_WHEEL_SHA256']:
-              assert re.fullmatch('[0-9a-f]{64}', os.environ[key]), key + ' must be frozen in R7'
+              assert re.fullmatch('[0-9a-f]{64}', os.environ[key]), key + ' must be frozen before tagging'
+          project = tomllib.loads(Path('pyproject.toml').read_text())
+          assert project['project']['version'] == '0.23.2'
+          assert not project.get('tool', {}).get('uv', {}).get('sources')
           lock = tomllib.loads(Path('uv.lock').read_text())
+          selected = {}
           for package in lock['package']:
-              source = package['source']
-              if package['name'] == 'millrace-os':
+              name, source = package['name'], package['source']
+              if name == 'millrace-os':
                   assert source == {'editable': '.'}
               else:
                   assert source == {'registry': 'https://pypi.org/simple'}, source
+              if name in {'millrace-os', 'millrace-ai', 'millrace-plus'}:
+                  assert name not in selected, name
+                  assert package['version'] == '0.23.2', name
+                  selected[name] = package
+          assert set(selected) == {'millrace-os', 'millrace-ai', 'millrace-plus'}, selected.keys()
           for name, key in [('millrace-ai', 'CORE'), ('millrace-plus', 'PLUS')]:
-              with urllib.request.urlopen('https://pypi.org/pypi/' + name + '/0.23.1/json', timeout=60) as response:
+              expected = os.environ[key + '_WHEEL_SHA256']
+              with urllib.request.urlopen('https://pypi.org/pypi/' + name + '/0.23.2/json', timeout=60) as response:
                   release = json.load(response)
-              filename = name.replace('-', '_') + '-0.23.1-py3-none-any.whl'
+              filename = name.replace('-', '_') + '-0.23.2-py3-none-any.whl'
               wheel, = [item for item in release['urls'] if item['filename'] == filename]
-              assert wheel['digests']['sha256'] == os.environ[key + '_WHEEL_SHA256']
+              assert not wheel['yanked'], name
+              assert wheel['digests']['sha256'] == expected, name
+              locked, = [item for item in selected[name]['wheels'] if item['url'] == wheel['url']]
+              assert locked['hash'] == 'sha256:' + expected, name
               with urllib.request.urlopen(wheel['url'], timeout=60) as response:
-                  assert hashlib.sha256(response.read()).hexdigest() == os.environ[key + '_WHEEL_SHA256']
+                  assert hashlib.sha256(response.read()).hexdigest() == expected, name
           PY
+          uv sync --frozen --no-editable --extra dev --extra router --python 3.12
       - name: Build selected distributions
         run: |
           test ! -e dist
@@ -67,8 +80,8 @@ jobs:
           import hashlib, os, tarfile, zipfile
           from pathlib import Path
           expected = {
-              'millrace_os-0.23.1-py3-none-any.whl': os.environ['EXPECTED_WHEEL_SHA256'],
-              'millrace_os-0.23.1.tar.gz': os.environ['EXPECTED_SDIST_SHA256'],
+              'millrace_os-0.23.2-py3-none-any.whl': os.environ['EXPECTED_WHEEL_SHA256'],
+              'millrace_os-0.23.2.tar.gz': os.environ['EXPECTED_SDIST_SHA256'],
           }
           assert {p.name for p in Path('dist').iterdir() if p.is_file()} - {'.gitignore'} == set(expected)
           lines = []
@@ -93,12 +106,12 @@ jobs:
           name: pypi-distributions
           if-no-files-found: error
           path: |
-            dist/millrace_os-0.23.1-py3-none-any.whl
-            dist/millrace_os-0.23.1.tar.gz
+            dist/millrace_os-0.23.2-py3-none-any.whl
+            dist/millrace_os-0.23.2.tar.gz
             release-sha256.txt
   publish:
     needs: build
-    if: github.ref == 'refs/tags/v0.23.1'
+    if: github.ref == 'refs/tags/v0.23.2'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -115,8 +128,8 @@ jobs:
           import hashlib, os
           from pathlib import Path
           expected = {
-              'millrace_os-0.23.1-py3-none-any.whl': os.environ['EXPECTED_WHEEL_SHA256'],
-              'millrace_os-0.23.1.tar.gz': os.environ['EXPECTED_SDIST_SHA256'],
+              'millrace_os-0.23.2-py3-none-any.whl': os.environ['EXPECTED_WHEEL_SHA256'],
+              'millrace_os-0.23.2.tar.gz': os.environ['EXPECTED_SDIST_SHA256'],
           }
           root = Path('release')
           assert root.is_dir() and not root.is_symlink()

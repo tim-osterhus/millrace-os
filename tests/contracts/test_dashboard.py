@@ -236,7 +236,7 @@ def test_the_stock_manifest_is_a_complete_compatible_closure():
         stock=True,
     )
     assert parsed == manifest and manifest["frontend_id"] == "stock"
-    assert manifest["frontend_version"] == "0.23.1"
+    assert manifest["frontend_version"] == "0.23.2"
     assert {item["contract_id"] for item in manifest["required_contracts"]} == (
         STOCK_CONTRACTS
     )

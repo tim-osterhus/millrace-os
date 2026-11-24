@@ -56,7 +56,7 @@
  "entry": "index.html",
  "format": "millrace-os-frontend-bundle/v1",
  "frontend_id": "stock",
- "frontend_version": "0.23.1",
+ "frontend_version": "0.23.2",
  "presentation_format": null,
  "required_capabilities": [
   "client.capabilities.read",

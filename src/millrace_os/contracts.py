@@ -66,7 +66,7 @@ class Read(Contract, Generic[T]):  # noqa: UP046 - Pydantic generic schema names
 
 class Version(Contract):
     package: Literal["millrace-os"] = "millrace-os"
-    version: Literal["0.23.1"] = "0.23.1"
+    version: Literal["0.23.2"] = "0.23.2"
     api: Literal["v1"] = "v1"
 
 

@@ -1,12 +1,13 @@
 # OS API foundations
 
-The retained foundation implements local trust and OS-owned version-one contracts. Millrace OS 0.23.1 adds the public router mapping documented in `router-operation.md`. Core retains durable execution and receipt authority. Historical released OS/provider gates remain separate evidence.
+OS implements local trust and version-one API contracts. Its public [router mapping](router-operation.md) exposes Core execution facts and receipts.
 
 `millrace-os serve` creates the owner-only bearer credential. CLI/script clients
 read that explicitly configured credential file and send `Authorization: Bearer
 <token>` over the configured loopback endpoint. File possession is not an HTTP
 session. `millrace-os open` authenticates an HTTP nonce-mint request and opens the
-stock browser client at `/ui/stock/` with the nonce only in the fragment.
+effective browser client with the nonce only in the fragment. Use
+`millrace-os open --stock` to always open the stock dashboard at `/ui/stock/`.
 `open --home NAME [--instance ID [--run ID]]` opens that exact target; the CLI
 validates the target before any request. `open --recovery` requests a separate
 recovery nonce and opens `/recovery`; it accepts no target. No nonce is printed

@@ -198,7 +198,7 @@
     },
     {
       "contract_id": "Read-Version",
-      "sha256": "32ab3e774833f5dd5560cc434adf238c5b972b92bbf1a5efaad07a7d8e6ee780",
+      "sha256": "12a2f1b0d2b3580d039849847646d01742b98c09616fa5c41526a00276f1876f",
       "version": 1
     },
     {
@@ -308,7 +308,7 @@
     },
     {
       "contract_id": "Version",
-      "sha256": "f521e06e6164d4f22326c454044a27bffe09c47b2034dcf337124ff82ac5a481",
+      "sha256": "74474672d5372d2c437c2dc215a95bc1b8d4349c47398f36547929375ce1db38",
       "version": 1
     },
     {

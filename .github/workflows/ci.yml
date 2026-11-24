@@ -17,7 +17,7 @@ env:
 
 jobs:
   verify:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
@@ -29,7 +29,7 @@ jobs:
         run: |
           test -f uv.lock
           uv lock --check --no-sources --python 3.12
-          python3 - <<'PYCODE'
+          uv run --no-project --python 3.12 python - <<'PYCODE'
           import tomllib
           from pathlib import Path
           project = tomllib.loads(Path("pyproject.toml").read_text())
@@ -43,8 +43,9 @@ jobs:
               else:
                   assert source == {"registry": "https://pypi.org/simple"}, source
               if package["name"] in {"millrace-ai", "millrace-plus", "millrace-os"}:
+                  assert package["name"] not in versions, package["name"]
                   versions[package["name"]] = package["version"]
-          assert versions == {"millrace-ai": "0.23.1", "millrace-plus": "0.23.1", "millrace-os": "0.23.1"}
+          assert versions == {"millrace-ai": "0.23.2", "millrace-plus": "0.23.2", "millrace-os": "0.23.2"}
           PYCODE
           uv sync --frozen --no-editable --extra dev --extra router --python 3.12
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -74,7 +75,7 @@ jobs:
           from pathlib import Path
           import millrace, millrace_plus, millrace_os
           for name, module in [('millrace-ai', millrace), ('millrace-plus', millrace_plus), ('millrace-os', millrace_os)]:
-              assert m.version(name) == '0.23.1', name
+              assert m.version(name) == '0.23.2', name
               assert 'site-packages' in str(Path(module.__file__).resolve()), module.__file__
           from millrace_plus.router import require_core
           require_core()
@@ -89,7 +90,7 @@ jobs:
         shell: bash
         run: |
           uv venv --python 3.12 .ci-base
-          uv pip install --python .ci-base/bin/python dist/millrace_os-0.23.1-py3-none-any.whl
+          uv pip install --python .ci-base/bin/python dist/millrace_os-0.23.2-py3-none-any.whl
           python_path="$PWD/.ci-base/bin/python"
           cd "$RUNNER_TEMP"
           env -u PYTHONPATH "$python_path" - <<'PY'
@@ -104,7 +105,7 @@ jobs:
           with tempfile.TemporaryDirectory() as folder:
               root = Path(folder)
               service = Service(ApplicationConfig(config_dir=root/'config', state_dir=root/'state', credential_path=root/'config/credentials.json'))
-              assert service.app.version == '0.23.1'
+              assert service.app.version == '0.23.2'
               try:
                   RouterClient({'main': root/'core'}).list_instances('main')
               except RouterUnavailable as error:
@@ -116,7 +117,7 @@ jobs:
         run: git diff --exit-code
 
   optional-mcp:
-    runs-on: macos-14
+    runs-on: macos-15
     strategy:
       matrix:
         python: ['3.12', '3.13']
@@ -137,7 +138,7 @@ jobs:
           .venv/bin/ruff check src tests
 
   native-process:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
@@ -150,8 +151,8 @@ jobs:
           uv build --wheel --force-pep517 --python 3.12 --out-dir "$RUNNER_TEMP/native-dist"
           uv venv --python 3.12 "$RUNNER_TEMP/native-env"
           uv pip install --python "$RUNNER_TEMP/native-env/bin/python" \
-            "$RUNNER_TEMP/native-dist/millrace_os-0.23.1-py3-none-any.whl" pytest==9.0.2
-          shasum -a 256 "$RUNNER_TEMP/native-dist/millrace_os-0.23.1-py3-none-any.whl"
+            "$RUNNER_TEMP/native-dist/millrace_os-0.23.2-py3-none-any.whl" pytest==9.0.2
+          shasum -a 256 "$RUNNER_TEMP/native-dist/millrace_os-0.23.2-py3-none-any.whl"
       - name: Verify six native process identity cases outside checkout
         shell: bash
         run: |
@@ -161,7 +162,7 @@ jobs:
           import importlib.metadata as m, importlib.util
           from pathlib import Path
           import millrace_os
-          assert m.version('millrace-os') == '0.23.1'
+          assert m.version('millrace-os') == '0.23.2'
           assert 'site-packages' in str(Path(millrace_os.__file__).resolve())
           assert all(importlib.util.find_spec(name) is None for name in ['millrace', 'millrace_plus', 'mcp'])
           PY

@@ -1,10 +1,9 @@
 # Stock browser client
 
-Millrace OS ships one prebuilt browser client, the stock client. It is an
-optional view of the same authenticated API that the CLI and MCP use. Opening a
-browser is never required; Core remains the execution authority. The client
-inspects inventory, instances, runs, captured graphs and generic workflow
-outputs. This build adds no operational controls of its own.
+Millrace OS ships the stock dashboard as a prebuilt browser client. It shares
+the authenticated OS API with the CLI and MCP bridge. Use it to inspect
+instances, runs, captured graphs, and reports, and review and submit supported
+public control requests. Core remains the execution authority.
 
 ## Opening it
 
